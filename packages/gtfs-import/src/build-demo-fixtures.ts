@@ -21,6 +21,7 @@ import { buildUnionDepartures } from "./build-union-departures.js";
 import {
   buildFeedSchedules,
   loadGoStops,
+  loadStopsUsedByRouteTypes,
   loadTtcSubwayStops,
 } from "./build-demo-stops.js";
 import { decimateLine } from "./simplify-line.js";
@@ -157,7 +158,8 @@ async function loadFeed(feedId: string, name: string, zipName: string) {
   const routeShape = new Map<string, Map<number, number[][]>>();
   let shapeFeatures = 0;
   let busShapes = 0;
-  const MAX_SHAPES = 500;
+  const MAX_SHAPES = 1200;
+  const busShapeCap = feedId === "ttc" ? 250 : feedId === "go" ? 120 : 150;
 
   const sortedTrips = [...tripRoute.entries()].sort((a, b) => {
     const rtA = routeTypeById.get(a[1].routeId) ?? 3;
@@ -170,7 +172,7 @@ async function loadFeed(feedId: string, name: string, zipName: string) {
   for (const [tripId, { routeId, direction }] of sortedTrips) {
     const rt = routeTypeById.get(routeId) ?? 3;
     if (rt === 3) {
-      if (busShapes >= 80) continue;
+      if (busShapes >= busShapeCap) continue;
     } else if (rt !== 2 && shapeFeatures >= MAX_SHAPES) {
       continue;
     }
@@ -201,27 +203,21 @@ async function loadFeed(feedId: string, name: string, zipName: string) {
   for (const [routeId, dirs] of routeShape) {
     const r = routes.find((x) => x.id === routeId);
     if (!r) continue;
-    let bestDir = 0;
-    let bestCoords: number[][] = [];
     for (const [directionId, coords] of dirs) {
-      if (coords.length > bestCoords.length) {
-        bestCoords = coords;
-        bestDir = directionId;
-      }
+      if (coords.length < 2) continue;
+      features.push({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: coords },
+        properties: {
+          feedId,
+          routeId,
+          routeShort: r.shortName,
+          directionId,
+          routeType: r.routeType,
+          color: r.color,
+        },
+      });
     }
-    if (bestCoords.length < 2) continue;
-    features.push({
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: bestCoords },
-      properties: {
-        feedId,
-        routeId,
-        routeShort: r.shortName,
-        directionId: bestDir,
-        routeType: r.routeType,
-        color: r.color,
-      },
-    });
   }
 
   const modeMap = new Map<number, typeof routes>();
@@ -305,37 +301,25 @@ async function main() {
 
   let goSchedules: Record<string, unknown> = {};
   let goTripStops: Record<string, unknown> = {};
+  let ttcSchedules: Record<string, unknown> = {};
+  let ttcTripStops: Record<string, unknown> = {};
+  let miwaySchedules: Record<string, unknown> = {};
+  let miwayTripStops: Record<string, unknown> = {};
 
-  const goFeed = feedDirs.find((f) => f.feedId === "go");
-  if (goFeed) {
-    console.log("Indexing GO stop_times (one-time, may take a few minutes)…");
-    const goStops = await loadGoStops(goFeed.dir);
-    const stopIds = new Set(goStops.map((s) => s.stopId));
-    const built = await buildFeedSchedules("go", goFeed.dir, stopIds);
-    goSchedules = built.schedulesByStop;
-    goTripStops = built.tripStops;
-    for (const s of goStops) {
-      const groupId = `go-${s.stopId}`;
-      stopRegistry[groupId] = {
-        name: s.name,
-        members: [{ feedId: "go", stopId: s.stopId }],
-      };
-      stopFeatures.push({
-        type: "Feature",
-        geometry: { type: "Point", coordinates: [s.lon, s.lat] },
-        properties: { groupId, name: s.name, feedId: "go" },
-      });
-    }
-    console.log(`GO: ${goStops.length} stops, ${Object.keys(goSchedules).length} with schedules`);
-
-    const goMeta: Record<
+  const stopMetaByFeed: Record<
+    string,
+    Record<
       string,
       { locationType: number; parentStation: string | null; name: string; lat: number; lon: number }
-    > = {};
-    for await (const row of readCsv(join(goFeed.dir, "stops.txt"))) {
+    >
+  > = {};
+
+  async function loadStopMeta(feedId: string, dir: string) {
+    const meta: (typeof stopMetaByFeed)[string] = {};
+    for await (const row of readCsv(join(dir, "stops.txt"))) {
       const stopId = pick(row, "stop_id");
       if (!stopId) continue;
-      goMeta[stopId] = {
+      meta[stopId] = {
         locationType: Number(pick(row, "location_type") || 0),
         parentStation: pick(row, "parent_station") || null,
         name: pick(row, "stop_name"),
@@ -343,7 +327,54 @@ async function main() {
         lon: Number(pick(row, "stop_lon")),
       };
     }
-    writeFileSync(join(outDir, "stop-meta.json"), JSON.stringify({ go: goMeta }));
+    stopMetaByFeed[feedId] = meta;
+  }
+
+  function registerStops(
+    feedId: string,
+    stops: Array<{ stopId: string; name: string; lat: number; lon: number }>,
+  ) {
+    for (const s of stops) {
+      const groupId = `${feedId}-${s.stopId}`;
+      if (stopRegistry[groupId]) continue;
+      stopRegistry[groupId] = {
+        name: s.name,
+        members: [{ feedId, stopId: s.stopId }],
+      };
+      stopFeatures.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [s.lon, s.lat] },
+        properties: { groupId, name: s.name, feedId },
+      });
+    }
+  }
+
+  const goFeed = feedDirs.find((f) => f.feedId === "go");
+  if (goFeed) {
+    console.log("Indexing GO stop_times (may take a few minutes)…");
+    const goStops = await loadGoStops(goFeed.dir);
+    const stopIds = new Set(goStops.map((s) => s.stopId));
+    const built = await buildFeedSchedules("go", goFeed.dir, stopIds);
+    goSchedules = built.schedulesByStop;
+    goTripStops = built.tripStops;
+    registerStops("go", goStops);
+    await loadStopMeta("go", goFeed.dir);
+    console.log(`GO: ${goStops.length} stops, ${Object.keys(goSchedules).length} with schedules`);
+  }
+
+  const miwayFeed = feedDirs.find((f) => f.feedId === "miway");
+  if (miwayFeed) {
+    console.log("Building MiWay stops & schedules…");
+    const miwayStops = await loadGoStops(miwayFeed.dir);
+    const stopIds = new Set(miwayStops.map((s) => s.stopId));
+    const built = await buildFeedSchedules("miway", miwayFeed.dir, stopIds);
+    miwaySchedules = built.schedulesByStop;
+    miwayTripStops = built.tripStops;
+    registerStops("miway", miwayStops);
+    await loadStopMeta("miway", miwayFeed.dir);
+    console.log(
+      `MiWay: ${miwayStops.length} stops, ${Object.keys(miwaySchedules).length} with schedules`,
+    );
   }
 
   const ttcFeed = feedDirs.find((f) => f.feedId === "ttc");
@@ -351,19 +382,23 @@ async function main() {
     { feedId: "go", stopId: "UN" },
   ];
   if (ttcFeed) {
+    console.log("Building TTC subway + bus/streetcar stops…");
     const subway = await loadTtcSubwayStops(ttcFeed.dir);
-    for (const s of subway) {
-      const groupId = `ttc-${s.stopId}`;
-      stopRegistry[groupId] = {
-        name: s.name,
-        members: [{ feedId: "ttc", stopId: s.stopId }],
-      };
-      stopFeatures.push({
-        type: "Feature",
-        geometry: { type: "Point", coordinates: [s.lon, s.lat] },
-        properties: { groupId, name: s.name, feedId: "ttc" },
-      });
-    }
+    console.log("Scanning TTC bus & streetcar stop_times (large feed, may take several minutes)…");
+    const surface = await loadStopsUsedByRouteTypes(ttcFeed.dir, [0, 3]);
+    const byId = new Map<string, { stopId: string; name: string; lat: number; lon: number }>();
+    for (const s of [...subway, ...surface]) byId.set(s.stopId, s);
+    const ttcStops = [...byId.values()];
+    const stopIds = new Set(ttcStops.map((s) => s.stopId));
+    console.log(`Indexing TTC schedules for ${ttcStops.length} stops…`);
+    const built = await buildFeedSchedules("ttc", ttcFeed.dir, stopIds);
+    ttcSchedules = built.schedulesByStop;
+    ttcTripStops = built.tripStops;
+    registerStops("ttc", ttcStops);
+    await loadStopMeta("ttc", ttcFeed.dir);
+    console.log(
+      `TTC: ${ttcStops.length} stops (${subway.length} subway, ${surface.length} bus/streetcar), ${Object.keys(ttcSchedules).length} with schedules`,
+    );
     for (const row of unionSchedule) {
       if (row.feedId === "ttc" && !unionMembers.some((m) => m.stopId === row.stopId)) {
         unionMembers.push({ feedId: "ttc", stopId: row.stopId });
@@ -377,6 +412,10 @@ async function main() {
     ) {
       unionMembers.push({ feedId: "miway", stopId: row.stopId });
     }
+  }
+
+  if (Object.keys(stopMetaByFeed).length) {
+    writeFileSync(join(outDir, "stop-meta.json"), JSON.stringify(stopMetaByFeed));
   }
 
   stopRegistry[TORONTO_UNION_ID] = { name: "Toronto Union", members: unionMembers };
@@ -404,6 +443,14 @@ async function main() {
   writeFileSync(join(outDir, "stops.json"), JSON.stringify({ type: "FeatureCollection", features: stopFeatures }));
   writeFileSync(join(outDir, "go-schedules.json"), JSON.stringify(goSchedules));
   writeFileSync(join(outDir, "go-trip-stops.json"), JSON.stringify(goTripStops));
+  if (Object.keys(ttcSchedules).length) {
+    writeFileSync(join(outDir, "ttc-schedules.json"), JSON.stringify(ttcSchedules));
+    writeFileSync(join(outDir, "ttc-trip-stops.json"), JSON.stringify(ttcTripStops));
+  }
+  if (Object.keys(miwaySchedules).length) {
+    writeFileSync(join(outDir, "miway-schedules.json"), JSON.stringify(miwaySchedules));
+    writeFileSync(join(outDir, "miway-trip-stops.json"), JSON.stringify(miwayTripStops));
+  }
   writeFileSync(join(outDir, "union-schedule.json"), JSON.stringify(unionSchedule));
 
   console.log(`Wrote ${outDir} (${agencies.length} agencies, ${features.length} routes, ${stopFeatures.length} stops)`);

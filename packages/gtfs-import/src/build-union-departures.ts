@@ -3,9 +3,9 @@ import { join } from "node:path";
 import { pick, readCsv } from "./csv.js";
 import {
   loadActiveServices,
+  resolveServiceDate,
   secToTime,
   timeToSec,
-  torontoServiceDate,
 } from "./gtfs-calendar.js";
 import { routeIdFromRow } from "./route-id.js";
 
@@ -66,7 +66,6 @@ export type DemoDepartureRaw = {
 export async function buildUnionDepartures(
   feedDirs: Array<{ feedId: string; dir: string }>,
 ): Promise<DemoDepartureRaw[]> {
-  const date = torontoServiceDate();
   const all: DemoDepartureRaw[] = [];
 
   for (const { feedId, dir } of feedDirs) {
@@ -123,6 +122,7 @@ export async function buildUnionDepartures(
         });
       }
     }
+    const date = resolveServiceDate(calendarRows, calendarDateRows);
     const activeServices = loadActiveServices(calendarRows, calendarDateRows, date);
 
     const routes = new Map<string, { shortName: string | null; color: string }>();

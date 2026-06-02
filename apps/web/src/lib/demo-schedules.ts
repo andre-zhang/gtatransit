@@ -1,28 +1,25 @@
-import goSchedules from "../../demo/go-schedules.json";
-import goTripStops from "../../demo/go-trip-stops.json";
-import unionSchedule from "../../demo/union-schedule.json";
 import { getDemoCore, type DemoStopMeta } from "./demo";
+import {
+  loadFeedSchedules,
+  loadFeedTripStops,
+  loadUnionSchedule,
+} from "./demo-schedule-data";
 import { resolveStopGroupId } from "./demo-stop-groups";
 
-export type ScheduleRow = {
-  feedId: string;
-  tripId: string;
-  routeId: string;
-  serviceId: string;
-  departureTime: string;
-  headsign: string;
-  routeShort: string;
-  routeColor: string;
-  stopId: string;
-};
+export type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 
-export type TripStopRow = {
-  stopId: string;
-  name: string;
-  sequence: number;
-  arrivalTime: string;
-  departureTime: string;
-};
+const FEEDS_WITH_SCHEDULE_FILES = ["go", "ttc", "miway"] as const;
+
+import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
+
+function rowsForMember(feedId: string, stopId: string): ScheduleRow[] {
+  if ((FEEDS_WITH_SCHEDULE_FILES as readonly string[]).includes(feedId)) {
+    return loadFeedSchedules(feedId)[stopId] ?? [];
+  }
+  return loadUnionSchedule().filter(
+    (r) => r.feedId === feedId && r.stopId === stopId,
+  );
+}
 
 export function getStopSchedule(groupId: string): ScheduleRow[] {
   const resolved = resolveStopGroupId(groupId);
@@ -31,18 +28,14 @@ export function getStopSchedule(groupId: string): ScheduleRow[] {
 
   const rows: ScheduleRow[] = [];
   for (const m of stop.members) {
-    if (m.feedId === "go") {
-      const sched = (goSchedules as Record<string, ScheduleRow[]>)[m.stopId] ?? [];
-      rows.push(...sched);
-    } else if (m.feedId === "ttc" || m.feedId === "miway") {
-      const union = unionSchedule as ScheduleRow[];
-      rows.push(...union.filter((r) => r.stopId === m.stopId));
-    }
+    rows.push(...rowsForMember(m.feedId, m.stopId));
   }
   return rows;
 }
 
 export function getTripStops(feedId: string, tripId: string): TripStopRow[] {
-  if (feedId !== "go") return [];
-  return (goTripStops as Record<string, TripStopRow[]>)[tripId] ?? [];
+  if (!(FEEDS_WITH_SCHEDULE_FILES as readonly string[]).includes(feedId)) {
+    return [];
+  }
+  return loadFeedTripStops(feedId)[tripId] ?? [];
 }

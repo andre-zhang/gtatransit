@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { pick, readCsv } from "./csv.js";
 import {
   loadActiveServices,
-  torontoServiceDate,
+  resolveServiceDate,
 } from "./gtfs-calendar.js";
 import { routeIdFromRow } from "./route-id.js";
 
@@ -72,6 +72,50 @@ export async function loadGoStops(dir: string): Promise<
   return out;
 }
 
+/** Stops served today on routes whose route_type is in routeTypes. */
+export async function loadStopsUsedByRouteTypes(
+  dir: string,
+  routeTypes: number[],
+): Promise<Array<{ stopId: string; name: string; lat: number; lon: number }>> {
+  const { date, activeServices } = await loadCalendar(dir);
+  const types = new Set(routeTypes);
+
+  const routeIds = new Set<string>();
+  for await (const row of readCsv(join(dir, "routes.txt"))) {
+    const id = routeIdFromRow(row);
+    if (id && types.has(Number(pick(row, "route_type") || 3))) routeIds.add(id);
+  }
+
+  const activeTrips = new Set<string>();
+  for await (const row of readCsv(join(dir, "trips.txt"))) {
+    const tripId = pick(row, "trip_id");
+    const routeId = pick(row, "route_id");
+    const serviceId = pick(row, "service_id");
+    if (!tripId || !routeIds.has(routeId) || !activeServices.has(serviceId)) continue;
+    activeTrips.add(tripId);
+  }
+
+  const stopIds = new Set<string>();
+  const stopTimesPath = join(dir, "stop_times.txt");
+  if (existsSync(stopTimesPath)) {
+    for await (const row of readCsv(stopTimesPath)) {
+      if (activeTrips.has(pick(row, "trip_id"))) stopIds.add(pick(row, "stop_id"));
+    }
+  }
+
+  const out: Array<{ stopId: string; name: string; lat: number; lon: number }> = [];
+  for await (const row of readCsv(join(dir, "stops.txt"))) {
+    const stopId = pick(row, "stop_id");
+    if (!stopIds.has(stopId)) continue;
+    const lat = Number(pick(row, "stop_lat"));
+    const lon = Number(pick(row, "stop_lon"));
+    const name = pick(row, "stop_name");
+    if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
+    out.push({ stopId, name, lat, lon });
+  }
+  return out;
+}
+
 export async function loadTtcSubwayStops(dir: string): Promise<
   Array<{ stopId: string; name: string; lat: number; lon: number }>
 > {
@@ -98,10 +142,14 @@ export async function loadTtcSubwayStops(dir: string): Promise<
     });
   }
 
+  const { activeServices } = await loadCalendar(dir);
   const tripRoute = new Map<string, string>();
   for await (const row of readCsv(join(dir, "trips.txt"))) {
     const rid = pick(row, "route_id");
-    if (subwayRoutes.has(rid)) tripRoute.set(pick(row, "trip_id"), rid);
+    const tripId = pick(row, "trip_id");
+    const serviceId = pick(row, "service_id");
+    if (!tripId || !subwayRoutes.has(rid) || !activeServices.has(serviceId)) continue;
+    tripRoute.set(tripId, rid);
   }
 
   for await (const row of readCsv(join(dir, "stop_times.txt"))) {
@@ -119,7 +167,7 @@ export async function loadTtcSubwayStops(dir: string): Promise<
   return out;
 }
 
-async function loadCalendar(dir: string, date: string) {
+async function loadCalendar(dir: string): Promise<{ date: string; activeServices: Set<string> }> {
   const calendarRows: Array<{
     service_id: string;
     start_date: string;
@@ -161,7 +209,9 @@ async function loadCalendar(dir: string, date: string) {
       });
     }
   }
-  return loadActiveServices(calendarRows, calendarDateRows, date);
+  const date = resolveServiceDate(calendarRows, calendarDateRows);
+  const activeServices = loadActiveServices(calendarRows, calendarDateRows, date);
+  return { date, activeServices };
 }
 
 /** Stream stop_times once — schedules by stop_id + trip stop lists. */
@@ -173,8 +223,7 @@ export async function buildFeedSchedules(
   schedulesByStop: Record<string, ScheduleRow[]>;
   tripStops: Record<string, TripStopRow[]>;
 }> {
-  const date = torontoServiceDate();
-  const activeServices = await loadCalendar(dir, date);
+  const { date, activeServices } = await loadCalendar(dir);
 
   const routes = new Map<string, { shortName: string | null; color: string }>();
   for await (const row of readCsv(join(dir, "routes.txt"))) {
@@ -208,7 +257,7 @@ export async function buildFeedSchedules(
 
   const schedulesByStop: Record<string, ScheduleRow[]> = {};
   const tripStops: Record<string, TripStopRow[]> = {};
-  const tripStopBuf = new Map<string, TripStopRow[]>();
+  const tripsServingTarget = new Set<string>();
 
   const stopTimesPath = join(dir, "stop_times.txt");
   if (!existsSync(stopTimesPath)) {
@@ -217,6 +266,35 @@ export async function buildFeedSchedules(
 
   for await (const row of readCsv(stopTimesPath)) {
     const tripId = pick(row, "trip_id");
+    const trip = trips.get(tripId);
+    if (!trip) continue;
+
+    const stopId = pick(row, "stop_id");
+    const departureTime = pick(row, "departure_time") || pick(row, "arrival_time");
+    if (!stopId || !departureTime) continue;
+    if (!targetStopIds.has(stopId)) continue;
+
+    tripsServingTarget.add(tripId);
+    const route = routes.get(trip.routeId);
+    const sched: ScheduleRow = {
+      feedId,
+      tripId,
+      routeId: trip.routeId,
+      serviceId: trip.serviceId,
+      departureTime,
+      headsign: trip.headsign,
+      routeShort: route?.shortName ?? trip.routeId,
+      routeColor: route?.color ?? routeColor(feedId, null, null),
+      stopId,
+    };
+    if (!schedulesByStop[stopId]) schedulesByStop[stopId] = [];
+    schedulesByStop[stopId]!.push(sched);
+  }
+
+  const tripStopBuf = new Map<string, TripStopRow[]>();
+  for await (const row of readCsv(stopTimesPath)) {
+    const tripId = pick(row, "trip_id");
+    if (!tripsServingTarget.has(tripId)) continue;
     const trip = trips.get(tripId);
     if (!trip) continue;
 
@@ -234,23 +312,6 @@ export async function buildFeedSchedules(
       arrivalTime,
       departureTime,
     });
-
-    if (!targetStopIds.has(stopId)) continue;
-
-    const route = routes.get(trip.routeId);
-    const sched: ScheduleRow = {
-      feedId,
-      tripId,
-      routeId: trip.routeId,
-      serviceId: trip.serviceId,
-      departureTime,
-      headsign: trip.headsign,
-      routeShort: route?.shortName ?? trip.routeId,
-      routeColor: route?.color ?? routeColor(feedId, null, null),
-      stopId,
-    };
-    if (!schedulesByStop[stopId]) schedulesByStop[stopId] = [];
-    schedulesByStop[stopId]!.push(sched);
   }
 
   for (const [tripId, stops] of tripStopBuf) {

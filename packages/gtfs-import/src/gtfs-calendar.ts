@@ -68,6 +68,38 @@ type CalendarRow = {
 
 type CalendarDateRow = { service_id: string; date: string; exception_type: string };
 
+function addDaysYmd(ymd: string, days: number): string {
+  const y = Number(ymd.slice(0, 4));
+  const m = Number(ymd.slice(4, 6)) - 1;
+  const d = Number(ymd.slice(6, 8));
+  return torontoServiceDate(new Date(y, m, d + days));
+}
+
+/** Today when the feed has service; otherwise the first in-range day with active trips. */
+export function resolveServiceDate(
+  calendarRows: CalendarRow[],
+  calendarDateRows: CalendarDateRow[],
+  preferred?: string,
+): string {
+  const today = preferred ?? torontoServiceDate();
+  if (loadActiveServices(calendarRows, calendarDateRows, today).size > 0) {
+    return today;
+  }
+
+  const starts = [
+    ...new Set(calendarRows.map((c) => c.start_date).filter(Boolean)),
+  ].sort();
+  for (const start of starts) {
+    const end = calendarRows.find((c) => c.start_date === start)?.end_date ?? start;
+    let d = start;
+    for (let i = 0; i < 21 && d <= end; i++) {
+      if (loadActiveServices(calendarRows, calendarDateRows, d).size > 0) return d;
+      d = addDaysYmd(d, 1);
+    }
+  }
+  return today;
+}
+
 export function loadActiveServices(
   calendarRows: CalendarRow[],
   calendarDateRows: CalendarDateRow[],

@@ -1,10 +1,13 @@
-import goSchedules from "../../demo/go-schedules.json";
-import unionSchedule from "../../demo/union-schedule.json";
+import type { FeatureCollection, LineString } from "geojson";
+import routesGeo from "../../demo/routes.json";
 import { routeColor } from "./colors";
 import { getDemoCore } from "./demo";
+import { loadFeedSchedules, loadUnionSchedule } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
 import { getRtVehicles } from "./rt-cache";
 import { lookupTripFromSchedules } from "./demo-trip-lookup";
+
+const FEEDS_WITH_SCHEDULE_FILES = ["go", "ttc", "miway"] as const;
 
 type RouteMeta = {
   short_name: string | null;
@@ -40,7 +43,7 @@ function findRouteMeta(feedId: string, routeId: string): RouteMeta | null {
     }
   }
 
-  const sample = (unionSchedule as ScheduleRow[]).find(
+  const sample = loadUnionSchedule().find(
     (row) => row.feedId === feedId && row.routeId === routeId,
   );
   if (sample) {
@@ -57,22 +60,37 @@ function findRouteMeta(feedId: string, routeId: string): RouteMeta | null {
 
 function collectScheduleRows(feedId: string, routeId: string): ScheduleRow[] {
   const rows: ScheduleRow[] = [];
-  for (const row of unionSchedule as ScheduleRow[]) {
-    if (
-      row.feedId === feedId &&
-      (row.routeId === routeId || row.routeShort === routeId)
-    ) {
-      rows.push(row);
-    }
-  }
-  if (feedId === "go") {
-    for (const sched of Object.values(goSchedules as Record<string, ScheduleRow[]>)) {
+  const matches = (row: ScheduleRow) =>
+    row.routeId === routeId || row.routeShort === routeId;
+
+  if ((FEEDS_WITH_SCHEDULE_FILES as readonly string[]).includes(feedId)) {
+    for (const sched of Object.values(loadFeedSchedules(feedId))) {
       for (const row of sched) {
-        if (row.routeId === routeId || row.routeShort === routeId) rows.push(row);
+        if (matches(row)) rows.push(row);
       }
     }
+    return rows;
+  }
+
+  for (const row of loadUnionSchedule()) {
+    if (row.feedId === feedId && matches(row)) rows.push(row);
   }
   return rows;
+}
+
+function findRouteShape(
+  feedId: string,
+  routeId: string,
+  direction: number,
+): LineString | null {
+  const fc = routesGeo as FeatureCollection;
+  const hit = fc.features.find((f) => {
+    const p = f.properties as Record<string, unknown> | null;
+    if (!p || p.feedId !== feedId || p.routeId !== routeId) return false;
+    return Number(p.directionId ?? 0) === direction;
+  });
+  if (!hit?.geometry || hit.geometry.type !== "LineString") return null;
+  return hit.geometry as LineString;
 }
 
 export function getDemoRouteDetail(feedId: string, routeId: string, direction: number) {
@@ -125,6 +143,6 @@ export function getDemoRouteDetail(feedId: string, routeId: string, direction: n
     direction,
     trips,
     vehicles,
-    shape: null,
+    shape: findRouteShape(feedId, routeId, direction),
   };
 }
