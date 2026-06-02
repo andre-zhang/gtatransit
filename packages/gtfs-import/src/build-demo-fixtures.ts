@@ -327,6 +327,23 @@ async function main() {
       });
     }
     console.log(`GO: ${goStops.length} stops, ${Object.keys(goSchedules).length} with schedules`);
+
+    const goMeta: Record<
+      string,
+      { locationType: number; parentStation: string | null; name: string; lat: number; lon: number }
+    > = {};
+    for await (const row of readCsv(join(goFeed.dir, "stops.txt"))) {
+      const stopId = pick(row, "stop_id");
+      if (!stopId) continue;
+      goMeta[stopId] = {
+        locationType: Number(pick(row, "location_type") || 0),
+        parentStation: pick(row, "parent_station") || null,
+        name: pick(row, "stop_name"),
+        lat: Number(pick(row, "stop_lat")),
+        lon: Number(pick(row, "stop_lon")),
+      };
+    }
+    writeFileSync(join(outDir, "stop-meta.json"), JSON.stringify({ go: goMeta }));
   }
 
   const ttcFeed = feedDirs.find((f) => f.feedId === "ttc");

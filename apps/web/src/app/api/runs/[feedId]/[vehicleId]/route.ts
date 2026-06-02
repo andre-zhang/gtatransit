@@ -6,6 +6,8 @@ import { isDemoMode } from "@/lib/demo";
 import { getDemoRun } from "@/lib/demo-run";
 import { refreshRtCache } from "@/lib/rt-cache";
 
+export { dynamic, maxDuration } from "@/lib/api-config";
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ feedId: string; vehicleId: string }> },

@@ -6,6 +6,8 @@ import { isDemoMode } from "@/lib/demo";
 import { getDemoRouteDetail } from "@/lib/demo-route-detail";
 import { refreshRtCache } from "@/lib/rt-cache";
 
+export { dynamic, maxDuration } from "@/lib/api-config";
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ feedId: string; routeId: string }> },

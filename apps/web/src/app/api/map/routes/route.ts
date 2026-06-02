@@ -5,6 +5,8 @@ import { filterDemoRoutes, parseMapFilters } from "@/lib/demo-map-filters";
 import { filterRouteCollection, mapQueryParams } from "@/lib/geojson-map";
 import { ZOOM_ROUTES } from "@/lib/map-zoom";
 
+export { dynamic, maxDuration } from "@/lib/api-config";
+
 const cache = new Map<string, { body: string; at: number }>();
 const CACHE_MS = 5000;
 

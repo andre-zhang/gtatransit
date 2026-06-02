@@ -8,6 +8,8 @@ import { filterPointCollection, mapQueryParams } from "@/lib/geojson-map";
 import { ZOOM_STOPS } from "@/lib/map-zoom";
 import { parseDirs, parseList } from "@/lib/parse-filters";
 
+export { dynamic, maxDuration } from "@/lib/api-config";
+
 export async function GET(req: NextRequest) {
   const { bbox } = mapQueryParams(req.nextUrl.searchParams);
   const zoom = Number(req.nextUrl.searchParams.get("zoom") ?? 0);

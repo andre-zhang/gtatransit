@@ -6,12 +6,18 @@ import { isDemoMode } from "@/lib/demo";
 export default async function HomePage() {
   let tree: Awaited<ReturnType<typeof getFilterTree>>["tree"] = { agencies: [] };
   let rtUpdated: string | null = null;
-  try {
-    const data = await getFilterTree();
-    tree = data.tree;
-    rtUpdated = data.rtUpdated;
-  } catch {
-    /* DB not ready */
+  if (isDemoMode()) {
+    const demo = (await import("@/lib/demo")).getDemoCore();
+    tree = demo.filterTree as typeof tree;
+    rtUpdated = demo.rtUpdated;
+  } else {
+    try {
+      const data = await getFilterTree();
+      tree = data.tree;
+      rtUpdated = data.rtUpdated;
+    } catch {
+      /* DB not ready */
+    }
   }
   const updatedLabel = rtUpdated
     ? `${Math.max(0, Math.round((Date.now() - new Date(rtUpdated).getTime()) / 1000))}s ago`

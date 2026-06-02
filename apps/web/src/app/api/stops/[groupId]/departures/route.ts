@@ -12,6 +12,8 @@ import { getStopSchedule } from "@/lib/demo-schedules";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
 import { mergeRtIntoDeparture, refreshRtCache } from "@/lib/rt-cache";
 
+export { dynamic, maxDuration } from "@/lib/api-config";
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ groupId: string }> },

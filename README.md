@@ -28,14 +28,28 @@ pnpm rt:poll
 
 ### Demo mode (no Docker)
 
-With `DEMO_MODE=1`, the app uses `apps/web/demo/fixtures.json`. After downloading GTFS:
+With `DEMO_MODE=1` (or on Vercel without `DATABASE_URL`), the app uses prebuilt fixtures in `apps/web/demo/` — no GTFS import at runtime.
+
+To regenerate demo data locally after downloading GTFS:
 
 ```bash
 npx pnpm@9.15.4 fetch-gtfs
-npx pnpm@9.15.4 build-demo    # all routes from zips → layer list + map shapes
+npx pnpm@9.15.4 build-demo    # writes apps/web/demo/*.json
 ```
 
 Then restart the dev server and refresh the browser.
+
+### Deploy on Vercel
+
+1. Import [github.com/andre-zhang/gtatransit](https://github.com/andre-zhang/gtatransit) on Vercel.
+2. Set **Root Directory** to `apps/web`.
+3. Framework preset: **Next.js** (install command is in `apps/web/vercel.json`).
+4. Environment variables:
+   - `METROLINX_API_KEY` — optional, enables GO live platforms/delays
+   - `DATABASE_URL` — only if you later attach Neon/Postgres for full DB mode
+   - `DEMO_MODE=1` — optional; auto-enabled on Vercel when `DATABASE_URL` is unset
+
+Demo fixtures (~11 MB) are committed in `apps/web/demo/` so Vercel does not need GTFS zips or PostGIS at build or runtime.
 
 ### Web app
 

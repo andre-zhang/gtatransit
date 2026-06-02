@@ -8,6 +8,8 @@ import { getRtVehicles, refreshRtCache } from "@/lib/rt-cache";
 import { vehicleCollection } from "@/lib/vehicle-geojson";
 import { parseDirs, parseList } from "@/lib/parse-filters";
 
+export { dynamic, maxDuration } from "@/lib/api-config";
+
 export async function GET(req: NextRequest) {
   const { bbox } = mapQueryParams(req.nextUrl.searchParams);
 

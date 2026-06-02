@@ -1,0 +1,4 @@
+data/
+packages/gtfs-import/data/
+**/*.zip
+.git

@@ -1,9 +1,8 @@
 import core from "../../demo/fixtures.json";
 import { getGroupedDemoStops } from "./demo-stop-groups";
+import { isDemoMode } from "./demo-mode";
 
-export function isDemoMode() {
-  return process.env.DEMO_MODE === "1" || process.env.DEMO_MODE === "true";
-}
+export { isDemoMode } from "./demo-mode";
 
 export type DemoStopMeta = {
   name: string;
