@@ -1,2 +1,0 @@
-apps/web/demo/ttc-schedules.json filter=lfs diff=lfs merge=lfs -text
-apps/web/demo/ttc-trip-stops.json filter=lfs diff=lfs merge=lfs -text

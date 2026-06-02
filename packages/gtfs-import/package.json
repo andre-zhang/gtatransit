@@ -7,7 +7,8 @@
     "fetch": "tsx src/fetch-gtfs.ts",
     "import": "tsx src/import-gtfs.ts",
     "cluster": "tsx src/cluster-stops.ts",
-    "build-demo": "tsx src/build-demo-fixtures.ts"
+    "build-demo": "tsx src/build-demo-fixtures.ts",
+    "split-demo": "tsx src/split-demo-json.ts"
   },
   "dependencies": {
     "@gta/db": "workspace:*",

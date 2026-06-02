@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd ../.. && pnpm install",
+  "installCommand": "cd ../.. && (git lfs pull 2>/dev/null || true) && pnpm install",
   "framework": "nextjs"
 }

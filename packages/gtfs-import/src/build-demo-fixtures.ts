@@ -25,6 +25,7 @@ import {
   loadTtcSubwayStops,
 } from "./build-demo-stops.js";
 import { decimateLine } from "./simplify-line.js";
+import { writeShardedRecord } from "./write-sharded-json.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "../../..");
@@ -444,8 +445,8 @@ async function main() {
   writeFileSync(join(outDir, "go-schedules.json"), JSON.stringify(goSchedules));
   writeFileSync(join(outDir, "go-trip-stops.json"), JSON.stringify(goTripStops));
   if (Object.keys(ttcSchedules).length) {
-    writeFileSync(join(outDir, "ttc-schedules.json"), JSON.stringify(ttcSchedules));
-    writeFileSync(join(outDir, "ttc-trip-stops.json"), JSON.stringify(ttcTripStops));
+    writeShardedRecord(outDir, "ttc-schedules", ttcSchedules);
+    writeShardedRecord(outDir, "ttc-trip-stops", ttcTripStops);
   }
   if (Object.keys(miwaySchedules).length) {
     writeFileSync(join(outDir, "miway-schedules.json"), JSON.stringify(miwaySchedules));
