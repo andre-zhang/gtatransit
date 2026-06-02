@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: gta
+      POSTGRES_PASSWORD: gta
+      POSTGRES_DB: gta_transit
+    ports:
+      - "5433:5432"
+    volumes:
+      - gta_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gta -d gta_transit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gta_pg_data:

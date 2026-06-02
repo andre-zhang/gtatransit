@@ -1,0 +1,23 @@
+{
+  "name": "gta-transit",
+  "private": true,
+  "scripts": {
+    "dev": "npx pnpm@9.15.4 --filter @gta/web dev",
+    "pnpm": "npx pnpm@9.15.4",
+    "build": "pnpm -r build",
+    "db:up": "docker compose up -d",
+    "db:migrate": "pnpm --filter @gta/db migrate",
+    "fetch-gtfs": "pnpm --filter @gta/gtfs-import fetch",
+    "import-gtfs": "pnpm --filter @gta/gtfs-import import",
+    "cluster-stops": "pnpm --filter @gta/gtfs-import cluster",
+    "build-demo": "pnpm --filter @gta/gtfs-import build-demo",
+    "rt:poll": "pnpm --filter @gta/rt-poller start"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  }
+}

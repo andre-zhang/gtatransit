@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.env
+.env.local
+data/gtfs/**/*.zip
+data/gtfs/**/extracted
+data/gtfs/**/extracted-demo
+.DS_Store
+*.log
+tsconfig.tsbuildinfo

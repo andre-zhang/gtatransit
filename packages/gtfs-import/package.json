@@ -1,0 +1,25 @@
+{
+  "name": "@gta/gtfs-import",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch": "tsx src/fetch-gtfs.ts",
+    "import": "tsx src/import-gtfs.ts",
+    "cluster": "tsx src/cluster-stops.ts",
+    "build-demo": "tsx src/build-demo-fixtures.ts"
+  },
+  "dependencies": {
+    "@gta/db": "workspace:*",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.4.7",
+    "unzipper": "^0.12.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.16",
+    "@types/unzipper": "^0.10.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

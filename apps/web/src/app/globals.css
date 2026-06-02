@@ -1,0 +1,240 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@theme {
+  --color-go-green: #007934;
+  --color-go-green-dark: #005c28;
+  --color-go-green-light: #78be20;
+  --color-go-navy: #1c2840;
+  --color-go-slate: #4a5568;
+  --color-go-bg: #eef1f4;
+  --color-go-surface: #ffffff;
+  --color-go-late: #c8102e;
+  --color-go-ontime: #007934;
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --shadow-panel: 0 8px 32px rgb(28 40 64 / 0.12), 0 2px 8px rgb(28 40 64 / 0.06);
+  --radius-panel: 12px;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-go-navy);
+  background: var(--color-go-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Map */
+.maplibregl-ctrl-group {
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-panel) !important;
+  border: none !important;
+  overflow: hidden;
+}
+
+.maplibregl-map {
+  font-family: var(--font-sans);
+}
+
+.maplibregl-canvas {
+  outline: none;
+}
+
+.maplibregl-popup-content {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  box-shadow: var(--shadow-panel);
+  border: none;
+}
+
+/* Custom checkbox */
+.go-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.go-check input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.go-check-box {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 2px solid #c5cdd8;
+  background: #fff;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.go-check input:checked + .go-check-box {
+  background: var(--color-go-green);
+  border-color: var(--color-go-green);
+}
+
+.go-check input:checked + .go-check-box::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.go-check input:focus-visible + .go-check-box {
+  outline: 2px solid var(--color-go-green-light);
+  outline-offset: 2px;
+}
+
+/* Section headers */
+.go-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-go-green);
+}
+
+/* Status badges */
+.go-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.go-badge--late {
+  background: #fde8eb;
+  color: var(--color-go-late);
+}
+
+.go-badge--ontime {
+  background: #e6f4ea;
+  color: var(--color-go-ontime);
+}
+
+.go-badge--sched {
+  background: #eef1f4;
+  color: var(--color-go-slate);
+}
+
+/* Departure board — explicit colors so the panel never renders as blank white */
+.departure-board {
+  background: var(--color-go-surface);
+  color: var(--color-go-navy);
+  min-height: 12rem;
+}
+
+.departure-board-table {
+  color: var(--color-go-navy);
+}
+
+.departure-board-head {
+  border-bottom: 1px solid var(--color-go-bg);
+  background: #f4f6f8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-go-slate);
+}
+
+.departure-board-body {
+  background: var(--color-go-surface);
+}
+
+.departure-board-row {
+  border-bottom: 1px solid var(--color-go-bg);
+}
+
+.departure-board-row:last-child {
+  border-bottom: none;
+}
+
+.departure-board-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.departure-board-link:hover {
+  color: var(--color-go-green);
+}
+
+.departure-board-time {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.departure-board-time--live {
+  color: var(--color-go-navy);
+}
+
+.departure-board-time--sched {
+  color: var(--color-go-slate);
+}
+
+.departure-board-timeWas {
+  font-size: 0.75rem;
+  color: var(--color-go-slate);
+}
+
+.departure-board-dest {
+  display: block;
+  text-decoration: none;
+  color: var(--color-go-slate);
+}
+
+.departure-board-dest--live {
+  font-weight: 600;
+  color: var(--color-go-navy);
+}
+
+.departure-board-dest:hover {
+  color: var(--color-go-green);
+}
+
+.departure-board-plat {
+  color: var(--color-go-navy);
+}
+
+.departure-board-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  background: var(--color-go-surface);
+  color: var(--color-go-slate);
+}
+
+.departure-board-emptyTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-go-navy);
+}
+
+.departure-board-emptyHint {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  color: var(--color-go-slate);
+}
