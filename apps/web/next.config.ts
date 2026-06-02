@@ -7,11 +7,25 @@ const rootEnv = resolve(process.cwd(), "../../.env");
 if (existsSync(rootEnv)) config({ path: rootEnv });
 config({ path: resolve(process.cwd(), ".env.local") });
 
+function isDatabaseConfigured(): boolean {
+  const keys = [
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "POSTGRES_URL_NON_POOLING",
+    "POSTGRES_PRISMA_URL",
+    "NEON_DATABASE_URL",
+    "POSTGRES_HOST",
+    "NEON_HOST",
+  ];
+  return keys.some((k) => Boolean(process.env[k]?.trim()));
+}
+
 function demoModeValue(): string {
   const explicit = process.env.DEMO_MODE?.toLowerCase();
   if (explicit === "0" || explicit === "false") return "";
   if (explicit === "1" || explicit === "true") return "1";
-  if (process.env.VERCEL && !process.env.DATABASE_URL) return "1";
+  if (isDatabaseConfigured()) return "";
+  if (process.env.VERCEL) return "1";
   return process.env.DEMO_MODE ?? "";
 }
 

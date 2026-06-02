@@ -6,9 +6,43 @@ Real-time GTA transit map with stop departures, vehicle runs, and route schedule
 
 ```bash
 pnpm install
-cp .env.example .env
+cp .env.example .env.local
+```
+
+### Database: Neon (recommended for Vercel)
+
+1. In the [Vercel dashboard](https://vercel.com/dashboard) → your project → **Storage** → **Connect Database** → **Neon Postgres**.
+2. Vercel injects env vars automatically (`POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`, etc.).
+3. Pull them locally:
+
+```bash
+npx vercel env pull .env.local
+```
+
+4. Apply schema (uses direct / non-pooling URL):
+
+```bash
+pnpm db:migrate
+```
+
+5. Import GTFS (run locally — not on Vercel serverless):
+
+```bash
+pnpm fetch-gtfs
+pnpm import-gtfs         # TTC import may take 30+ min
+pnpm cluster-stops
+```
+
+When Neon env vars are present, the app uses **database mode** automatically. Without them, it falls back to **demo fixtures** on Vercel.
+
+See `.env.example` for the full list of supported `POSTGRES_*` / `NEON_*` variables.
+
+### Database: local Docker (dev alternative)
+
+```bash
 pnpm db:up
 pnpm db:migrate
+# set DATABASE_URL=postgresql://gta:gta@localhost:5433/gta_transit in .env.local
 ```
 
 ### GTFS data
@@ -26,9 +60,9 @@ pnpm cluster-stops       # build merged stop groups
 pnpm rt:poll
 ```
 
-### Demo mode (no Docker)
+### Demo mode (no database)
 
-With `DEMO_MODE=1` (or on Vercel without `DATABASE_URL`), the app uses prebuilt fixtures in `apps/web/demo/` — no GTFS import at runtime.
+With no Postgres env vars (or `DEMO_MODE=1`), the app uses prebuilt fixtures in `apps/web/demo/`.
 
 To regenerate demo data locally after downloading GTFS:
 
@@ -43,13 +77,11 @@ Then restart the dev server and refresh the browser.
 
 1. Import [github.com/andre-zhang/gtatransit](https://github.com/andre-zhang/gtatransit) on Vercel.
 2. Set **Root Directory** to `apps/web`.
-3. Framework preset: **Next.js** (install command is in `apps/web/vercel.json`).
-4. Environment variables:
-   - `METROLINX_API_KEY` — optional, enables GO live platforms/delays
-   - `DATABASE_URL` — only if you later attach Neon/Postgres for full DB mode
-   - `DEMO_MODE=1` — optional; auto-enabled on Vercel when `DATABASE_URL` is unset
+3. **Storage → Neon Postgres** — connect a database (env vars are auto-added).
+4. Optional: `METROLINX_API_KEY` for GO live platforms/delays.
+5. Run `pnpm db:migrate` locally against `POSTGRES_URL_NON_POOLING`, then import GTFS.
 
-Demo fixtures (~11 MB) are committed in `apps/web/demo/` so Vercel does not need GTFS zips or PostGIS at build or runtime.
+Without Neon, demo fixtures still work (~11 MB bundled in `apps/web/demo/`).
 
 ### Web app
 
@@ -67,6 +99,6 @@ pnpm dev                 # http://localhost:3001
 
 ## Prerequisites
 
-- Docker (PostGIS)
+- **Neon Postgres** (via Vercel Storage) or Docker PostGIS for full data
 - [Metrolinx API key](https://api.openmetrolinx.com/OpenDataAPI/Help/Registration/en) for GO real-time
 - YRT GTFS ZIP from [YRT open data](https://www.yrt.ca/en/about-us/open-data.aspx)
