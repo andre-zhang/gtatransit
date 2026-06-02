@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { isUnixTimestamp, gtfsTimeToSec, secToTime, unixToTorontoSec } from "@/lib/calendar";
-import { isDemoMode } from "@/lib/demo";
+import { useDemoFixtures } from "@/lib/demo-mode";
 import { getTripStops } from "@/lib/demo-schedules";
 import { getStopTripRt, getTripRt, refreshRtCache } from "@/lib/rt-cache";
 
@@ -15,7 +15,7 @@ export async function GET(
   const fromStop = req.nextUrl.searchParams.get("fromStop") ?? undefined;
   await refreshRtCache();
 
-  if (isDemoMode()) {
+  if (await useDemoFixtures()) {
     const stops = getTripStops(feedId, tripId);
     if (!stops.length) {
       return NextResponse.json({ tripId, feedId, stops: [], fromStop });

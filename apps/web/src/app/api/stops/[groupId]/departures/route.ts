@@ -7,7 +7,7 @@ import {
 } from "@/lib/departures";
 import { activeServiceSql, secToTime, serviceDate } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
-import { getDemoCore, isDemoMode } from "@/lib/demo";
+import { getDemoCore, useDemoFixtures } from "@/lib/demo";
 import { getStopSchedule } from "@/lib/demo-schedules";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
 import { mergeRtIntoDeparture, refreshRtCache } from "@/lib/rt-cache";
@@ -21,7 +21,7 @@ export async function GET(
   const { groupId } = await params;
   const resolved = resolveStopGroupId(groupId);
 
-  if (isDemoMode()) {
+  if (await useDemoFixtures()) {
     await refreshRtCache(true);
     const stop = getDemoCore().stops[resolved];
     if (!stop) return NextResponse.json({ name: "Stop", rows: [] });

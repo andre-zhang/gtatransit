@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
-import { isDemoMode } from "@/lib/demo";
+import { useDemoFixtures } from "@/lib/demo-mode";
 import { parseMapFilters, vehicleMatchesFilters } from "@/lib/demo-map-filters";
 import { filterPointCollection, mapQueryParams } from "@/lib/geojson-map";
 import { routeColor } from "@/lib/colors";
@@ -13,7 +13,7 @@ export { dynamic, maxDuration } from "@/lib/api-config";
 export async function GET(req: NextRequest) {
   const { bbox } = mapQueryParams(req.nextUrl.searchParams);
 
-  if (isDemoMode()) {
+  if (await useDemoFixtures()) {
     await refreshRtCache();
     const filters = parseMapFilters(req.nextUrl.searchParams);
     const vehicles = getRtVehicles().filter((v) => vehicleMatchesFilters(v, filters));

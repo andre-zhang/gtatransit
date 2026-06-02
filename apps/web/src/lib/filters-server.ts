@@ -1,13 +1,14 @@
 import { getSql } from "@/lib/db";
 import { MODE_LABELS } from "@/lib/colors";
-import { getDemoCore, isDemoMode } from "@/lib/demo";
+import { getDemoCore } from "@/lib/demo";
+import { useDemoFixtures } from "@/lib/demo-mode";
 import type { FilterTree } from "@/lib/types";
 
 export async function getFilterTree(): Promise<{
   tree: FilterTree;
   rtUpdated: string | null;
 }> {
-  if (isDemoMode()) {
+  if (await useDemoFixtures()) {
     const demo = getDemoCore();
     return { tree: demo.filterTree as FilterTree, rtUpdated: demo.rtUpdated };
   }

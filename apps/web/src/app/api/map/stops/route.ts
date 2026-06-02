@@ -2,7 +2,7 @@ import type { FeatureCollection } from "geojson";
 import { NextRequest, NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { getDemoStopsGeoJson } from "@/lib/demo-stops-geo";
-import { isDemoMode } from "@/lib/demo";
+import { useDemoFixtures } from "@/lib/demo-mode";
 import { filterDemoStops, parseMapFilters } from "@/lib/demo-map-filters";
 import { filterPointCollection, mapQueryParams } from "@/lib/geojson-map";
 import { ZOOM_STOPS } from "@/lib/map-zoom";
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ type: "FeatureCollection", features: [] });
   }
 
-  if (isDemoMode()) {
+  if (await useDemoFixtures()) {
     const filters = parseMapFilters(req.nextUrl.searchParams);
     return NextResponse.json(
       filterPointCollection(

@@ -1,15 +1,18 @@
 import { Nav } from "@/components/Nav";
 import { MapView } from "@/components/MapView";
 import { getFilterTree } from "@/lib/filters-server";
-import { isDemoMode } from "@/lib/demo";
+import { useDemoFixtures } from "@/lib/demo";
 
 export default async function HomePage() {
+  const demo = await useDemoFixtures();
   let tree: Awaited<ReturnType<typeof getFilterTree>>["tree"] = { agencies: [] };
   let rtUpdated: string | null = null;
-  if (isDemoMode()) {
-    const demo = (await import("@/lib/demo")).getDemoCore();
-    tree = demo.filterTree as typeof tree;
-    rtUpdated = demo.rtUpdated;
+
+  if (demo) {
+    const { getDemoCore } = await import("@/lib/demo");
+    const core = getDemoCore();
+    tree = core.filterTree as typeof tree;
+    rtUpdated = core.rtUpdated;
   } else {
     try {
       const data = await getFilterTree();
@@ -19,14 +22,15 @@ export default async function HomePage() {
       /* DB not ready */
     }
   }
+
   const updatedLabel = rtUpdated
     ? `${Math.max(0, Math.round((Date.now() - new Date(rtUpdated).getTime()) / 1000))}s ago`
     : null;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <Nav rtUpdated={updatedLabel} />
-      <MapView filterTree={tree} rtUpdated={updatedLabel} demoMode={isDemoMode()} />
+      <Nav rtUpdated={updatedLabel} demo={demo} />
+      <MapView filterTree={tree} rtUpdated={updatedLabel} demoMode={demo} />
     </div>
   );
 }

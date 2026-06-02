@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDemoRoutesGeoJson } from "@/lib/demo-routes";
-import { isDemoMode } from "@/lib/demo";
+import { useDemoFixtures } from "@/lib/demo-mode";
 import { filterDemoRoutes, parseMapFilters } from "@/lib/demo-map-filters";
 import { filterRouteCollection, mapQueryParams } from "@/lib/geojson-map";
 import { ZOOM_ROUTES } from "@/lib/map-zoom";
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ type: "FeatureCollection", features: [] });
   }
 
-  if (isDemoMode()) {
+  if (await useDemoFixtures()) {
     const filters = parseMapFilters(req.nextUrl.searchParams);
     const key = `${bbox?.join(",") ?? "all"}:${zoom}:${JSON.stringify(filters)}`;
     const hit = cache.get(key);

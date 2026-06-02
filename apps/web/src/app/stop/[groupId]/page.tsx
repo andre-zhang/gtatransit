@@ -2,7 +2,8 @@ import { StopBoardClient } from "@/components/StopBoardClient";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import type { DepartureRow } from "@/components/DepartureTable";
-import { getDemoCore, isDemoMode } from "@/lib/demo";
+import { getDemoCore } from "@/lib/demo";
+import { useDemoFixtures } from "@/lib/demo-mode";
 import { getStopSchedule } from "@/lib/demo-schedules";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
 import {
@@ -57,9 +58,8 @@ export default async function StopPage({
 }) {
   const { groupId } = await params;
   const resolved = resolveStopGroupId(groupId);
-  const { name, rows } = isDemoMode()
-    ? await loadDemo(groupId)
-    : await loadRemote(groupId);
+  const demo = await useDemoFixtures();
+  const { name, rows } = demo ? await loadDemo(groupId) : await loadRemote(groupId);
 
   return (
     <PageShell>

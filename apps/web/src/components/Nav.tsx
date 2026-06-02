@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function Nav({ rtUpdated }: { rtUpdated?: string | null }) {
+export function Nav({
+  rtUpdated,
+  demo,
+}: {
+  rtUpdated?: string | null;
+  demo?: boolean;
+}) {
   const path = usePathname();
-  const isDemo =
-    process.env.NEXT_PUBLIC_DEMO_MODE === "1" ||
-    process.env.DEMO_MODE === "1" ||
-    process.env.DEMO_MODE === "true";
 
   return (
     <header className="relative z-20 flex h-14 shrink-0 items-center gap-8 bg-go-green-dark px-5 text-white shadow-md">
@@ -36,7 +38,7 @@ export function Nav({ rtUpdated }: { rtUpdated?: string | null }) {
       </nav>
 
       <div className="ml-auto flex items-center gap-3">
-        {isDemo && (
+        {demo && (
           <span className="rounded-full border border-white/25 bg-white/10 px-2.5 py-0.5 text-xs font-semibold">
             Demo
           </span>

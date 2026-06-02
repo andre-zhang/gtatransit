@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { activeServiceSql, serviceDate } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
-import { isDemoMode } from "@/lib/demo";
+import { useDemoFixtures } from "@/lib/demo-mode";
 import { getDemoRun } from "@/lib/demo-run";
 import { refreshRtCache } from "@/lib/rt-cache";
 
@@ -13,7 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ feedId: string; vehicleId: string }> },
 ) {
   const { feedId, vehicleId } = await params;
-  if (isDemoMode()) {
+  if (await useDemoFixtures()) {
     await refreshRtCache(true);
     const run = getDemoRun(feedId, vehicleId);
     if (!run) return NextResponse.json({ error: "not_found" }, { status: 404 });
