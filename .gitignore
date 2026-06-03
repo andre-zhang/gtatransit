@@ -3,6 +3,7 @@ dist
 .next
 .env
 .env.local
+neon-direct-url.txt
 data/gtfs/**/*.zip
 data/gtfs/**/extracted
 data/gtfs/**/extracted-demo

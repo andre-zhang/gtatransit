@@ -11,7 +11,8 @@
     "import-gtfs": "pnpm --filter @gta/gtfs-import import",
     "cluster-stops": "pnpm --filter @gta/gtfs-import cluster",
     "build-demo": "pnpm --filter @gta/gtfs-import build-demo",
-    "rt:poll": "pnpm --filter @gta/rt-poller start"
+    "rt:poll": "pnpm --filter @gta/rt-poller start",
+    "load-neon": "node scripts/load-neon.mjs"
   },
   "devDependencies": {
     "typescript": "^5.7.3"
