@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
-import { activeServiceSql, serviceDate } from "@/lib/calendar";
+import {
+  activeServiceSql,
+  gtfsTimeToSec,
+  isUnixTimestamp,
+  secToTime,
+  serviceDate,
+  unixToTorontoSec,
+} from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { getDemoRun } from "@/lib/demo-run";
-import { refreshRtCache } from "@/lib/rt-cache";
+import { getStopTripRt, refreshRtCache } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
@@ -13,12 +20,14 @@ export async function GET(
   { params }: { params: Promise<{ feedId: string; vehicleId: string }> },
 ) {
   const { feedId, vehicleId } = await params;
+  await refreshRtCache(true);
+
   if (await useDemoFixtures()) {
-    await refreshRtCache(true);
     const run = getDemoRun(feedId, vehicleId);
     if (!run) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(run);
   }
+
   const db = getSql();
   const date = serviceDate();
 
@@ -98,6 +107,58 @@ export async function GET(
       `
     : [];
 
+  let upcomingStops: Array<{
+    stop_id: string;
+    name: string;
+    scheduled: string;
+    predicted?: string;
+    platform?: string;
+    delayMin?: number;
+  }> = [];
+
+  if (v.trip_id) {
+    const stopRows = await db<
+      Array<{
+        stop_id: string;
+        name: string;
+        stop_sequence: number;
+        departure_time: string;
+      }>
+    >`
+      SELECT st.stop_id, s.name, st.stop_sequence, st.departure_time
+      FROM stop_times st
+      JOIN stops s ON s.feed_id = st.feed_id AND s.stop_id = st.stop_id
+      WHERE st.feed_id = ${feedId} AND st.trip_id = ${v.trip_id}
+      ORDER BY st.stop_sequence
+    `;
+    const fromSeq = v.current_stop_sequence ?? 0;
+    upcomingStops = stopRows
+      .filter((s) => s.stop_sequence > fromSeq)
+      .slice(0, 12)
+      .map((s) => {
+        const schedSec = gtfsTimeToSec(s.departure_time);
+        const rt = getStopTripRt(feedId, v.trip_id!, s.stop_id);
+        const delaySec = rt?.delaySec;
+        let predictedSec: number | undefined;
+        if (rt?.predictedSec != null) {
+          predictedSec = isUnixTimestamp(rt.predictedSec)
+            ? unixToTorontoSec(rt.predictedSec)
+            : rt.predictedSec;
+        } else if (delaySec != null) {
+          predictedSec = schedSec + delaySec;
+        }
+        return {
+          stop_id: s.stop_id,
+          name: s.name,
+          scheduled: secToTime(schedSec % 86400),
+          predicted:
+            predictedSec != null ? secToTime(predictedSec % 86400) : undefined,
+          platform: feedId === "go" ? rt?.platform : undefined,
+          delayMin: delaySec != null ? Math.round(delaySec / 60) : undefined,
+        };
+      });
+  }
+
   return NextResponse.json({
     vehicle: {
       id: v.vehicle_id,
@@ -116,6 +177,7 @@ export async function GET(
         }
       : null,
     currentStop,
+    upcomingStops,
     blockTrips,
     shape: shape[0]?.geojson ? JSON.parse(shape[0].geojson) : null,
   });

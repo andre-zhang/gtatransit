@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const { bbox } = mapQueryParams(req.nextUrl.searchParams);
 
   if (await useDemoFixtures()) {
-    await refreshRtCache();
+    await refreshRtCache(true);
     const filters = parseMapFilters(req.nextUrl.searchParams);
     const vehicles = getRtVehicles().filter((v) => vehicleMatchesFilters(v, filters));
     const fc = vehicleCollection(
@@ -33,6 +33,8 @@ export async function GET(req: NextRequest) {
     );
     return NextResponse.json(filterPointCollection(fc, bbox));
   }
+
+  await refreshRtCache(true);
 
   const agencies = parseList(req.nextUrl.searchParams.get("agencies"));
   const dirs = parseDirs(req.nextUrl.searchParams.get("directions"));

@@ -53,7 +53,7 @@ export async function GET(
     });
   }
 
-  await refreshRtCache();
+  await refreshRtCache(true);
   const db = getSql();
   const date = serviceDate();
 

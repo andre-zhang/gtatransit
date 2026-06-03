@@ -33,7 +33,14 @@ pnpm import-gtfs         # TTC import may take 30+ min
 pnpm cluster-stops
 ```
 
-When Neon env vars are present, the app uses **database mode** automatically. Without them, it falls back to **demo fixtures** on Vercel.
+When Neon env vars are present, the app uses **database mode** (static GTFS from Postgres + live GTFS-RT). Set `DEMO_MODE=0` on Vercel to force this. Without Postgres, it falls back to bundled demo fixtures.
+
+**Production checklist (like Transit / Google Maps):**
+
+1. Connect Neon on Vercel and run `pnpm db:migrate` locally.
+2. `pnpm fetch-gtfs && pnpm import-gtfs && pnpm cluster-stops` (against `POSTGRES_URL_NON_POOLING`).
+3. Vercel env: `DEMO_MODE=0`, `METROLINX_API_KEY` (GO live data).
+4. Redeploy. Map clicks use **imported GTFS** in Postgres; vehicles are refreshed from agency GTFS-RT feeds into `rt_vehicles` on each API request (and every 2 minutes via `/api/cron/rt`).
 
 See `.env.example` for the full list of supported `POSTGRES_*` / `NEON_*` variables.
 

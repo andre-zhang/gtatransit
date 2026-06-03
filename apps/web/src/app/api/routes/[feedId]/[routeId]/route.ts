@@ -15,11 +15,13 @@ export async function GET(
   const { feedId, routeId } = await params;
   const direction = Number(req.nextUrl.searchParams.get("direction") ?? 0);
   if (await useDemoFixtures()) {
-    await refreshRtCache();
+    await refreshRtCache(true);
     const detail = getDemoRouteDetail(feedId, routeId, direction);
     if (!detail) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(detail);
   }
+  await refreshRtCache(true);
+
   const db = getSql();
   const date = serviceDate();
   const serviceFilter = activeServiceSql(feedId, date);

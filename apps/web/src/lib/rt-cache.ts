@@ -6,6 +6,8 @@ import {
   type RtTripUpdate,
   type RtVehicle,
 } from "@gta/gtfs-rt";
+import { isDatabaseConfigured } from "@gta/db";
+import { persistRtSnapshot } from "./rt-persist";
 import { isUnixTimestamp, unixToTorontoSec } from "./calendar";
 
 type StopRt = {
@@ -155,6 +157,13 @@ export async function refreshRtCache(force = false) {
     const goKey = process.env.METROLINX_API_KEY;
     if (goKey) await pollGo(goKey);
 
+    if (isDatabaseConfigured()) {
+      await persistRtSnapshot(
+        [...vehicleMap.values()].filter((v) => v.lat != null && v.lon != null),
+        snapshotTripUpdates(),
+      );
+    }
+
     lastRefresh = Date.now();
     refreshing = null;
   })();
@@ -208,6 +217,23 @@ export function mergeRtIntoDeparture(
     vehicleId: tripRt?.vehicleId,
     realtime: delaySec != null || rt.predictedSec != null,
   };
+}
+
+function snapshotTripUpdates(): RtTripUpdate[] {
+  const out: RtTripUpdate[] = [];
+  for (const [key, rt] of stopTripMap) {
+    const [feedId, tripId, stopId] = key.split(":");
+    if (!feedId || !tripId || !stopId) continue;
+    out.push({
+      feedId,
+      tripId,
+      stopId,
+      delaySec: rt.delaySec,
+      arrivalTime: rt.predictedSec,
+      departureTime: rt.predictedSec,
+    });
+  }
+  return out;
 }
 
 export function getRtVehicles(): RtVehicle[] {

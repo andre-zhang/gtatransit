@@ -30,7 +30,8 @@ export default async function RoutePage({
       <PageShell>
         <PageHeader title="Route not found" />
         <div className="px-6 py-12 text-center text-go-slate">
-          No schedule data for this route in demo mode.
+          Route not found. Import GTFS into Postgres and set DEMO_MODE=0, or enable
+          demo fixtures with DEMO_MODE=1.
         </div>
       </PageShell>
     );
