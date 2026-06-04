@@ -69,13 +69,13 @@ pnpm rt:poll
 
 ### Demo mode (no database)
 
-With no Postgres env vars (or `DEMO_MODE=1`), the app uses prebuilt fixtures in `apps/web/demo/`.
+With no Postgres env vars (or `DEMO_MODE=1`), the app uses prebuilt fixtures in `apps/web/public/demo/` (static files, not bundled into serverless functions).
 
 To regenerate demo data locally after downloading GTFS:
 
 ```bash
 npx pnpm@9.15.4 fetch-gtfs
-npx pnpm@9.15.4 build-demo    # writes apps/web/demo/*.json
+npx pnpm@9.15.4 build-demo    # writes apps/web/public/demo/*.json
 ```
 
 Then restart the dev server and refresh the browser.
@@ -88,7 +88,7 @@ Then restart the dev server and refresh the browser.
 4. Optional: `METROLINX_API_KEY` for GO live platforms/delays.
 5. Run `pnpm db:migrate` locally against `POSTGRES_URL_NON_POOLING`, then import GTFS.
 
-Without Neon, demo fixtures still work (~11 MB bundled in `apps/web/demo/`).
+Without Neon, set `DEMO_MODE=1` and redeploy (demo JSON is served from `public/demo/`, ~400 MB static assets).
 
 ### Web app
 

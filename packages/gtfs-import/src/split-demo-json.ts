@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { shardJsonObjectFile } from "./split-demo-stream.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const demoDir = join(__dirname, "../../../apps/web/demo");
+const demoDir = join(__dirname, "../../../apps/web/public/demo");
 
 const TARGETS = ["ttc-schedules", "ttc-trip-stops"] as const;
 

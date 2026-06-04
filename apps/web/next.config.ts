@@ -37,9 +37,6 @@ const nextConfig: NextConfig = {
     DEMO_MODE: demoMode,
     NEXT_PUBLIC_DEMO_MODE: demoMode,
   },
-  outputFileTracingIncludes: {
-    "/api/**/*": ["./demo/**/*"],
-  },
 };
 
 export default nextConfig;

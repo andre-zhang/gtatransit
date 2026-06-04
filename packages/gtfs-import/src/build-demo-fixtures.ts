@@ -1,5 +1,5 @@
 /**
- * Builds apps/web/demo/fixtures.json from downloaded GTFS zips (routes + shapes).
+ * Builds apps/web/public/demo/fixtures.json from downloaded GTFS zips (routes + shapes).
  * Run after fetch-gtfs — no database required.
  */
 import {
@@ -30,7 +30,7 @@ import { writeShardedRecord } from "./write-sharded-json.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "../../..");
 const dataDir = process.env.GTFS_DATA_DIR ?? join(root, "data/gtfs");
-const outDir = join(root, "apps/web/demo");
+const outDir = join(root, "apps/web/public/demo");
 const outPath = join(outDir, "fixtures.json");
 
 const FEEDS: Array<{ id: string; name: string; zip: string }> = [

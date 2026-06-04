@@ -1,5 +1,5 @@
 import type { FeatureCollection, LineString } from "geojson";
-import routesGeo from "../../demo/routes.json";
+import { loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
 import { getDemoCore } from "./demo";
 import { loadFeedSchedules, loadUnionSchedule } from "./demo-schedule-data";
@@ -83,7 +83,7 @@ function findRouteShape(
   routeId: string,
   direction: number,
 ): LineString | null {
-  const fc = routesGeo as FeatureCollection;
+  const fc = loadDemoAssets().routesGeo;
   const hit = fc.features.find((f) => {
     const p = f.properties as Record<string, unknown> | null;
     if (!p || p.feedId !== feedId || p.routeId !== routeId) return false;

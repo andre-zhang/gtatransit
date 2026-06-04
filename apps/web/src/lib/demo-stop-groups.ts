@@ -1,10 +1,7 @@
 import type { FeatureCollection } from "geojson";
-import stopMeta from "../../demo/stop-meta.json";
-import unionSchedule from "../../demo/union-schedule.json";
-import core from "../../demo/fixtures.json";
-import stopsGeo from "../../demo/stops.json";
+import { loadDemoAssets } from "./demo-assets";
 import type { DemoStopMeta } from "./demo";
-import type { ScheduleRow } from "./demo-schedules";
+import type { ScheduleRow } from "./demo-schedule-types";
 
 type StopMeta = {
   locationType: number;
@@ -43,7 +40,7 @@ function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): num
 }
 
 function metaFor(feedId: string, stopId: string): StopMeta | undefined {
-  const feed = (stopMeta as Record<string, Record<string, StopMeta>>)[feedId];
+  const feed = loadDemoAssets().stopMeta[feedId] as Record<string, StopMeta> | undefined;
   return feed?.[stopId];
 }
 
@@ -74,8 +71,9 @@ class UnionFind {
 }
 
 function buildStopPoints(): StopPoint[] {
+  const { core, stopsGeo } = loadDemoAssets();
   const registry = core.stops as Record<string, DemoStopMeta>;
-  const fc = stopsGeo as FeatureCollection;
+  const fc = stopsGeo;
   const coordByGroup = new Map<string, [number, number]>();
   for (const f of fc.features) {
     const gid = f.properties?.groupId as string | undefined;
@@ -110,7 +108,7 @@ function buildStopPoints(): StopPoint[] {
 function unionScheduleMembers(): Array<{ feedId: string; stopId: string }> {
   const members = new Map<string, { feedId: string; stopId: string }>();
   members.set("go:UN", { feedId: "go", stopId: "UN" });
-  for (const row of unionSchedule as ScheduleRow[]) {
+  for (const row of loadDemoAssets().unionSchedule) {
     members.set(`${row.feedId}:${row.stopId}`, { feedId: row.feedId, stopId: row.stopId });
   }
   return [...members.values()];
@@ -194,7 +192,7 @@ function buildGroupedStops(): {
   alias: Map<string, string>;
   points: StopPoint[];
 } {
-  const registry = { ...(core.stops as Record<string, DemoStopMeta>) };
+  const registry = { ...(loadDemoAssets().core.stops as Record<string, DemoStopMeta>) };
   delete registry["demo-union"];
 
   const points = buildStopPoints();

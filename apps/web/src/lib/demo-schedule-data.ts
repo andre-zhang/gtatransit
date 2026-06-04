@@ -1,8 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { resolveDemoDir } from "./demo-dir";
 import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 
-const demoDir = join(process.cwd(), "demo");
+const demoDir = resolveDemoDir();
 
 const scheduleCache = new Map<string, Record<string, ScheduleRow[]>>();
 const tripStopCache = new Map<string, Record<string, TripStopRow[]>>();
