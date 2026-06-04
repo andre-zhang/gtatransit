@@ -3,6 +3,8 @@ import { MapView } from "@/components/MapView";
 import { getFilterTree } from "@/lib/filters-server";
 import { useDemoFixtures } from "@/lib/demo";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const demo = await useDemoFixtures();
   let tree: Awaited<ReturnType<typeof getFilterTree>>["tree"] = { agencies: [] };

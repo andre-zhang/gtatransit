@@ -19,6 +19,8 @@ const SHARD_MANIFEST: Record<string, string[]> = {
 };
 
 function listShardFiles(basename: string): string[] {
+  if (process.env.VERCEL) return SHARD_MANIFEST[basename] ?? [];
+
   const demoDir = resolveDemoDir();
   if (!existsSync(demoDir)) return SHARD_MANIFEST[basename] ?? [];
   const re = new RegExp(

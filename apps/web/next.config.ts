@@ -38,6 +38,15 @@ const nextConfig: NextConfig = {
     DEMO_MODE: demoMode,
     NEXT_PUBLIC_DEMO_MODE: demoMode,
   },
+  // Demo JSON is served from /demo (public/demo). Never bundle ~400MB into lambdas.
+  outputFileTracingExcludes: {
+    "/*": ["./public/demo/**", "./demo/**"],
+    "/api/**": ["./public/demo/**", "./demo/**"],
+    "/stop/**": ["./public/demo/**", "./demo/**"],
+    "/route/**": ["./public/demo/**", "./demo/**"],
+    "/run/**": ["./public/demo/**", "./demo/**"],
+    "/trip/**": ["./public/demo/**", "./demo/**"],
+  },
 };
 
 export default nextConfig;

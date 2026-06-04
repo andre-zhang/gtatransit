@@ -2,3 +2,7 @@ data/
 packages/gtfs-import/data/
 **/*.zip
 .git
+apps/web/public/demo
+apps/web/demo
+public/demo
+demo
