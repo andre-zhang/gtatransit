@@ -1,4 +1,4 @@
-import { getDemoCore } from "./demo";
+import { ensureDemoAssets, getDemoCore } from "./demo";
 import { getGroupedDemoStops, resolveStopGroupId } from "./demo-stop-groups";
 import { getTripStops } from "./demo-schedules";
 import { lookupRouteFromSchedules, lookupTripFromSchedules } from "./demo-trip-lookup";
@@ -7,7 +7,7 @@ import { routeColor } from "./colors";
 import { gtfsTimeToSec, secToTime } from "./calendar";
 import { getRtVehicles, getTripRt, getStopTripRt } from "./rt-cache";
 
-function findRouteMeta(feedId: string, routeId: string | undefined) {
+async function findRouteMeta(feedId: string, routeId: string | undefined) {
   if (!routeId) return null;
   for (const agency of getDemoCore().filterTree.agencies) {
     if (agency.id !== feedId) continue;
@@ -22,7 +22,7 @@ function findRouteMeta(feedId: string, routeId: string | undefined) {
       }
     }
   }
-  const sample = lookupRouteFromSchedules(feedId, routeId);
+  const sample = await lookupRouteFromSchedules(feedId, routeId);
   if (sample) {
     return {
       short_name: sample.routeShort,
@@ -53,12 +53,12 @@ function findShape(feedId: string, routeId: string | undefined, direction = 0) {
   );
 }
 
-function upcomingStops(
+async function upcomingStops(
   feedId: string,
   tripId: string,
   fromSequence: number | undefined,
 ) {
-  const stops = getTripStops(feedId, tripId);
+  const stops = await getTripStops(feedId, tripId);
   if (!stops.length) return [];
   const startIdx =
     fromSequence != null
@@ -84,7 +84,9 @@ function upcomingStops(
   });
 }
 
-export function getDemoRun(feedId: string, vehicleId: string) {
+export async function getDemoRun(feedId: string, vehicleId: string) {
+  await ensureDemoAssets();
+
   const vehicle = getRtVehicles().find(
     (v) => v.feedId === feedId && v.vehicleId === vehicleId,
   );
@@ -92,20 +94,18 @@ export function getDemoRun(feedId: string, vehicleId: string) {
 
   const tripRt = vehicle.tripId ? getTripRt(feedId, vehicle.tripId) : undefined;
   const scheduleTrip = vehicle.tripId
-    ? lookupTripFromSchedules(feedId, vehicle.tripId)
+    ? await lookupTripFromSchedules(feedId, vehicle.tripId)
     : undefined;
   const routeId = vehicle.routeId ?? tripRt?.routeId ?? scheduleTrip?.routeId;
-  const route = findRouteMeta(feedId, routeId);
+  const route = await findRouteMeta(feedId, routeId);
   const shape = findShape(feedId, routeId);
   const headsign = scheduleTrip?.headsign ?? null;
 
-  const currentStop = vehicle.tripId
-    ? upcomingStops(feedId, vehicle.tripId, vehicle.currentStopSequence)[0] ?? null
-    : null;
-
-  const nextStops = vehicle.tripId
-    ? upcomingStops(feedId, vehicle.tripId, vehicle.currentStopSequence).slice(1, 12)
+  const upcoming = vehicle.tripId
+    ? await upcomingStops(feedId, vehicle.tripId, vehicle.currentStopSequence)
     : [];
+  const currentStop = upcoming[0] ?? null;
+  const nextStops = upcoming.slice(1, 12);
 
   return {
     vehicle: {

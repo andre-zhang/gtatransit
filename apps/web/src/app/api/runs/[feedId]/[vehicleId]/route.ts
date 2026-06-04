@@ -23,7 +23,7 @@ export async function GET(
   await refreshRtCache(true);
 
   if (await useDemoFixtures()) {
-    const run = getDemoRun(feedId, vehicleId);
+    const run = await getDemoRun(feedId, vehicleId);
     if (!run) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(run);
   }

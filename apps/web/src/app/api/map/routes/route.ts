@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
   }
 
   if (await useDemoFixtures()) {
+    const { ensureDemoAssets } = await import("@/lib/demo-assets");
+    await ensureDemoAssets();
     const filters = parseMapFilters(req.nextUrl.searchParams);
     const key = `${bbox?.join(",") ?? "all"}:${zoom}:${JSON.stringify(filters)}`;
     const hit = cache.get(key);

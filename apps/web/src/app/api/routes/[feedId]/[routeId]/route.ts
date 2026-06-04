@@ -15,8 +15,10 @@ export async function GET(
   const { feedId, routeId } = await params;
   const direction = Number(req.nextUrl.searchParams.get("direction") ?? 0);
   if (await useDemoFixtures()) {
+    const { ensureDemoAssets } = await import("@/lib/demo-assets");
+    await ensureDemoAssets();
     await refreshRtCache(true);
-    const detail = getDemoRouteDetail(feedId, routeId, direction);
+    const detail = await getDemoRouteDetail(feedId, routeId, direction);
     if (!detail) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(detail);
   }

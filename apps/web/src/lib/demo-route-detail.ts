@@ -1,5 +1,5 @@
-import type { FeatureCollection, LineString } from "geojson";
-import { loadDemoAssets } from "./demo-assets";
+import type { LineString } from "geojson";
+import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
 import { getDemoCore } from "./demo";
 import { loadFeedSchedules, loadUnionSchedule } from "./demo-schedule-data";
@@ -42,29 +42,20 @@ function findRouteMeta(feedId: string, routeId: string): RouteMeta | null {
       }
     }
   }
-
-  const sample = loadUnionSchedule().find(
-    (row) => row.feedId === feedId && row.routeId === routeId,
-  );
-  if (sample) {
-    return {
-      short_name: sample.routeShort,
-      long_name: sample.headsign,
-      route_type: feedId === "go" ? 2 : 3,
-      color: sample.routeColor,
-    };
-  }
-
   return null;
 }
 
-function collectScheduleRows(feedId: string, routeId: string): ScheduleRow[] {
+async function collectScheduleRows(
+  feedId: string,
+  routeId: string,
+): Promise<ScheduleRow[]> {
   const rows: ScheduleRow[] = [];
   const matches = (row: ScheduleRow) =>
     row.routeId === routeId || row.routeShort === routeId;
 
   if ((FEEDS_WITH_SCHEDULE_FILES as readonly string[]).includes(feedId)) {
-    for (const sched of Object.values(loadFeedSchedules(feedId))) {
+    const byStop = await loadFeedSchedules(feedId);
+    for (const sched of Object.values(byStop)) {
       for (const row of sched) {
         if (matches(row)) rows.push(row);
       }
@@ -72,7 +63,8 @@ function collectScheduleRows(feedId: string, routeId: string): ScheduleRow[] {
     return rows;
   }
 
-  for (const row of loadUnionSchedule()) {
+  const union = await loadUnionSchedule();
+  for (const row of union) {
     if (row.feedId === feedId && matches(row)) rows.push(row);
   }
   return rows;
@@ -93,8 +85,28 @@ function findRouteShape(
   return hit.geometry as LineString;
 }
 
-export function getDemoRouteDetail(feedId: string, routeId: string, direction: number) {
-  const meta = findRouteMeta(feedId, routeId);
+export async function getDemoRouteDetail(
+  feedId: string,
+  routeId: string,
+  direction: number,
+) {
+  await ensureDemoAssets();
+
+  let meta = findRouteMeta(feedId, routeId);
+  if (!meta) {
+    const union = await loadUnionSchedule();
+    const sample = union.find(
+      (row) => row.feedId === feedId && row.routeId === routeId,
+    );
+    if (sample) {
+      meta = {
+        short_name: sample.routeShort,
+        long_name: sample.headsign,
+        route_type: feedId === "go" ? 2 : 3,
+        color: sample.routeColor,
+      };
+    }
+  }
   if (!meta) return null;
 
   const tripMap = new Map<
@@ -102,7 +114,7 @@ export function getDemoRouteDetail(feedId: string, routeId: string, direction: n
     { trip_id: string; headsign: string | null; first_departure: string }
   >();
 
-  for (const row of collectScheduleRows(feedId, routeId)) {
+  for (const row of await collectScheduleRows(feedId, routeId)) {
     const dep = formatDeparture(row.departureTime);
     const existing = tripMap.get(row.tripId);
     if (!existing || dep < existing.first_departure) {
@@ -118,25 +130,29 @@ export function getDemoRouteDetail(feedId: string, routeId: string, direction: n
     .sort((a, b) => a.first_departure.localeCompare(b.first_departure))
     .slice(0, 200);
 
-  const vehicles = getRtVehicles()
-    .filter(
-      (v) =>
-        v.feedId === feedId &&
-        (v.routeId === routeId ||
-          v.routeId === meta.short_name ||
-          meta.short_name === routeId),
-    )
-    .map((v) => {
-      const sched = v.tripId ? lookupTripFromSchedules(feedId, v.tripId) : undefined;
-      return {
-        vehicle_id: v.vehicleId,
-        label: v.label?.trim() || v.vehicleId,
-        lat: v.lat!,
-        lon: v.lon!,
-        headsign: sched?.headsign ?? null,
-        delay_sec: v.delaySec ?? null,
-      };
-    });
+  const vehicles = await Promise.all(
+    getRtVehicles()
+      .filter(
+        (v) =>
+          v.feedId === feedId &&
+          (v.routeId === routeId ||
+            v.routeId === meta!.short_name ||
+            meta!.short_name === routeId),
+      )
+      .map(async (v) => {
+        const sched = v.tripId
+          ? await lookupTripFromSchedules(feedId, v.tripId)
+          : undefined;
+        return {
+          vehicle_id: v.vehicleId,
+          label: v.label?.trim() || v.vehicleId,
+          lat: v.lat!,
+          lon: v.lon!,
+          headsign: sched?.headsign ?? null,
+          delay_sec: v.delaySec ?? null,
+        };
+      }),
+  );
 
   return {
     route: meta,

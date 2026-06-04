@@ -1,4 +1,5 @@
 import { isDatabaseConfigured } from "@gta/db";
+import { getSql } from "@/lib/db";
 
 function explicitDemo(): boolean | null {
   const v = process.env.DEMO_MODE?.toLowerCase();
@@ -16,12 +17,20 @@ export function isDemoMode(): boolean {
   return false;
 }
 
-/** Bundled demo JSON only when explicitly enabled or Postgres is not configured. */
+/** Demo fixtures when DEMO_MODE=1, no DB, or Neon is still empty (no GTFS import yet). */
 export async function useDemoFixtures(): Promise<boolean> {
   const explicit = explicitDemo();
   if (explicit === true) return true;
   if (explicit === false) return false;
-  return !isDatabaseConfigured();
+  if (!isDatabaseConfigured()) return true;
+
+  try {
+    const db = getSql();
+    const rows = await db`SELECT 1 FROM feeds LIMIT 1`;
+    return rows.length === 0;
+  } catch {
+    return true;
+  }
 }
 
 export function demoModeEnvValue(): string {

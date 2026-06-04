@@ -16,7 +16,9 @@ export async function GET(
   await refreshRtCache();
 
   if (await useDemoFixtures()) {
-    const stops = getTripStops(feedId, tripId);
+    const { ensureDemoAssets } = await import("@/lib/demo-assets");
+    await ensureDemoAssets();
+    const stops = await getTripStops(feedId, tripId);
     if (!stops.length) {
       return NextResponse.json({ tripId, feedId, stops: [], fromStop });
     }

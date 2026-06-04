@@ -19,6 +19,8 @@ export async function GET(req: NextRequest) {
   }
 
   if (await useDemoFixtures()) {
+    const { ensureDemoAssets } = await import("@/lib/demo-assets");
+    await ensureDemoAssets();
     const filters = parseMapFilters(req.nextUrl.searchParams);
     return NextResponse.json(
       filterPointCollection(

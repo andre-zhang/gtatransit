@@ -24,8 +24,9 @@ function demoModeValue(): string {
   const explicit = process.env.DEMO_MODE?.toLowerCase();
   if (explicit === "0" || explicit === "false") return "";
   if (explicit === "1" || explicit === "true") return "1";
-  if (isDatabaseConfigured()) return "";
+  // Default to demo on Vercel unless DEMO_MODE=0 (Neon without GTFS import is common).
   if (process.env.VERCEL) return "1";
+  if (isDatabaseConfigured()) return "";
   return process.env.DEMO_MODE ?? "";
 }
 

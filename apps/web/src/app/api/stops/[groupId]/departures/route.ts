@@ -22,11 +22,13 @@ export async function GET(
   const resolved = resolveStopGroupId(groupId);
 
   if (await useDemoFixtures()) {
+    const { ensureDemoAssets } = await import("@/lib/demo-assets");
+    await ensureDemoAssets();
     await refreshRtCache(true);
     const stop = getDemoCore().stops[resolved];
     if (!stop) return NextResponse.json({ name: "Stop", rows: [] });
 
-    const schedule = getStopSchedule(resolved);
+    const schedule = await getStopSchedule(resolved);
     const inputs: DepartureInput[] = schedule.map((r) => {
       const schedSec = gtfsTimeToSec(r.departureTime);
       const rt = mergeRtIntoDeparture(r.feedId, r.tripId, r.stopId, schedSec);

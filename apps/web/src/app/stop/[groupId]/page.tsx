@@ -2,7 +2,7 @@ import { StopBoardClient } from "@/components/StopBoardClient";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import type { DepartureRow } from "@/components/DepartureTable";
-import { getDemoCore } from "@/lib/demo";
+import { ensureDemoAssets, getDemoCore } from "@/lib/demo";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { getStopSchedule } from "@/lib/demo-schedules";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
@@ -23,11 +23,12 @@ async function loadRemote(groupId: string) {
 
 async function loadDemo(groupId: string) {
   const resolved = resolveStopGroupId(groupId);
+  await ensureDemoAssets();
   await refreshRtCache(true);
   const stop = getDemoCore().stops[resolved];
   if (!stop) return { name: "Stop", rows: [] as DepartureRow[] };
 
-  const schedule = getStopSchedule(resolved);
+  const schedule = await getStopSchedule(resolved);
   const inputs: DepartureInput[] = schedule.map((r) => {
     const schedSec = gtfsTimeToSec(r.departureTime);
     const rt = mergeRtIntoDeparture(r.feedId, r.tripId, r.stopId, schedSec);

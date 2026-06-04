@@ -1,6 +1,6 @@
 import { getSql } from "@/lib/db";
 import { MODE_LABELS } from "@/lib/colors";
-import { getDemoCore } from "@/lib/demo";
+import { ensureDemoAssets, getDemoCore } from "@/lib/demo";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import type { FilterTree } from "@/lib/types";
 
@@ -9,6 +9,7 @@ export async function getFilterTree(): Promise<{
   rtUpdated: string | null;
 }> {
   if (await useDemoFixtures()) {
+    await ensureDemoAssets();
     const demo = getDemoCore();
     return { tree: demo.filterTree as FilterTree, rtUpdated: demo.rtUpdated };
   }

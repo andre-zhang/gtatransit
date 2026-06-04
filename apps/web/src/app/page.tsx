@@ -9,7 +9,8 @@ export default async function HomePage() {
   let rtUpdated: string | null = null;
 
   if (demo) {
-    const { getDemoCore } = await import("@/lib/demo");
+    const { ensureDemoAssets, getDemoCore } = await import("@/lib/demo");
+    await ensureDemoAssets();
     const core = getDemoCore();
     tree = core.filterTree as typeof tree;
     rtUpdated = core.rtUpdated;
