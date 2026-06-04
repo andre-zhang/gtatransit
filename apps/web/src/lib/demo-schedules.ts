@@ -7,6 +7,8 @@ import {
 import { resolveStopGroupId } from "./demo-stop-groups";
 import { ensureDemoAssets } from "./demo-assets";
 
+import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
+
 export type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 
 const FEEDS_WITH_SCHEDULE_FILES = ["go", "ttc", "miway"] as const;
