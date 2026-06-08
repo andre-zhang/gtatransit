@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { RunMap } from "@/components/RunMap";
@@ -41,15 +42,16 @@ export default async function RunPage({
     );
   }
 
-  const { vehicle, trip, route, currentStop, upcomingStops, shape } = data as {
+  const { vehicle, trip, route, currentStop, upcomingStops, shape, blockTrips } = data as {
     vehicle: {
       id: string;
       label: string;
       lat: number;
       lon: number;
+      bearing?: number | null;
       delayMin: number | null;
     };
-    trip: { trip_id: string; route_id: string; headsign: string | null } | null;
+    trip: { trip_id: string; route_id: string; headsign: string | null; block_id?: string | null } | null;
     route: {
       short_name: string | null;
       long_name: string | null;
@@ -57,9 +59,16 @@ export default async function RunPage({
     } | null;
     currentStop: { stop_id: string; name: string } | null;
     upcomingStops: UpcomingStop[];
+    blockTrips?: Array<{
+      trip_id: string;
+      headsign: string | null;
+      first_departure: string;
+      active: boolean;
+    }>;
     shape: GeoJSON.Feature | null;
   };
 
+  const early = vehicle.delayMin != null && vehicle.delayMin < 0;
   const late = vehicle.delayMin != null && vehicle.delayMin > 0;
   const headsign =
     trip?.headsign ?? route?.long_name ?? route?.short_name ?? "In service";
@@ -80,22 +89,61 @@ export default async function RunPage({
         }
       />
 
-      <div className="grid grid-cols-2 divide-x divide-go-bg border-b border-go-bg">
+      <div className="grid grid-cols-2 divide-x divide-go-bg border-b border-go-bg sm:grid-cols-3">
         <div className="p-5">
           <div className="go-section-title mb-1">Delay</div>
           <div
-            className={`text-2xl font-bold ${late ? "text-go-late" : "text-go-ontime"}`}
+            className={`text-2xl font-bold ${
+              late ? "text-go-late" : early ? "text-go-slate" : "text-go-ontime"
+            }`}
           >
-            {late ? `+${vehicle.delayMin} min` : "On time"}
+            {late
+              ? `+${vehicle.delayMin} min`
+              : early
+                ? `${vehicle.delayMin} min`
+                : "On time"}
           </div>
         </div>
         <div className="p-5">
+          <div className="go-section-title mb-1">Vehicle</div>
+          <div className="text-lg font-bold text-go-navy">{vehicle.label}</div>
+        </div>
+        <div className="p-5 col-span-2 sm:col-span-1">
           <div className="go-section-title mb-1">Current stop</div>
           <div className="text-lg font-bold text-go-navy">{currentStop?.name ?? "—"}</div>
         </div>
       </div>
 
       <RunMap lat={vehicle.lat} lon={vehicle.lon} shape={shape} />
+
+      {blockTrips && blockTrips.length > 1 && (
+        <Section title="Trips in block">
+          <ul className="divide-y divide-go-bg">
+            {blockTrips.map((t) => (
+              <li
+                key={t.trip_id}
+                className={`flex items-center gap-4 px-5 py-3 ${t.active ? "bg-go-bg/40" : ""}`}
+              >
+                <span className="w-16 shrink-0 text-right font-bold tabular-nums text-go-navy">
+                  {t.first_departure}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-go-navy">
+                  {t.headsign ?? t.trip_id}
+                </span>
+                {t.active && (
+                  <span className="go-badge go-badge--live shrink-0">Active</span>
+                )}
+                <Link
+                  href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
+                  className="shrink-0 text-xs font-semibold text-go-green hover:underline"
+                >
+                  Open
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       {upcomingStops?.length > 0 && (
         <Section title="Next stops">

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { AgencyMark } from "./AgencyMark";
 import { RoutePill } from "./RoutePill";
 
 export type DepartureRow = {
@@ -107,6 +108,7 @@ export function DepartureTable({
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const showPlatform = stopName?.includes("GO") || stopName?.includes("Union") || rows.some((r) => r.feedId === "go");
+  const showAgency = new Set(rows.map((r) => r.feedId)).size > 1;
 
   if (!rows.length) {
     return (
@@ -127,6 +129,7 @@ export function DepartureTable({
         <thead>
           <tr className="departure-board-head">
             <th className="px-5 py-3 text-right">Time</th>
+            {showAgency && <th className="px-2 py-3">Agency</th>}
             <th className="px-3 py-3">Route</th>
             <th className="px-3 py-3">Destination</th>
             {showPlatform && <th className="px-3 py-3 text-center">Plat</th>}
@@ -137,6 +140,7 @@ export function DepartureTable({
           {rows.map((r, i) => {
             const displayTime = r.predicted ?? r.time;
             const late = r.latenessMin != null && r.latenessMin > 0;
+            const early = r.latenessMin != null && r.latenessMin < 0;
             const rowKey = `${r.tripId}-${i}`;
             const isOpen = expanded === rowKey;
             const tripHref = `/trip/${r.feedId}/${encodeURIComponent(r.tripId)}${
@@ -163,6 +167,11 @@ export function DepartureTable({
                       </span>
                     )}
                   </td>
+                  {showAgency && (
+                    <td className="px-2 py-3">
+                      <AgencyMark feedId={r.feedId} />
+                    </td>
+                  )}
                   <td className="px-3 py-3">
                     <RoutePill shortName={r.routeShort} color={r.routeColor} size="lg" />
                   </td>
@@ -181,15 +190,26 @@ export function DepartureTable({
                     </td>
                   )}
                   <td className="px-5 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {late ? (
                         <span className="go-badge go-badge--late">+{r.latenessMin} min</span>
+                      ) : early ? (
+                        <span className="go-badge go-badge--ontime">{r.latenessMin} min</span>
                       ) : r.realtime && r.latenessMin === 0 ? (
                         <span className="go-badge go-badge--ontime">On time</span>
                       ) : r.realtime ? (
                         <span className="go-badge go-badge--live">Live</span>
                       ) : (
                         <span className="go-badge go-badge--sched">Scheduled</span>
+                      )}
+                      {r.vehicleId && (
+                        <Link
+                          href={`/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs font-semibold text-go-slate hover:text-go-navy hover:underline"
+                        >
+                          Vehicle
+                        </Link>
                       )}
                       <Link
                         href={tripHref}
@@ -203,7 +223,7 @@ export function DepartureTable({
                 </tr>
                 {isOpen && (
                   <tr>
-                    <td colSpan={showPlatform ? 5 : 4} className="p-0">
+                    <td colSpan={(showPlatform ? 1 : 0) + (showAgency ? 1 : 0) + 4} className="p-0">
                       <TripStopsPanel
                         feedId={r.feedId}
                         tripId={r.tripId}

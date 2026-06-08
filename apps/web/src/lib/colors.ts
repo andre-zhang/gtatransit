@@ -42,6 +42,15 @@ export const AGENCY_COLORS: Record<string, string> = {
   miway: "#00a651",
 };
 
+export const AGENCY_NAMES: Record<string, string> = {
+  ttc: "TTC",
+  go: "GO",
+  yrt: "YRT",
+  brampton: "Brampton",
+  drt: "DRT",
+  miway: "MiWay",
+};
+
 export function routeColor(
   feedId: string,
   routeShortName: string | null,

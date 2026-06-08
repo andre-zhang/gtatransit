@@ -70,15 +70,11 @@ export async function loadFeedSchedules(
   return data;
 }
 
-/** Load one stop's rows without merging every TTC schedule shard into memory. */
+/** Load one stop's rows without merging every schedule shard into memory. */
 export async function loadStopScheduleRows(
   feedId: string,
   stopId: string,
 ): Promise<ScheduleRow[]> {
-  if (HEAVY_SCHEDULE_FEEDS.has(feedId)) {
-    return [];
-  }
-
   const files = listShardFiles(`${feedId}-schedules`);
   if (!files.length) {
     try {
@@ -99,7 +95,7 @@ export async function loadStopScheduleRows(
   return [];
 }
 
-/** Feeds whose schedule shards are too large to scan per request on serverless. */
+/** Feeds too large for full-route / full-feed scans on serverless (per-stop shard lookup is OK). */
 const HEAVY_SCHEDULE_FEEDS = new Set(["ttc"]);
 
 /** Collect rows for a route by scanning shards (avoids caching the full feed map). */
@@ -149,8 +145,6 @@ export async function lookupTripScheduleRow(
   feedId: string,
   tripId: string,
 ): Promise<ScheduleRow | undefined> {
-  if (HEAVY_SCHEDULE_FEEDS.has(feedId)) return undefined;
-
   const files = listShardFiles(`${feedId}-schedules`);
   if (!files.length) {
     try {

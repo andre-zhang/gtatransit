@@ -185,7 +185,62 @@ export function getStopTripRt(
   tripId: string,
   stopId: string,
 ): StopRt | undefined {
-  return stopTripMap.get(stopTripKey(feedId, tripId, stopId));
+  const direct = stopTripMap.get(stopTripKey(feedId, tripId, stopId));
+  if (direct) return direct;
+  return undefined;
+}
+
+function getStopTripRtAny(
+  feedId: string,
+  tripId: string,
+  stopIds: string[],
+): StopRt | undefined {
+  for (const stopId of stopIds) {
+    const hit = stopTripMap.get(stopTripKey(feedId, tripId, stopId));
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+export type RtStopPrediction = {
+  feedId: string;
+  tripId: string;
+  stopId: string;
+  delaySec?: number;
+  predictedSec?: number;
+  vehicleId?: string;
+  routeId?: string;
+};
+
+/** Live predictions at a stop that may not appear in static schedule (e.g. trip id drift). */
+export function getRtPredictionsForStop(
+  feedId: string,
+  stopIds: string[],
+  excludeTrips: Set<string>,
+): RtStopPrediction[] {
+  const stopIdSet = new Set(stopIds);
+  const byTrip = new Map<string, RtStopPrediction>();
+
+  for (const [key, rt] of stopTripMap) {
+    const [f, tripId, stopId] = key.split(":");
+    if (f !== feedId || !tripId || !stopId || !stopIdSet.has(stopId)) continue;
+    if (excludeTrips.has(`${feedId}:${tripId}`) || excludeTrips.has(tripId)) continue;
+    if (rt.delaySec == null && rt.predictedSec == null) continue;
+
+    const tripRt = getTripRt(feedId, tripId);
+    const vehicle = getVehicleForTrip(feedId, tripId);
+    byTrip.set(tripId, {
+      feedId,
+      tripId,
+      stopId,
+      delaySec: rt.delaySec ?? tripRt?.delaySec,
+      predictedSec: rt.predictedSec,
+      vehicleId: tripRt?.vehicleId ?? vehicle?.vehicleId,
+      routeId: tripRt?.routeId ?? vehicle?.routeId,
+    });
+  }
+
+  return [...byTrip.values()];
 }
 
 function getVehicleForTrip(feedId: string, tripId: string): RtVehicle | undefined {
@@ -208,6 +263,7 @@ export function mergeRtIntoDeparture(
   tripId: string,
   stopId: string | undefined,
   schedSec: number,
+  altStopIds: string[] = [],
 ): {
   delaySec?: number;
   predictedSec?: number;
@@ -215,7 +271,10 @@ export function mergeRtIntoDeparture(
   vehicleId?: string;
   realtime: boolean;
 } {
-  const stopRt = stopId ? getStopTripRt(feedId, tripId, stopId) : undefined;
+  const stopIds = stopId ? [stopId, ...altStopIds.filter((id) => id !== stopId)] : altStopIds;
+  const stopRt = stopIds.length
+    ? getStopTripRtAny(feedId, tripId, stopIds)
+    : undefined;
   const tripRt = getTripRt(feedId, tripId);
   const vehicle = getVehicleForTrip(feedId, tripId);
 

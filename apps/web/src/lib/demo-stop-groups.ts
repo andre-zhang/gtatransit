@@ -44,16 +44,20 @@ function metaFor(feedId: string, stopId: string): StopMeta | undefined {
   return feed?.[stopId];
 }
 
-function isTerminalLike(meta: StopMeta | undefined, name: string, stopId: string): boolean {
+function isTerminalLike(
+  feedId: string,
+  meta: StopMeta | undefined,
+  name: string,
+  stopId: string,
+): boolean {
   if (meta?.locationType === 1) return true;
-  if (meta?.parentStation) return false;
-  if (stopId.length <= 3 && /^[A-Z0-9]+$/.test(stopId)) return true;
-  const n = name.toLowerCase();
-  return (
-    n.includes("terminal") ||
-    n.includes(" station") ||
-    (n.endsWith(" go") && !n.includes("@"))
-  );
+  if (feedId === "go" && stopId.length <= 3 && /^[A-Z0-9]+$/.test(stopId)) return true;
+  const n = name.trim().toLowerCase();
+  if (/\bterminal\b/.test(n)) return true;
+  if (/\bunion station\b/.test(n)) return true;
+  if (/\bstation\s*$/.test(n) && !n.includes("@")) return true;
+  if (n.endsWith(" go") && !n.includes("@")) return true;
+  return false;
 }
 
 class UnionFind {
@@ -98,7 +102,7 @@ function buildStopPoints(): StopPoint[] {
       lon: meta?.lon ?? coords[0],
       locationType: meta?.locationType ?? 0,
       parentStation: meta?.parentStation ?? null,
-      isTerminal: isTerminalLike(meta, stop.name, member.stopId),
+      isTerminal: isTerminalLike(member.feedId, meta, stop.name, member.stopId),
     });
   }
   return points;
@@ -142,8 +146,7 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
         continue;
       }
 
-      const terminalCluster =
-        a.isTerminal || b.isTerminal || a.locationType === 1 || b.locationType === 1;
+      const terminalCluster = a.isTerminal && b.isTerminal;
       if (!terminalCluster || dist > TERMINAL_RADIUS_M) continue;
       uf.union(a.groupId, b.groupId);
     }

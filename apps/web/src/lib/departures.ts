@@ -48,7 +48,7 @@ export function filterUpcomingDepartures(
 ): DepartureRowOut[] {
   const now = torontoNowSec();
   const pastGrace = opts?.pastGraceSec ?? 120;
-  const limit = opts?.limit ?? 40;
+  const limit = opts?.limit ?? 80;
 
   const mapped = rows
     .map((r) => {
@@ -73,11 +73,9 @@ export function filterUpcomingDepartures(
       const delayMin =
         delaySec != null ? Math.round(delaySec / 60) : undefined;
       const latenessMin =
-        delayMin != null && delayMin > 0
+        delayMin != null && realtime
           ? delayMin
-          : delayMin === 0 && realtime
-            ? 0
-            : undefined;
+          : undefined;
 
       return {
         depSec,
