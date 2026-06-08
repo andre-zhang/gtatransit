@@ -1,4 +1,5 @@
-import { ensureDemoAssets, getDemoCore } from "./demo";
+import { ensureDemoAssets } from "./demo";
+import { loadDemoAssets } from "./demo-assets";
 import { getGroupedDemoStops, resolveStopGroupId } from "./demo-stop-groups";
 import { getTripStops } from "./demo-schedules";
 import { lookupRouteFromSchedules, lookupTripFromSchedules } from "./demo-trip-lookup";
@@ -9,7 +10,8 @@ import { getRtVehicles, getTripRt, getStopTripRt } from "./rt-cache";
 
 async function findRouteMeta(feedId: string, routeId: string | undefined) {
   if (!routeId) return null;
-  for (const agency of getDemoCore().filterTree.agencies) {
+  const { core } = loadDemoAssets();
+  for (const agency of core.filterTree.agencies) {
     if (agency.id !== feedId) continue;
     for (const mode of agency.modes) {
       const r = mode.routes.find((x) => x.id === routeId || x.shortName === routeId);

@@ -22,8 +22,8 @@ async function loadRemote(groupId: string) {
 }
 
 async function loadDemo(groupId: string) {
-  const resolved = resolveStopGroupId(groupId);
   await ensureDemoAssets();
+  const resolved = resolveStopGroupId(groupId);
   await refreshRtCache(true);
   const stop = getDemoCore().stops[resolved];
   if (!stop) return { name: "Stop", rows: [] as DepartureRow[] };
@@ -58,9 +58,11 @@ export default async function StopPage({
   params: Promise<{ groupId: string }>;
 }) {
   const { groupId } = await params;
-  const resolved = resolveStopGroupId(groupId);
   const demo = await useDemoFixtures();
   const { name, rows } = demo ? await loadDemo(groupId) : await loadRemote(groupId);
+  const resolved = demo
+    ? resolveStopGroupId(groupId)
+    : groupId;
 
   return (
     <PageShell>

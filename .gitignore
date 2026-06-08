@@ -10,3 +10,5 @@ data/gtfs/**/extracted-demo
 .DS_Store
 *.log
 tsconfig.tsbuildinfo
+
+.vercel

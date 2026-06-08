@@ -2,7 +2,7 @@ import type { LineString } from "geojson";
 import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
 import { getDemoCore } from "./demo";
-import { loadFeedSchedules, loadUnionSchedule } from "./demo-schedule-data";
+import { loadRouteScheduleRows, loadUnionSchedule } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
 import { getRtVehicles } from "./rt-cache";
 import { lookupTripFromSchedules } from "./demo-trip-lookup";
@@ -26,7 +26,8 @@ function formatDeparture(time: string): string {
 }
 
 function findRouteMeta(feedId: string, routeId: string): RouteMeta | null {
-  for (const agency of getDemoCore().filterTree.agencies) {
+  const { core } = loadDemoAssets();
+  for (const agency of core.filterTree.agencies) {
     if (agency.id !== feedId) continue;
     for (const mode of agency.modes) {
       const r = mode.routes.find(
@@ -54,13 +55,7 @@ async function collectScheduleRows(
     row.routeId === routeId || row.routeShort === routeId;
 
   if ((FEEDS_WITH_SCHEDULE_FILES as readonly string[]).includes(feedId)) {
-    const byStop = await loadFeedSchedules(feedId);
-    for (const sched of Object.values(byStop)) {
-      for (const row of sched) {
-        if (matches(row)) rows.push(row);
-      }
-    }
-    return rows;
+    return loadRouteScheduleRows(feedId, routeId);
   }
 
   const union = await loadUnionSchedule();

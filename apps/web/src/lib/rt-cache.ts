@@ -7,6 +7,7 @@ import {
   type RtVehicle,
 } from "@gta/gtfs-rt";
 import { isDatabaseConfigured } from "@gta/db";
+import { useDemoFixtures } from "./demo-mode";
 import { persistRtSnapshot } from "./rt-persist";
 import { isUnixTimestamp, unixToTorontoSec } from "./calendar";
 
@@ -157,11 +158,15 @@ export async function refreshRtCache(force = false) {
     const goKey = process.env.METROLINX_API_KEY;
     if (goKey) await pollGo(goKey);
 
-    if (isDatabaseConfigured()) {
-      await persistRtSnapshot(
-        [...vehicleMap.values()].filter((v) => v.lat != null && v.lon != null),
-        snapshotTripUpdates(),
-      );
+    if (isDatabaseConfigured() && !(await useDemoFixtures())) {
+      try {
+        await persistRtSnapshot(
+          [...vehicleMap.values()].filter((v) => v.lat != null && v.lon != null),
+          snapshotTripUpdates(),
+        );
+      } catch {
+        /* Neon may be linked but empty/unreachable — keep in-memory RT for this request */
+      }
     }
 
     lastRefresh = Date.now();

@@ -19,12 +19,12 @@ export async function GET(
   { params }: { params: Promise<{ groupId: string }> },
 ) {
   const { groupId } = await params;
-  const resolved = resolveStopGroupId(groupId);
 
   if (await useDemoFixtures()) {
     const { ensureDemoAssets } = await import("@/lib/demo-assets");
     await ensureDemoAssets();
     await refreshRtCache(true);
+    const resolved = resolveStopGroupId(groupId);
     const stop = getDemoCore().stops[resolved];
     if (!stop) return NextResponse.json({ name: "Stop", rows: [] });
 
