@@ -5,70 +5,14 @@ import {
   gtfsTimeToSec,
   type DepartureInput,
 } from "@/lib/departures";
-import { activeServiceSql, isUnixTimestamp, secToTime, serviceDate, unixToTorontoSec } from "@/lib/calendar";
+import { activeServiceSql, secToTime, serviceDate } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
 import { getDemoCore, useDemoFixtures } from "@/lib/demo";
-import { getStopSchedule } from "@/lib/demo-schedules";
-import { lookupTripFromSchedules } from "@/lib/demo-trip-lookup";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
-import {
-  getRtPredictionsForStop,
-  mergeRtIntoDeparture,
-  refreshRtCache,
-} from "@/lib/rt-cache";
+import { buildDemoStopDepartures } from "@/lib/stop-departures";
+import { mergeRtIntoDeparture, refreshRtCache } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
-
-function routeMetaFromCore(feedId: string, routeId: string | undefined) {
-  if (!routeId) return null;
-  for (const agency of getDemoCore().filterTree.agencies) {
-    if (agency.id !== feedId) continue;
-    for (const mode of agency.modes) {
-      const r = mode.routes.find((x) => x.id === routeId || x.shortName === routeId);
-      if (r) {
-        return {
-          routeShort: r.shortName,
-          routeColor: routeColor(feedId, r.shortName, null),
-          destination: r.longName,
-        };
-      }
-    }
-  }
-  return null;
-}
-
-async function rtPredictionToDeparture(
-  row: Awaited<ReturnType<typeof getRtPredictionsForStop>>[number],
-): Promise<DepartureInput | null> {
-  const tripRow = await lookupTripFromSchedules(row.feedId, row.tripId);
-  const routeId = row.routeId ?? tripRow?.routeId;
-  const coreMeta = routeMetaFromCore(row.feedId, routeId);
-  let predictedSec = row.predictedSec;
-  if (predictedSec != null && isUnixTimestamp(predictedSec)) {
-    predictedSec = unixToTorontoSec(predictedSec);
-  }
-  if (predictedSec == null && row.delaySec == null) return null;
-
-  const schedSec = predictedSec ?? gtfsTimeToSec(secToTime((Date.now() / 1000) % 86400));
-  return {
-    tripId: row.tripId,
-    feedId: row.feedId,
-    routeId: routeId ?? "",
-    routeShort: tripRow?.routeShort ?? coreMeta?.routeShort ?? routeId ?? "?",
-    routeColor: routeColor(
-      row.feedId,
-      tripRow?.routeShort ?? coreMeta?.routeShort ?? null,
-      tripRow?.routeColor ?? null,
-    ),
-    destination: tripRow?.headsign ?? coreMeta?.destination ?? "In service",
-    departureTime: secToTime(schedSec % 86400),
-    stopId: row.stopId,
-    delaySec: row.delaySec,
-    predictedSec: predictedSec ?? undefined,
-    realtime: true,
-    vehicleId: row.vehicleId,
-  };
-}
 
 export async function GET(
   _req: NextRequest,
@@ -79,53 +23,12 @@ export async function GET(
   if (await useDemoFixtures()) {
     const { ensureDemoAssets } = await import("@/lib/demo-assets");
     await ensureDemoAssets();
-    await refreshRtCache(true);
     const resolved = resolveStopGroupId(groupId);
     const stop = getDemoCore().stops[resolved];
     if (!stop) return NextResponse.json({ name: "Stop", rows: [] });
 
-    const schedule = await getStopSchedule(resolved);
-    const memberStopIds = stop.members.map((m) => m.stopId);
-    const inputs: DepartureInput[] = schedule.map((r) => {
-      const schedSec = gtfsTimeToSec(r.departureTime);
-      const rt = mergeRtIntoDeparture(r.feedId, r.tripId, r.stopId, schedSec, memberStopIds);
-      return {
-        tripId: r.tripId,
-        feedId: r.feedId,
-        routeId: r.routeId,
-        routeShort: r.routeShort,
-        routeColor: r.routeColor,
-        destination: r.headsign,
-        departureTime: r.departureTime,
-        stopId: r.stopId,
-        platform: r.feedId === "go" ? rt.platform : undefined,
-        delaySec: rt.delaySec,
-        predictedSec: rt.predictedSec,
-        realtime: rt.realtime,
-        vehicleId: rt.vehicleId,
-      };
-    });
-
-    const seenTrips = new Set(inputs.map((r) => `${r.feedId}:${r.tripId}`));
-    const feedsSeen = new Set<string>();
-    for (const m of stop.members) {
-      if (feedsSeen.has(m.feedId)) continue;
-      feedsSeen.add(m.feedId);
-      const idsForFeed = stop.members
-        .filter((x) => x.feedId === m.feedId)
-        .map((x) => x.stopId);
-      const extras = getRtPredictionsForStop(m.feedId, idsForFeed, seenTrips);
-      for (const extra of extras) {
-        seenTrips.add(`${extra.feedId}:${extra.tripId}`);
-        const row = await rtPredictionToDeparture(extra);
-        if (row) inputs.push(row);
-      }
-    }
-
-    return NextResponse.json({
-      name: stop.name,
-      rows: filterUpcomingDepartures(inputs),
-    });
+    const board = await buildDemoStopDepartures(resolved, stop);
+    return NextResponse.json(board);
   }
 
   await refreshRtCache(true);
@@ -170,13 +73,26 @@ export async function GET(
     allRows.push(...rows);
   }
 
+  const memberStopIds = members.map((m) => m.stop_id);
+  const usedRtTrips = new Set<string>();
   const inputs: DepartureInput[] = allRows.map((r) => {
     const schedSec = gtfsTimeToSec(r.departure_time);
-    const rt = mergeRtIntoDeparture(r.feed_id, r.trip_id, r.stop_id, schedSec);
+    const rt = mergeRtIntoDeparture(
+      r.feed_id,
+      r.trip_id,
+      r.stop_id,
+      schedSec,
+      memberStopIds,
+      {
+        routeId: r.route_id,
+        routeShort: r.short_name ?? r.route_id,
+        usedRtTrips,
+      },
+    );
     const delaySec = r.delay_sec ?? rt.delaySec;
     const realtime = delaySec != null || rt.realtime;
     return {
-      tripId: r.trip_id,
+      tripId: rt.liveTripId ?? r.trip_id,
       feedId: r.feed_id,
       routeId: r.route_id,
       routeShort: r.short_name ?? r.route_id,

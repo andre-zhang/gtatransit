@@ -18,6 +18,7 @@ export type RtVehicle = {
 export type RtTripUpdate = {
   feedId: string;
   tripId: string;
+  routeId?: string;
   stopId: string;
   stopSequence?: number;
   delaySec?: number;
@@ -83,6 +84,7 @@ export function parseTripUpdates(
       out.push({
         feedId,
         tripId: tu.trip.tripId,
+        routeId: tu.trip.routeId ?? undefined,
         stopId: stu.stopId,
         stopSequence: stu.stopSequence ?? undefined,
         delaySec: stu.arrival?.delay ?? stu.departure?.delay ?? undefined,

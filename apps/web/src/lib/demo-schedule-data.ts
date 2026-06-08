@@ -70,11 +70,17 @@ export async function loadFeedSchedules(
   return data;
 }
 
+const stopRowCache = new Map<string, ScheduleRow[]>();
+
 /** Load one stop's rows without merging every schedule shard into memory. */
 export async function loadStopScheduleRows(
   feedId: string,
   stopId: string,
 ): Promise<ScheduleRow[]> {
+  const cacheKey = `${feedId}:${stopId}`;
+  const cached = stopRowCache.get(cacheKey);
+  if (cached) return cached;
+
   const files = listShardFiles(`${feedId}-schedules`);
   if (!files.length) {
     try {
@@ -90,8 +96,12 @@ export async function loadStopScheduleRows(
   for (const file of files) {
     const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(file);
     const rows = part[stopId];
-    if (rows?.length) return rows;
+    if (rows?.length) {
+      stopRowCache.set(cacheKey, rows);
+      return rows;
+    }
   }
+  stopRowCache.set(cacheKey, []);
   return [];
 }
 

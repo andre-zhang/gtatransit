@@ -4,14 +4,8 @@ import { PageShell } from "@/components/PageShell";
 import type { DepartureRow } from "@/components/DepartureTable";
 import { ensureDemoAssets, getDemoCore } from "@/lib/demo";
 import { useDemoFixtures } from "@/lib/demo-mode";
-import { getStopSchedule } from "@/lib/demo-schedules";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
-import {
-  filterUpcomingDepartures,
-  gtfsTimeToSec,
-  type DepartureInput,
-} from "@/lib/departures";
-import { mergeRtIntoDeparture, refreshRtCache } from "@/lib/rt-cache";
+import { buildDemoStopDepartures } from "@/lib/stop-departures";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 async function loadRemote(groupId: string) {
@@ -21,37 +15,6 @@ async function loadRemote(groupId: string) {
   return res.json() as Promise<{ name: string; rows: DepartureRow[] }>;
 }
 
-async function loadDemo(groupId: string) {
-  await ensureDemoAssets();
-  const resolved = resolveStopGroupId(groupId);
-  await refreshRtCache(true);
-  const stop = getDemoCore().stops[resolved];
-  if (!stop) return { name: "Stop", rows: [] as DepartureRow[] };
-
-  const schedule = await getStopSchedule(resolved);
-  const inputs: DepartureInput[] = schedule.map((r) => {
-    const schedSec = gtfsTimeToSec(r.departureTime);
-    const rt = mergeRtIntoDeparture(r.feedId, r.tripId, r.stopId, schedSec);
-    return {
-      tripId: r.tripId,
-      feedId: r.feedId,
-      routeId: r.routeId,
-      routeShort: r.routeShort,
-      routeColor: r.routeColor,
-      destination: r.headsign,
-      departureTime: r.departureTime,
-      stopId: r.stopId,
-      platform: r.feedId === "go" ? rt.platform : undefined,
-      delaySec: rt.delaySec,
-      predictedSec: rt.predictedSec,
-      realtime: rt.realtime,
-      vehicleId: rt.vehicleId,
-    };
-  });
-
-  return { name: stop.name, rows: filterUpcomingDepartures(inputs) };
-}
-
 export default async function StopPage({
   params,
 }: {
@@ -59,10 +22,24 @@ export default async function StopPage({
 }) {
   const { groupId } = await params;
   const demo = await useDemoFixtures();
-  const { name, rows } = demo ? await loadDemo(groupId) : await loadRemote(groupId);
-  const resolved = demo
-    ? resolveStopGroupId(groupId)
-    : groupId;
+  let name = "Stop";
+  let rows: DepartureRow[] = [];
+  let resolved = groupId;
+
+  if (demo) {
+    await ensureDemoAssets();
+    resolved = resolveStopGroupId(groupId);
+    const stop = getDemoCore().stops[resolved];
+    if (stop) {
+      const board = await buildDemoStopDepartures(resolved, stop);
+      name = board.name;
+      rows = board.rows;
+    }
+  } else {
+    const data = await loadRemote(groupId);
+    name = data.name;
+    rows = data.rows;
+  }
 
   return (
     <PageShell>
