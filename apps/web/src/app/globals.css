@@ -130,6 +130,11 @@ body {
   color: var(--color-go-ontime);
 }
 
+.go-badge--live {
+  background: #e8f0fe;
+  color: #1a5fb4;
+}
+
 .go-badge--sched {
   background: #eef1f4;
   color: var(--color-go-slate);
@@ -162,6 +167,14 @@ body {
 
 .departure-board-row {
   border-bottom: 1px solid var(--color-go-bg);
+}
+
+.departure-board-row--open {
+  background: #f4f6f8;
+}
+
+.departure-board-expand {
+  border-top: 1px solid var(--color-go-bg);
 }
 
 .departure-board-row:last-child {

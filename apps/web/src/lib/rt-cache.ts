@@ -188,6 +188,21 @@ export function getStopTripRt(
   return stopTripMap.get(stopTripKey(feedId, tripId, stopId));
 }
 
+function getVehicleForTrip(feedId: string, tripId: string): RtVehicle | undefined {
+  const cutoff = Date.now() - 5 * 60_000;
+  for (const v of vehicleMap.values()) {
+    if (
+      v.feedId === feedId &&
+      v.tripId === tripId &&
+      v.updatedAt >= cutoff &&
+      v.lat != null
+    ) {
+      return v;
+    }
+  }
+  return undefined;
+}
+
 export function mergeRtIntoDeparture(
   feedId: string,
   tripId: string,
@@ -202,25 +217,47 @@ export function mergeRtIntoDeparture(
 } {
   const stopRt = stopId ? getStopTripRt(feedId, tripId, stopId) : undefined;
   const tripRt = getTripRt(feedId, tripId);
-  const rt = stopRt ?? tripRt;
-  if (!rt) return { realtime: false };
+  const vehicle = getVehicleForTrip(feedId, tripId);
 
-  const delaySec = rt.delaySec;
+  let delaySec =
+    stopRt?.delaySec ?? tripRt?.delaySec ?? vehicle?.delaySec ?? undefined;
+
   let predictedSec: number | undefined;
-  if (rt.predictedSec != null) {
-    predictedSec = isUnixTimestamp(rt.predictedSec)
-      ? unixToTorontoSec(rt.predictedSec)
-      : rt.predictedSec;
+  if (stopRt?.predictedSec != null) {
+    predictedSec = isUnixTimestamp(stopRt.predictedSec)
+      ? unixToTorontoSec(stopRt.predictedSec)
+      : stopRt.predictedSec;
+  } else if (tripRt?.predictedSec != null) {
+    predictedSec = isUnixTimestamp(tripRt.predictedSec)
+      ? unixToTorontoSec(tripRt.predictedSec)
+      : tripRt.predictedSec;
   } else if (delaySec != null) {
     predictedSec = schedSec + delaySec;
   }
 
+  if (predictedSec != null && delaySec == null) {
+    const drift = predictedSec - schedSec;
+    if (Math.abs(drift) >= 30) delaySec = drift;
+  }
+
+  const vehicleId = tripRt?.vehicleId ?? vehicle?.vehicleId;
+  const hasStopUpdate =
+    stopRt != null && (stopRt.delaySec != null || stopRt.predictedSec != null);
+  const hasTripUpdate =
+    tripRt != null && (tripRt.delaySec != null || tripRt.predictedSec != null);
+  const hasVehicle = vehicle != null;
+  const realtime =
+    hasStopUpdate ||
+    hasTripUpdate ||
+    hasVehicle ||
+    (delaySec != null && delaySec !== 0);
+
   return {
     delaySec,
     predictedSec,
-    platform: rt.platform,
-    vehicleId: tripRt?.vehicleId,
-    realtime: delaySec != null || rt.predictedSec != null,
+    platform: stopRt?.platform ?? tripRt?.platform,
+    vehicleId,
+    realtime,
   };
 }
 

@@ -194,8 +194,6 @@ export async function loadTripStopsForTrip(
   feedId: string,
   tripId: string,
 ): Promise<TripStopRow[]> {
-  if (HEAVY_SCHEDULE_FEEDS.has(feedId)) return [];
-
   const files = listShardFiles(`${feedId}-trip-stops`);
   if (!files.length) {
     try {

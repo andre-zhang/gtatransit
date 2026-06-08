@@ -184,10 +184,10 @@ export function DepartureTable({
                     <div className="flex items-center justify-end gap-2">
                       {late ? (
                         <span className="go-badge go-badge--late">+{r.latenessMin} min</span>
+                      ) : r.realtime && r.latenessMin === 0 ? (
+                        <span className="go-badge go-badge--ontime">On time</span>
                       ) : r.realtime ? (
-                        <span className="go-badge go-badge--ontime">
-                          {r.latenessMin === 0 ? "On time" : "Live"}
-                        </span>
+                        <span className="go-badge go-badge--live">Live</span>
                       ) : (
                         <span className="go-badge go-badge--sched">Scheduled</span>
                       )}

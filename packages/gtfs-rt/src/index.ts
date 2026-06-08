@@ -51,6 +51,7 @@ export function parseVehicles(
     if (!vp) continue;
     const id = vp.vehicle?.id ?? entity.id;
     if (!id) continue;
+    const trip = vp.trip as { delay?: number | null } | null | undefined;
     out.push({
       feedId,
       vehicleId: id,
@@ -63,6 +64,7 @@ export function parseVehicles(
       speed: vp.position?.speed ?? undefined,
       currentStopSequence: vp.currentStopSequence ?? undefined,
       occupancyStatus: vp.occupancyStatus ?? undefined,
+      delaySec: trip?.delay != null ? Number(trip.delay) : undefined,
     });
   }
   return out;

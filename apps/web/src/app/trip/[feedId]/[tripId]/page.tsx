@@ -43,6 +43,20 @@ export default async function TripPage({
     );
   }
 
+  if (!data.stops.length) {
+    return (
+      <PageShell>
+        <PageHeader title="Upcoming stops" subtitle={tripId} />
+        <div className="departure-board-empty">
+          <p className="departure-board-emptyTitle">No upcoming stops</p>
+          <p className="departure-board-emptyHint">
+            Could not load stop list for this trip.
+          </p>
+        </div>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
       <PageHeader title="Upcoming stops" subtitle={tripId} />

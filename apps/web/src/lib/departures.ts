@@ -73,7 +73,11 @@ export function filterUpcomingDepartures(
       const delayMin =
         delaySec != null ? Math.round(delaySec / 60) : undefined;
       const latenessMin =
-        delayMin != null && delayMin > 0 ? delayMin : delayMin === 0 ? 0 : undefined;
+        delayMin != null && delayMin > 0
+          ? delayMin
+          : delayMin === 0 && realtime
+            ? 0
+            : undefined;
 
       return {
         depSec,

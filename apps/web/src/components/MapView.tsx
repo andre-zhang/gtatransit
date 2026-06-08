@@ -212,6 +212,16 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
           "circle-stroke-color": "#007934",
         },
       });
+      map.addLayer({
+        id: "stops-hit",
+        type: "circle",
+        source: "stops",
+        minzoom: ZOOM_STOPS,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 10, 14, 14, 16, 18],
+          "circle-opacity": 0,
+        },
+      });
 
       map.addSource("vehicles", { type: "geojson", data: EMPTY_FC });
       ensureVehicleArrowImage(map);
@@ -244,6 +254,20 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         map.getCanvas().style.cursor = "";
       });
 
+      map.on("mouseenter", "stops-hit", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "stops-hit", () => {
+        map.getCanvas().style.cursor = "";
+      });
+
+      map.on("mouseenter", "vehicles-arrow", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "vehicles-arrow", () => {
+        map.getCanvas().style.cursor = "";
+      });
+
       map.on("click", "vehicles-arrow", (e) => {
         const f = e.features?.[0];
         if (!f?.properties) return;
@@ -252,7 +276,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         );
       });
 
-      map.on("click", "stops-circle", (e) => {
+      map.on("click", "stops-hit", (e) => {
         const f = e.features?.[0];
         if (!f?.properties?.groupId) return;
         navigate(`/stop/${f.properties.groupId}`);
