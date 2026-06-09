@@ -197,7 +197,18 @@ body {
 }
 
 .departure-board-time--live {
-  color: var(--color-go-navy);
+  color: var(--color-go-green);
+}
+
+.departure-board-time--live::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.375rem;
+  border-radius: 9999px;
+  background: var(--color-go-green);
+  vertical-align: middle;
 }
 
 .departure-board-time--sched {

@@ -109,6 +109,7 @@ export function DepartureTable({
   const [expanded, setExpanded] = useState<string | null>(null);
   const showPlatform = stopName?.includes("GO") || stopName?.includes("Union") || rows.some((r) => r.feedId === "go");
   const showAgency = new Set(rows.map((r) => r.feedId)).size > 1;
+  const liveCount = rows.filter((r) => r.realtime).length;
 
   if (!rows.length) {
     return (
@@ -125,6 +126,11 @@ export function DepartureTable({
 
   return (
     <div className="overflow-x-auto">
+      {liveCount > 0 && (
+        <div className="border-b border-go-bg px-5 py-2 text-xs font-medium text-go-green">
+          {liveCount} live · {rows.length - liveCount} scheduled
+        </div>
+      )}
       <table className="departure-board-table w-full min-w-[36rem] text-left">
         <thead>
           <tr className="departure-board-head">

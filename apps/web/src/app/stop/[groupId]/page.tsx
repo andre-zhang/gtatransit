@@ -44,7 +44,7 @@ export default async function StopPage({
   return (
     <PageShell>
       <PageHeader title={name} />
-      <StopBoardClient groupId={resolved} initialName={name} initialRows={rows} />
+      <StopBoardClient groupId={groupId} initialName={name} initialRows={rows} />
     </PageShell>
   );
 }

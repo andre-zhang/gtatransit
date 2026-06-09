@@ -34,7 +34,9 @@ export function StopBoardClient({
 
     const load = async () => {
       try {
-        const res = await fetch(`/api/stops/${groupId}/departures`, { cache: "no-store" });
+        const res = await fetch(`/api/stops/${encodeURIComponent(groupId)}/departures`, {
+          cache: "no-store",
+        });
         if (!res.ok || cancelled) return;
         apply(await res.json());
       } catch {

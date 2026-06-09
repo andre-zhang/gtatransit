@@ -486,3 +486,28 @@ export function getRtVehicles(): RtVehicle[] {
     .filter((v) => v.updatedAt >= cutoff && v.lat != null && v.lon != null)
     .map(({ updatedAt: _, ...v }) => v);
 }
+
+/** Active vehicle serving a route (for stops without stop-level trip updates). */
+export function getActiveVehicleForRoute(
+  feedId: string,
+  routeId: string | undefined,
+  routeShort: string | undefined,
+): RtVehicle | undefined {
+  for (const v of getRtVehicles()) {
+    if (v.feedId !== feedId || !v.tripId) continue;
+    if (routeMatches(v.routeId, routeId, routeShort)) return v;
+  }
+  return undefined;
+}
+
+export function getTripDelaySec(feedId: string, tripId: string): number | undefined {
+  const stopRt = [...stopTripMap.entries()]
+    .filter(([key]) => key.startsWith(`${feedId}:${tripId}:`))
+    .map(([, rt]) => rt)
+    .find((rt) => rt.delaySec != null);
+  if (stopRt?.delaySec != null) return stopRt.delaySec;
+  const tripRt = getTripRt(feedId, tripId);
+  if (tripRt?.delaySec != null) return tripRt.delaySec;
+  const vehicle = getVehicleForTrip(feedId, tripId);
+  return vehicle?.delaySec;
+}
