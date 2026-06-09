@@ -18,6 +18,7 @@ import {
   refreshRtCache,
   type RtStopPrediction,
 } from "@/lib/rt-cache";
+import { isTtcRtStopAtGroup, resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
 
 function normalizeDepSec(schedSec: number, now: number): number {
   let depSec = schedSec;
@@ -44,31 +45,6 @@ function routeMetaFromCore(feedId: string, routeId: string | undefined) {
   return null;
 }
 
-function buildRoutesByStop(schedule: ScheduleRow[]): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>();
-  for (const row of schedule) {
-    const key = `${row.feedId}:${row.stopId}`;
-    if (!map.has(key)) map.set(key, new Set());
-    map.get(key)!.add(row.routeShort);
-    map.get(key)!.add(row.routeId);
-  }
-  return map;
-}
-
-function routeScheduledAtStop(
-  routesByStop: Map<string, Set<string>>,
-  feedId: string,
-  stopId: string,
-  routeId: string | undefined,
-  routeShort: string | undefined,
-): boolean {
-  const allowed = routesByStop.get(`${feedId}:${stopId}`);
-  if (!allowed) return false;
-  if (routeShort && allowed.has(routeShort)) return true;
-  if (routeId && allowed.has(routeId)) return true;
-  return false;
-}
-
 function scheduleHeadsignByRoute(
   schedule: ScheduleRow[],
 ): Map<string, { headsign: string; routeColor: string }> {
@@ -85,17 +61,11 @@ function scheduleHeadsignByRoute(
 function rtPredictionToDeparture(
   row: RtStopPrediction,
   headsigns: Map<string, { headsign: string; routeColor: string }>,
-  routesByStop: Map<string, Set<string>>,
 ): DepartureInput | null {
   const routeId = row.routeId;
   const coreMeta = routeMetaFromCore(row.feedId, routeId);
   const routeShort = coreMeta?.routeShort ?? routeId ?? "?";
-  if (!routeScheduledAtStop(routesByStop, row.feedId, row.stopId, routeId, routeShort)) {
-    return null;
-  }
-  const schedMeta = routeId
-    ? headsigns.get(`${row.feedId}:${routeShort}`)
-    : undefined;
+  const schedMeta = routeId ? headsigns.get(`${row.feedId}:${routeShort}`) : undefined;
   let predictedSec = row.predictedSec;
   if (predictedSec != null && isUnixTimestamp(predictedSec)) {
     predictedSec = unixToTorontoSec(predictedSec);
@@ -197,19 +167,27 @@ export async function buildDemoStopDepartures(
   await refreshRtCache(true);
   const schedule = await getStopSchedule(groupId);
   const headsigns = scheduleHeadsignByRoute(schedule);
-  const routesByStop = buildRoutesByStop(schedule);
+  const rtStopIdsByFeed = new Map<string, string[]>();
+
+  for (const m of stop.members) {
+    if (m.feedId === "ttc") {
+      rtStopIdsByFeed.set("ttc", await resolveTtcRtStopIds(stop.members));
+    } else if (!rtStopIdsByFeed.has(m.feedId)) {
+      rtStopIdsByFeed.set(
+        m.feedId,
+        stop.members.filter((x) => x.feedId === m.feedId).map((x) => x.stopId),
+      );
+    }
+  }
 
   const inputs: DepartureInput[] = [];
 
-  const feedsSeen = new Set<string>();
-  for (const m of stop.members) {
-    if (feedsSeen.has(m.feedId)) continue;
-    feedsSeen.add(m.feedId);
-    const idsForFeed = stop.members
-      .filter((x) => x.feedId === m.feedId)
-      .map((x) => x.stopId);
-    for (const extra of getRtPredictionsForStop(m.feedId, idsForFeed, new Set())) {
-      const row = rtPredictionToDeparture(extra, headsigns, routesByStop);
+  for (const [feedId, rtStopIds] of rtStopIdsByFeed) {
+    for (const extra of getRtPredictionsForStop(feedId, rtStopIds, new Set())) {
+      if (feedId === "ttc" && !(await isTtcRtStopAtGroup(extra.stopId, stop.members))) {
+        continue;
+      }
+      const row = rtPredictionToDeparture(extra, headsigns);
       if (!row) continue;
       usedRtTrips.add(`${row.feedId}:${row.tripId}`);
       inputs.push(row);
@@ -217,13 +195,17 @@ export async function buildDemoStopDepartures(
   }
 
   for (const r of schedule) {
+    const rtIds =
+      r.feedId === "ttc"
+        ? (rtStopIdsByFeed.get("ttc") ?? [r.stopId])
+        : [r.stopId];
     const schedSec = gtfsTimeToSec(r.departureTime);
     const rt = mergeRtIntoDeparture(
       r.feedId,
       r.tripId,
       r.stopId,
       schedSec,
-      [r.stopId],
+      rtIds,
       {
         routeId: r.routeId,
         routeShort: r.routeShort,

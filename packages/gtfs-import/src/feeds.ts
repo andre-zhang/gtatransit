@@ -9,7 +9,8 @@ export const FEEDS: FeedConfig[] = [
   {
     id: "ttc",
     name: "TTC",
-    url: "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/7795b45e-e65a-4465-81fc-c36b9dfff169/resource/cfb6b2b8-6191-41e3-bda1-b175c51148cb/download/TTC%20Routes%20and%20Schedules%20Data.zip",
+    // Surface GTFS aligns with bustime GTFS-RT; merged feed stop_ids can drift.
+    url: "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/bd4809dd-e289-4de8-bbde-c5c00dafbf4f/resource/28514055-d011-4ed7-8bb0-97961dfe2b66/download/SurfaceGTFS.zip",
   },
   {
     id: "go",

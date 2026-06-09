@@ -419,6 +419,8 @@ async function main() {
     writeFileSync(join(outDir, "stop-meta.json"), JSON.stringify(stopMetaByFeed));
   }
 
+  console.log("Run: node scripts/gen-ttc-surface-stops.mjs (Surface GTFS stops for RT stop_id alignment)");
+
   stopRegistry[TORONTO_UNION_ID] = { name: "Toronto Union", members: unionMembers };
   if (!stopFeatures.some((f) => f.properties.groupId === TORONTO_UNION_ID)) {
     stopFeatures.push({
