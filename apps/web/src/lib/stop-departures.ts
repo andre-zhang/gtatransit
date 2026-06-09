@@ -44,6 +44,31 @@ function routeMetaFromCore(feedId: string, routeId: string | undefined) {
   return null;
 }
 
+function buildRoutesByStop(schedule: ScheduleRow[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const row of schedule) {
+    const key = `${row.feedId}:${row.stopId}`;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key)!.add(row.routeShort);
+    map.get(key)!.add(row.routeId);
+  }
+  return map;
+}
+
+function routeScheduledAtStop(
+  routesByStop: Map<string, Set<string>>,
+  feedId: string,
+  stopId: string,
+  routeId: string | undefined,
+  routeShort: string | undefined,
+): boolean {
+  const allowed = routesByStop.get(`${feedId}:${stopId}`);
+  if (!allowed) return false;
+  if (routeShort && allowed.has(routeShort)) return true;
+  if (routeId && allowed.has(routeId)) return true;
+  return false;
+}
+
 function scheduleHeadsignByRoute(
   schedule: ScheduleRow[],
 ): Map<string, { headsign: string; routeColor: string }> {
@@ -60,11 +85,16 @@ function scheduleHeadsignByRoute(
 function rtPredictionToDeparture(
   row: RtStopPrediction,
   headsigns: Map<string, { headsign: string; routeColor: string }>,
+  routesByStop: Map<string, Set<string>>,
 ): DepartureInput | null {
   const routeId = row.routeId;
   const coreMeta = routeMetaFromCore(row.feedId, routeId);
+  const routeShort = coreMeta?.routeShort ?? routeId ?? "?";
+  if (!routeScheduledAtStop(routesByStop, row.feedId, row.stopId, routeId, routeShort)) {
+    return null;
+  }
   const schedMeta = routeId
-    ? headsigns.get(`${row.feedId}:${coreMeta?.routeShort ?? routeId}`)
+    ? headsigns.get(`${row.feedId}:${routeShort}`)
     : undefined;
   let predictedSec = row.predictedSec;
   if (predictedSec != null && isUnixTimestamp(predictedSec)) {
@@ -78,7 +108,6 @@ function rtPredictionToDeparture(
     delaySec = 0;
   }
 
-  const routeShort = coreMeta?.routeShort ?? routeId ?? "?";
   return {
     tripId: row.tripId,
     feedId: row.feedId,
@@ -163,12 +192,12 @@ export async function buildDemoStopDepartures(
   groupId: string,
   stop: DemoStopMeta,
 ): Promise<{ name: string; rows: DepartureRowOut[] }> {
-  const memberStopIds = stop.members.map((m) => m.stopId);
   const usedRtTrips = new Set<string>();
 
   await refreshRtCache(true);
   const schedule = await getStopSchedule(groupId);
   const headsigns = scheduleHeadsignByRoute(schedule);
+  const routesByStop = buildRoutesByStop(schedule);
 
   const inputs: DepartureInput[] = [];
 
@@ -180,7 +209,7 @@ export async function buildDemoStopDepartures(
       .filter((x) => x.feedId === m.feedId)
       .map((x) => x.stopId);
     for (const extra of getRtPredictionsForStop(m.feedId, idsForFeed, new Set())) {
-      const row = rtPredictionToDeparture(extra, headsigns);
+      const row = rtPredictionToDeparture(extra, headsigns, routesByStop);
       if (!row) continue;
       usedRtTrips.add(`${row.feedId}:${row.tripId}`);
       inputs.push(row);
@@ -194,7 +223,7 @@ export async function buildDemoStopDepartures(
       r.tripId,
       r.stopId,
       schedSec,
-      memberStopIds,
+      [r.stopId],
       {
         routeId: r.routeId,
         routeShort: r.routeShort,
