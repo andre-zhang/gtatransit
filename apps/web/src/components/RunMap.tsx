@@ -8,10 +8,12 @@ import { ensureVehicleArrowImage, VEHICLE_ARROW_IMAGE_ID } from "@/lib/map-icons
 export function RunMap({
   lat,
   lon,
+  bearing,
   shape,
 }: {
   lat: number | null;
   lon: number | null;
+  bearing?: number | null;
   shape: GeoJSON.Feature | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -41,7 +43,7 @@ export function RunMap({
         data: {
           type: "Feature",
           geometry: { type: "Point", coordinates: [lon, lat] },
-          properties: { bearing: 0 },
+          properties: { bearing: bearing ?? 0 },
         },
       });
       ensureVehicleArrowImage(map);
@@ -59,7 +61,7 @@ export function RunMap({
     });
 
     return () => map.remove();
-  }, [lat, lon, shape]);
+  }, [lat, lon, bearing, shape]);
 
   if (lat == null || lon == null) return null;
   return <div ref={ref} className="h-52 w-full border-b border-go-bg" />;

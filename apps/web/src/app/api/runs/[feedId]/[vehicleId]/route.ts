@@ -20,7 +20,7 @@ export async function GET(
   { params }: { params: Promise<{ feedId: string; vehicleId: string }> },
 ) {
   const { feedId, vehicleId } = await params;
-  await refreshRtCache(true);
+  await refreshRtCache();
 
   if (await useDemoFixtures()) {
     const run = await getDemoRun(feedId, vehicleId);

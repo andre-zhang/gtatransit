@@ -1,0 +1,96 @@
+#!/usr/bin/env node
+/**
+ * Build compact block-index JSON (multi-trip blocks only) for demo vehicle view.
+ */
+import { createReadStream, existsSync, writeFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const dataDir = join(root, "data", "gtfs", "extracted-demo");
+const outDir = join(root, "apps", "web", "public", "demo");
+const FEEDS = ["go", "miway"];
+/** Match demo fixture service day (GO/MiWay trip ids embed this date). */
+const SERVICE_DATE = process.env.SERVICE_DATE ?? "20260602";
+
+function pick(row, key) {
+  return row[key] ?? "";
+}
+
+async function readCsv(path) {
+  const rows = [];
+  if (!existsSync(path)) return rows;
+  const rl = createInterface({ input: createReadStream(path), crlfDelay: Infinity });
+  let headers = null;
+  for await (const line of rl) {
+    if (!headers) {
+      headers = line.split(",").map((h) => h.trim().replace(/^\uFEFF/, ""));
+      continue;
+    }
+    const cols = line.split(",");
+    const row = {};
+    headers.forEach((h, i) => {
+      row[h] = (cols[i] ?? "").trim();
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+async function buildBlockIndex(feedId) {
+  const gtfsDir = join(dataDir, feedId);
+  const trips = await readCsv(join(gtfsDir, "trips.txt"));
+  if (!trips.length) {
+    console.warn(`skip ${feedId}: no trips.txt`);
+    return;
+  }
+  const stopTimes = await readCsv(join(gtfsDir, "stop_times.txt"));
+
+  const firstDep = new Map();
+  for (const row of stopTimes) {
+    const tid = pick(row, "trip_id");
+    const dep = pick(row, "departure_time");
+    if (!tid || !dep) continue;
+    const prev = firstDep.get(tid);
+    if (!prev || dep < prev) firstDep.set(tid, dep);
+  }
+
+  const blocks = new Map();
+  for (const row of trips) {
+    const tripId = pick(row, "trip_id");
+    const blockId = pick(row, "block_id");
+    const serviceId = pick(row, "service_id");
+    if (!tripId || !blockId) continue;
+    if (
+      feedId === "go" &&
+      serviceId &&
+      serviceId !== SERVICE_DATE &&
+      !tripId.includes(SERVICE_DATE)
+    ) {
+      continue;
+    }
+    if (!blocks.has(blockId)) blocks.set(blockId, []);
+    blocks.get(blockId).push({
+      trip_id: tripId,
+      headsign: pick(row, "trip_headsign") || null,
+      first_departure: firstDep.get(tripId) ?? "—",
+    });
+  }
+
+  const blockIndex = {};
+  for (const [blockId, list] of blocks) {
+    if (list.length <= 1) continue;
+    list.sort((a, b) => a.first_departure.localeCompare(b.first_departure));
+    blockIndex[blockId] = list;
+  }
+
+  const outPath = join(outDir, `${feedId}-block-index.json`);
+  writeFileSync(outPath, JSON.stringify({ blocks: blockIndex }));
+  const kb = Math.round((JSON.stringify({ blocks: blockIndex }).length || 0) / 1024);
+  console.log(`${feedId}: ${Object.keys(blockIndex).length} blocks (~${kb} KB)`);
+}
+
+for (const feedId of FEEDS) {
+  await buildBlockIndex(feedId);
+}

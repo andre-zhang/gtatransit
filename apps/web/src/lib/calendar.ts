@@ -65,6 +65,43 @@ export function secToTime(sec: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** GTFS allows hours ≥ 24 for post-midnight service (e.g. 25:30). */
+export function formatGtfsTime(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+const SERVICE_ROLLOVER_SEC = 3 * 3600;
+
+/** Normalize a departure second-of-day into upcoming service context. */
+export function normalizeServiceSec(schedSec: number, now: number): number {
+  let depSec = schedSec;
+  for (let i = 0; i < 3; i++) {
+    if (depSec >= now - 120) break;
+    depSec += 86400;
+  }
+  if (depSec > now + 36 * 3600) depSec -= 86400;
+  return depSec;
+}
+
+/** 0 = tonight, 1+ = next service day(s) for board dividers. */
+export function serviceDayOffset(normSec: number, now: number): number {
+  const nowBucket = Math.floor((now - SERVICE_ROLLOVER_SEC) / 86400);
+  const depBucket = Math.floor((normSec - SERVICE_ROLLOVER_SEC) / 86400);
+  return Math.max(0, depBucket - nowBucket);
+}
+
+export function formatBoardTime(
+  sec: number,
+  now = torontoNowSec(),
+): { time: string; dayOffset: number } {
+  const norm = normalizeServiceSec(sec, now);
+  const dayOffset = serviceDayOffset(norm, now);
+  const time = sec >= 86400 ? formatGtfsTime(sec) : secToTime(sec % 86400);
+  return { time, dayOffset };
+}
+
 export function nowSec(): number {
   return torontoNowSec();
 }

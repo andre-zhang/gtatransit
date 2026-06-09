@@ -17,12 +17,12 @@ export async function GET(
   if (await useDemoFixtures()) {
     const { ensureDemoAssets } = await import("@/lib/demo-assets");
     await ensureDemoAssets();
-    await refreshRtCache(true);
+    await refreshRtCache();
     const detail = await getDemoRouteDetail(feedId, routeId, direction);
     if (!detail) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(detail);
   }
-  await refreshRtCache(true);
+  await refreshRtCache();
 
   const db = getSql();
   const date = serviceDate();

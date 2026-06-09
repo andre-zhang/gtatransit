@@ -13,7 +13,7 @@ export async function GET(
 ) {
   const { feedId, tripId } = await params;
   const fromStop = req.nextUrl.searchParams.get("fromStop") ?? undefined;
-  await refreshRtCache(true);
+  await refreshRtCache();
 
   if (await useDemoFixtures()) {
     const { ensureDemoAssets } = await import("@/lib/demo-assets");

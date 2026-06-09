@@ -4,7 +4,13 @@ import {
   type DepartureInput,
   type DepartureRowOut,
 } from "@/lib/departures";
-import { isUnixTimestamp, secToTime, torontoNowSec, unixToTorontoSec } from "@/lib/calendar";
+import {
+  isUnixTimestamp,
+  normalizeServiceSec,
+  secToTime,
+  torontoNowSec,
+  unixToTorontoSec,
+} from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
 import { getDemoCore } from "@/lib/demo";
 import type { DemoStopMeta } from "@/lib/demo";
@@ -19,13 +25,6 @@ import {
   type RtStopPrediction,
 } from "@/lib/rt-cache";
 import { isTtcRtStopAtGroup, resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
-
-function normalizeDepSec(schedSec: number, now: number): number {
-  let depSec = schedSec;
-  if (depSec < now - 120) depSec += 86400;
-  if (depSec < now - 120) depSec += 86400;
-  return depSec;
-}
 
 function routeMetaFromCore(feedId: string, routeId: string | undefined) {
   if (!routeId) return null;
@@ -75,7 +74,7 @@ function rtPredictionToDeparture(
 
   const now = torontoNowSec();
   const predNorm =
-    predictedSec != null ? normalizeDepSec(predictedSec, now) : null;
+    predictedSec != null ? normalizeServiceSec(predictedSec, now) : null;
 
   let scheduledRow: ScheduleRow | undefined;
   if (predNorm != null) {
@@ -83,7 +82,7 @@ function rtPredictionToDeparture(
     for (const s of schedule) {
       if (s.feedId !== row.feedId) continue;
       if (s.routeShort !== routeShort && s.routeId !== routeId) continue;
-      const schedNorm = normalizeDepSec(gtfsTimeToSec(s.departureTime), now);
+      const schedNorm = normalizeServiceSec(gtfsTimeToSec(s.departureTime), now);
       const delta = Math.abs(schedNorm - predNorm);
       if (delta < bestDelta && delta <= 50 * 60) {
         bestDelta = delta;
@@ -98,7 +97,7 @@ function rtPredictionToDeparture(
 
   let delaySec = row.delaySec;
   if (predictedSec != null && scheduledRow) {
-    const schedNorm = normalizeDepSec(schedSec, now);
+    const schedNorm = normalizeServiceSec(schedSec, now);
     delaySec = predNorm! - schedNorm;
   } else if (delaySec == null && predictedSec != null) {
     delaySec = 0;
@@ -133,11 +132,11 @@ function enrichNextPerRouteWithVehicles(rows: DepartureInput[]): DepartureInput[
 
   for (const row of rows) {
     if (row.realtime) continue;
-    const schedSec = normalizeDepSec(gtfsTimeToSec(row.departureTime), now);
+    const schedSec = normalizeServiceSec(gtfsTimeToSec(row.departureTime), now);
     if (schedSec < now - 120 || schedSec > now + 90 * 60) continue;
     const key = `${row.feedId}:${row.routeShort || row.routeId}`;
     const prev = nextByRoute.get(key);
-    if (!prev || schedSec < normalizeDepSec(gtfsTimeToSec(prev.departureTime), now)) {
+    if (!prev || schedSec < normalizeServiceSec(gtfsTimeToSec(prev.departureTime), now)) {
       nextByRoute.set(key, row);
     }
   }
@@ -169,7 +168,7 @@ function dedupeNearLive(rows: DepartureInput[]): DepartureInput[] {
 
   for (const row of rows) {
     if (!row.realtime) continue;
-    const sec = normalizeDepSec(
+    const sec = normalizeServiceSec(
       row.predictedSec ?? gtfsTimeToSec(row.departureTime),
       now,
     );
@@ -182,7 +181,7 @@ function dedupeNearLive(rows: DepartureInput[]): DepartureInput[] {
 
   return rows.filter((row) => {
     if (row.realtime) return true;
-    const sec = normalizeDepSec(gtfsTimeToSec(row.departureTime), now);
+    const sec = normalizeServiceSec(gtfsTimeToSec(row.departureTime), now);
     return !liveKeys.some(
       (live) =>
         live.feedId === row.feedId &&
@@ -198,7 +197,7 @@ export async function buildDemoStopDepartures(
 ): Promise<{ name: string; rows: DepartureRowOut[] }> {
   const usedRtTrips = new Set<string>();
 
-  await refreshRtCache(true);
+  await refreshRtCache();
   const schedule = await getStopSchedule(groupId);
   const headsigns = scheduleHeadsignByRoute(schedule);
   const rtStopIdsByFeed = new Map<string, string[]>();

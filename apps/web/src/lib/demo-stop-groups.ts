@@ -264,6 +264,12 @@ function ensureCache() {
   legacyAlias.set("demo-union", TORONTO_UNION_ID);
   legacyAlias.set("go-UN", TORONTO_UNION_ID);
 
+  const unionMemberKeys = new Set(
+    (cachedStops[TORONTO_UNION_ID]?.members ?? []).map(
+      (m) => `${m.feedId}:${m.stopId}`,
+    ),
+  );
+
   const features: FeatureCollection["features"] = [];
   for (const [gid, stop] of Object.entries(cachedStops)) {
     if (gid === TORONTO_UNION_ID) {
@@ -272,6 +278,14 @@ function ensureCache() {
         geometry: { type: "Point", coordinates: [-79.3806, 43.6453] },
         properties: { groupId: gid, name: stop.name, feedId: "go" },
       });
+      continue;
+    }
+
+    const soleMember = stop.members.length === 1 ? stop.members[0] : null;
+    if (
+      soleMember &&
+      unionMemberKeys.has(`${soleMember.feedId}:${soleMember.stopId}`)
+    ) {
       continue;
     }
     let lonLat = coords.get(gid);

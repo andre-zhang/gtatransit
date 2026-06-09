@@ -20,6 +20,7 @@ export type DepartureRow = {
   delayMin?: number;
   latenessMin?: number;
   realtime: boolean;
+  dayOffset?: number;
 };
 
 type TripStop = {
@@ -144,6 +145,11 @@ export function DepartureTable({
         </thead>
         <tbody className="departure-board-body">
           {rows.map((r, i) => {
+            const prevDay = i > 0 ? rows[i - 1]!.dayOffset ?? 0 : 0;
+            const dayOffset = r.dayOffset ?? 0;
+            const showDayBreak = dayOffset > prevDay;
+            const dayLabel =
+              dayOffset === 1 ? "Tomorrow" : dayOffset > 1 ? `+${dayOffset} days` : null;
             const displayTime = r.predicted ?? r.time;
             const late = r.latenessMin != null && r.latenessMin > 0;
             const early = r.latenessMin != null && r.latenessMin < 0;
@@ -155,6 +161,16 @@ export function DepartureTable({
 
             return (
               <Fragment key={rowKey}>
+                {showDayBreak && dayLabel && (
+                  <tr className="departure-board-daybreak">
+                    <td
+                      colSpan={showAgency ? (showPlatform ? 6 : 5) : showPlatform ? 5 : 4}
+                      className="px-5 py-2 text-xs font-semibold uppercase tracking-wide text-go-slate"
+                    >
+                      {dayLabel}
+                    </td>
+                  </tr>
+                )}
                 <tr
                   className={`departure-board-row cursor-pointer ${isOpen ? "departure-board-row--open" : ""}`}
                   onClick={() => toggle(rowKey)}
@@ -166,6 +182,11 @@ export function DepartureTable({
                       }`}
                     >
                       {displayTime}
+                      {dayOffset > 0 && (
+                        <sup className="ml-0.5 text-[10px] font-semibold text-go-slate">
+                          +{dayOffset}
+                        </sup>
+                      )}
                     </span>
                     {r.predicted && r.predicted !== r.time && (
                       <span className="departure-board-timeWas mt-0.5 block tabular-nums line-through">

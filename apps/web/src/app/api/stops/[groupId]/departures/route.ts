@@ -31,7 +31,7 @@ export async function GET(
     return NextResponse.json(board);
   }
 
-  await refreshRtCache(true);
+  await refreshRtCache();
   const db = getSql();
   const date = serviceDate();
 

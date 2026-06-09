@@ -1,4 +1,12 @@
-import { isUnixTimestamp, secToTime, torontoNowSec, gtfsTimeToSec, unixToTorontoSec } from "./calendar";
+import {
+  formatBoardTime,
+  isUnixTimestamp,
+  normalizeServiceSec,
+  secToTime,
+  torontoNowSec,
+  gtfsTimeToSec,
+  unixToTorontoSec,
+} from "./calendar";
 
 export { gtfsTimeToSec, secToTime };
 
@@ -33,14 +41,8 @@ export type DepartureRowOut = {
   delayMin?: number;
   latenessMin?: number;
   realtime: boolean;
+  dayOffset?: number;
 };
-
-function normalizeDepSec(schedSec: number, now: number): number {
-  let depSec = schedSec;
-  if (depSec < now - 120) depSec += 86400;
-  if (depSec < now - 120) depSec += 86400;
-  return depSec;
-}
 
 export function filterUpcomingDepartures(
   rows: DepartureInput[],
@@ -53,7 +55,7 @@ export function filterUpcomingDepartures(
   const mapped = rows
     .map((r) => {
       const schedSec = gtfsTimeToSec(r.departureTime);
-      const schedNorm = normalizeDepSec(schedSec, now);
+      const schedNorm = normalizeServiceSec(schedSec, now);
       let depSec = schedSec;
       let realtime = r.realtime ?? false;
       let delaySec = r.delaySec ?? null;
@@ -68,7 +70,7 @@ export function filterUpcomingDepartures(
         realtime = true;
       }
 
-      depSec = normalizeDepSec(depSec, now);
+      depSec = normalizeServiceSec(depSec, now);
       if (depSec < now - pastGrace) return null;
 
       // Compare live prediction to scheduled time — don't trust agency delay=0 alone.
@@ -84,12 +86,14 @@ export function filterUpcomingDepartures(
       const latenessMin =
         delayMin != null && realtime ? delayMin : undefined;
 
-      const showPredicted = realtime ? secToTime(depSec % 86400) : undefined;
+      const schedDisplay = formatBoardTime(schedSec, now);
+      const predDisplay = realtime ? formatBoardTime(depSec, now) : null;
 
       return {
         depSec,
-        time: secToTime(schedSec % 86400),
-        predicted: showPredicted,
+        time: schedDisplay.time,
+        predicted: predDisplay?.time,
+        dayOffset: predDisplay?.dayOffset ?? schedDisplay.dayOffset,
         routeShort: r.routeShort,
         routeColor: r.routeColor,
         destination: r.destination,

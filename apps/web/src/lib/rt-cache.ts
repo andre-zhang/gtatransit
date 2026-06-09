@@ -9,7 +9,12 @@ import {
 import { isDatabaseConfigured } from "@gta/db";
 import { useDemoFixtures } from "./demo-mode";
 import { persistRtSnapshot } from "./rt-persist";
-import { isUnixTimestamp, unixToTorontoSec, torontoNowSec } from "./calendar";
+import {
+  isUnixTimestamp,
+  normalizeServiceSec,
+  torontoNowSec,
+  unixToTorontoSec,
+} from "./calendar";
 
 type StopRt = {
   delaySec?: number;
@@ -20,7 +25,7 @@ type StopRt = {
 
 type TripRt = StopRt & { routeId?: string; vehicleId?: string };
 
-const TTL_MS = 20_000;
+const TTL_MS = 30_000;
 const tripMap = new Map<string, TripRt>();
 const stopTripMap = new Map<string, StopRt>();
 const vehicleMap = new Map<string, RtVehicle & { updatedAt: number }>();
@@ -65,13 +70,6 @@ function routeMatches(
     routeId === rtRoute ||
     routeShort === rtRoute
   );
-}
-
-function normalizeDepSec(schedSec: number, now: number): number {
-  let depSec = schedSec;
-  if (depSec < now - 120) depSec += 86400;
-  if (depSec < now - 120) depSec += 86400;
-  return depSec;
 }
 
 function rebuildStopPredictionsIndex() {
@@ -124,7 +122,7 @@ function findFuzzyRtMatch(
   usedRtTrips: Set<string>,
 ): IndexedPrediction | undefined {
   const now = torontoNowSec();
-  const targetSec = normalizeDepSec(schedSec, now);
+  const targetSec = normalizeServiceSec(schedSec, now);
   let best: IndexedPrediction | undefined;
   let bestDelta = Infinity;
 
@@ -134,7 +132,7 @@ function findFuzzyRtMatch(
       const usedKey = `${feedId}:${p.tripId}`;
       if (usedRtTrips.has(usedKey) || usedRtTrips.has(p.tripId)) continue;
       if (!routeMatches(p.routeId, routeId, routeShort)) continue;
-      const predSec = normalizeDepSec(p.predictedSec, now);
+      const predSec = normalizeServiceSec(p.predictedSec, now);
       const delta = Math.abs(predSec - targetSec);
       if (delta > FUZZY_MATCH_SEC || delta >= bestDelta) continue;
       best = p;
@@ -259,9 +257,7 @@ export async function refreshRtCache(force = false) {
   if (refreshing) return refreshing;
 
   refreshing = (async () => {
-    for (const feedId of Object.keys(RT_FEEDS)) {
-      await pollFeed(feedId);
-    }
+    await Promise.all(Object.keys(RT_FEEDS).map((feedId) => pollFeed(feedId)));
     const goKey = process.env.METROLINX_API_KEY;
     if (goKey) await pollGo(goKey);
 
@@ -502,6 +498,50 @@ export function getActiveVehicleForRoute(
     if (routeMatches(v.routeId, routeId, routeShort)) return v;
   }
   return undefined;
+}
+
+export function getRtVehicle(
+  feedId: string,
+  vehicleId: string,
+): (RtVehicle & { updatedAt?: number }) | undefined {
+  const v = vehicleMap.get(`${feedId}:${vehicleId}`);
+  if (!v || v.lat == null || v.lon == null) return undefined;
+  if (v.updatedAt < Date.now() - 5 * 60_000) return undefined;
+  return v;
+}
+
+export function getTripStopUpdates(
+  feedId: string,
+  tripId: string,
+): Array<{
+  stopId: string;
+  delaySec?: number;
+  predictedSec?: number;
+  platform?: string;
+}> {
+  const prefix = `${feedId}:${tripId}:`;
+  const out: Array<{
+    stopId: string;
+    delaySec?: number;
+    predictedSec?: number;
+    platform?: string;
+  }> = [];
+
+  for (const [key, rt] of stopTripMap) {
+    if (!key.startsWith(prefix)) continue;
+    const stopId = key.slice(prefix.length);
+    let predictedSec = rt.predictedSec;
+    if (predictedSec != null) predictedSec = normalizePredictedSec(predictedSec);
+    out.push({
+      stopId,
+      delaySec: rt.delaySec,
+      predictedSec,
+      platform: rt.platform,
+    });
+  }
+
+  out.sort((a, b) => (a.predictedSec ?? Infinity) - (b.predictedSec ?? Infinity));
+  return out;
 }
 
 export function getTripDelaySec(feedId: string, tripId: string): number | undefined {
