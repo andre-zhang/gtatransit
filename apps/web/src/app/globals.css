@@ -130,6 +130,11 @@ body {
   color: var(--color-go-ontime);
 }
 
+.go-badge--early {
+  background: #eef1f4;
+  color: var(--color-go-slate);
+}
+
 .go-badge--live {
   background: #e8f0fe;
   color: #1a5fb4;

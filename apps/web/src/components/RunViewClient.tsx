@@ -56,13 +56,17 @@ export function RunViewClient({
   initial: RunData;
 }) {
   const [data, setData] = useState(initial);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/runs/${feedId}/${encodeURIComponent(vehicleId)}`, {
         cache: "no-store",
       });
-      if (res.ok) setData(await res.json());
+      if (res.ok) {
+        setData(await res.json());
+        setUpdatedAt(new Date());
+      }
     } catch {
       /* keep last good snapshot */
     }
@@ -151,7 +155,7 @@ export function RunViewClient({
         </Section>
       )}
 
-      {upcomingStops?.length > 0 && (
+      {upcomingStops?.length > 0 ? (
         <Section title="Next stops">
           <ul className="divide-y divide-go-bg">
             {upcomingStops.map((s) => (
@@ -169,18 +173,30 @@ export function RunViewClient({
                   </span>
                 )}
                 {s.delayMin != null && s.delayMin > 0 && (
-                  <span className="go-badge go-badge--late shrink-0">+{s.delayMin}m</span>
+                  <span className="go-badge go-badge--late shrink-0">+{s.delayMin} min</span>
+                )}
+                {s.delayMin != null && s.delayMin < 0 && (
+                  <span className="go-badge go-badge--early shrink-0">{s.delayMin} min</span>
                 )}
               </li>
             ))}
           </ul>
         </Section>
+      ) : (
+        <div className="border-b border-go-bg px-5 py-6 text-center text-sm text-go-slate">
+          No upcoming stop times available for this vehicle.
+        </div>
       )}
 
       {trip && (
         <div className="border-t border-go-bg px-5 py-3 text-xs text-go-slate">
           Trip {trip.trip_id}
           {trip.block_id ? ` · Block ${trip.block_id}` : ""}
+          {updatedAt && (
+            <span className="float-right tabular-nums">
+              Updated {updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+            </span>
+          )}
         </div>
       )}
     </>

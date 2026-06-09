@@ -4,6 +4,7 @@ import { activeServiceSql, serviceDate } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { getDemoRouteDetail } from "@/lib/demo-route-detail";
+import { routesMatch } from "@/lib/route-match";
 import { refreshRtCache } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
@@ -47,22 +48,28 @@ export async function GET(
     LIMIT 200
   `;
 
-  const vehicles = await db<
+  const vehicleRows = await db<
     Array<{
       vehicle_id: string;
       label: string | null;
       lat: number;
       lon: number;
+      route_id: string | null;
       headsign: string | null;
       delay_sec: number | null;
     }>
   >`
-    SELECT v.vehicle_id, v.label, v.lat, v.lon, t.headsign, v.delay_sec
+    SELECT v.vehicle_id, v.label, v.lat, v.lon, v.route_id, t.headsign, v.delay_sec
     FROM rt_vehicles v
     LEFT JOIN trips t ON t.feed_id = v.feed_id AND t.trip_id = v.trip_id
-    WHERE v.feed_id = ${feedId} AND v.route_id = ${routeId}
+    WHERE v.feed_id = ${feedId}
       AND v.lat IS NOT NULL AND v.updated_at > NOW() - INTERVAL '5 minutes'
   `;
+
+  const vehicles = vehicleRows
+    .filter((v) => routesMatch(feedId, routeId, route.short_name, v.route_id ?? undefined))
+    .slice(0, 80)
+    .map(({ route_id: _, ...v }) => v);
 
   const shapes = await db<Array<{ geojson: string }>>`
     SELECT geojson FROM route_shapes

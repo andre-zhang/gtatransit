@@ -53,6 +53,7 @@ export default async function RoutePage({
         feedId={feedId}
         routeId={routeId}
         direction={direction}
+        directionLabels={data.directionLabels}
         trips={data.trips}
         vehicles={data.vehicles}
       />

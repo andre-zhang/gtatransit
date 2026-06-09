@@ -10,6 +10,36 @@ import {
 
 export { gtfsTimeToSec, secToTime };
 
+/** Compare live prediction to schedule; don't trust agency delay=0 alone. */
+export function computeDelaySec(
+  schedSec: number,
+  opts: {
+    predictedSec?: number | null;
+    agencyDelaySec?: number | null;
+    now?: number;
+  },
+): number | null {
+  const now = opts.now ?? torontoNowSec();
+  const schedNorm = normalizeServiceSec(schedSec, now);
+  let delaySec = opts.agencyDelaySec ?? null;
+
+  if (opts.predictedSec != null) {
+    const pred = isUnixTimestamp(opts.predictedSec)
+      ? unixToTorontoSec(opts.predictedSec)
+      : opts.predictedSec;
+    const drift = normalizeServiceSec(pred, now) - schedNorm;
+    if (delaySec == null || Math.abs(drift) > Math.abs(delaySec)) {
+      delaySec = drift;
+    }
+  }
+
+  return delaySec;
+}
+
+export function delayMinFromSec(delaySec: number | null | undefined): number | undefined {
+  return delaySec != null ? Math.round(delaySec / 60) : undefined;
+}
+
 export type DepartureInput = {
   tripId: string;
   feedId: string;
@@ -73,16 +103,18 @@ export function filterUpcomingDepartures(
       depSec = normalizeServiceSec(depSec, now);
       if (depSec < now - pastGrace) return null;
 
-      // Compare live prediction to scheduled time — don't trust agency delay=0 alone.
       if (realtime) {
-        const drift = depSec - schedNorm;
-        if (delaySec == null || Math.abs(drift) > Math.abs(delaySec)) {
-          delaySec = drift;
+        delaySec = computeDelaySec(schedSec, {
+          predictedSec: r.predictedSec,
+          agencyDelaySec: delaySec,
+          now,
+        });
+        if (delaySec != null && r.predictedSec == null) {
+          depSec = schedNorm + delaySec;
         }
       }
 
-      const delayMin =
-        delaySec != null ? Math.round(delaySec / 60) : undefined;
+      const delayMin = delayMinFromSec(delaySec);
       const latenessMin =
         delayMin != null && realtime ? delayMin : undefined;
 

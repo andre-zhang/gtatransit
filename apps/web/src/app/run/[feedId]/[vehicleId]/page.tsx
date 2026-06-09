@@ -24,7 +24,8 @@ export default async function RunPage({
   if (!data) {
     return (
       <PageShell>
-        <div className="py-16 text-center text-go-slate">
+        <PageHeader title="Vehicle unavailable" subtitle={vehicleId} />
+        <div className="px-6 py-12 text-center text-go-slate">
           Vehicle not found or no longer reporting location.
         </div>
       </PageShell>

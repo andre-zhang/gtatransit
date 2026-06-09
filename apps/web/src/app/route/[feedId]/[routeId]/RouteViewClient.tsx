@@ -16,16 +16,19 @@ export function RouteViewClient({
   feedId,
   routeId,
   direction,
+  directionLabels,
   trips,
   vehicles,
 }: {
   feedId: string;
   routeId: string;
   direction: number;
+  directionLabels?: [string, string];
   trips: Trip[];
   vehicles: Vehicle[];
 }) {
   const router = useRouter();
+  const labels: [string, string] = directionLabels ?? ["Outbound", "Inbound"];
 
   return (
     <>
@@ -37,22 +40,25 @@ export function RouteViewClient({
             onClick={() =>
               router.push(`/route/${feedId}/${encodeURIComponent(routeId)}?direction=${d}`)
             }
-            className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition ${
+            className={`flex-1 rounded-lg px-2 py-2.5 text-sm font-bold transition ${
               direction === d
                 ? "bg-go-surface text-go-green shadow-sm"
                 : "text-go-slate hover:text-go-navy"
             }`}
           >
-            Direction {d}
+            <span className="block truncate">{labels[d]}</span>
           </button>
         ))}
       </div>
 
-      {vehicles.length > 0 && (
+      {vehicles.length > 0 ? (
         <Section title="Live">
           <ul className="divide-y divide-go-bg">
             {vehicles.map((v) => {
-              const late = v.delay_sec != null && v.delay_sec > 0;
+              const delayMin =
+                v.delay_sec != null ? Math.round(v.delay_sec / 60) : null;
+              const late = delayMin != null && delayMin > 0;
+              const early = delayMin != null && delayMin < 0;
               return (
                 <li key={v.vehicle_id}>
                   <Link
@@ -62,13 +68,15 @@ export function RouteViewClient({
                     <span className="font-bold text-go-green">
                       {v.label ?? v.vehicle_id}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-go-slate">{v.headsign}</span>
+                    <span className="min-w-0 flex-1 truncate text-go-slate">
+                      {v.headsign ?? "In service"}
+                    </span>
                     {late ? (
-                      <span className="go-badge go-badge--late">
-                        +{Math.round(v.delay_sec! / 60)}m
-                      </span>
+                      <span className="go-badge go-badge--late">+{delayMin} min</span>
+                    ) : early ? (
+                      <span className="go-badge go-badge--early">{delayMin} min</span>
                     ) : (
-                      <span className="go-badge go-badge--ontime">Live</span>
+                      <span className="go-badge go-badge--live">Live</span>
                     )}
                   </Link>
                 </li>
@@ -76,22 +84,34 @@ export function RouteViewClient({
             })}
           </ul>
         </Section>
+      ) : (
+        <div className="border-b border-go-bg px-5 py-4 text-sm text-go-slate">
+          No vehicles reporting on this direction right now.
+        </div>
       )}
 
       <Section title="Schedule">
-        <ul className="max-h-[28rem] divide-y divide-go-bg overflow-y-auto">
-          {trips.map((t) => (
-            <li
-              key={t.trip_id}
-              className="flex items-center justify-between gap-4 px-5 py-3"
-            >
-              <span className="truncate text-go-navy">{t.headsign ?? "—"}</span>
-              <span className="shrink-0 text-lg font-bold tabular-nums text-go-navy">
-                {t.first_departure}
-              </span>
-            </li>
-          ))}
-        </ul>
+        {trips.length > 0 ? (
+          <ul className="max-h-[28rem] divide-y divide-go-bg overflow-y-auto">
+            {trips.map((t) => (
+              <li key={t.trip_id}>
+                <Link
+                  href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
+                  className="flex items-center justify-between gap-4 px-5 py-3 transition hover:bg-go-bg/60"
+                >
+                  <span className="truncate text-go-navy">{t.headsign ?? "—"}</span>
+                  <span className="shrink-0 text-lg font-bold tabular-nums text-go-navy">
+                    {t.first_departure}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="px-5 py-8 text-center text-sm text-go-slate">
+            No scheduled trips for this direction today.
+          </div>
+        )}
       </Section>
     </>
   );

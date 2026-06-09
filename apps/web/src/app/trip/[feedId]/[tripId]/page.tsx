@@ -38,7 +38,10 @@ export default async function TripPage({
   if (!data) {
     return (
       <PageShell>
-        <div className="py-16 text-center text-go-slate">Trip not found</div>
+        <PageHeader title="Trip unavailable" subtitle={tripId} />
+        <div className="px-6 py-12 text-center text-go-slate">
+          Could not load this trip. It may have ended or is not in today&apos;s schedule.
+        </div>
       </PageShell>
     );
   }
@@ -85,7 +88,10 @@ export default async function TripPage({
               <span className="shrink-0 text-sm tabular-nums text-go-slate">Plat {s.platform}</span>
             )}
             {s.delayMin != null && s.delayMin > 0 && (
-              <span className="go-badge go-badge--late shrink-0">+{s.delayMin}m</span>
+              <span className="go-badge go-badge--late shrink-0">+{s.delayMin} min</span>
+            )}
+            {s.delayMin != null && s.delayMin < 0 && (
+              <span className="go-badge go-badge--early shrink-0">{s.delayMin} min</span>
             )}
           </li>
         ))}

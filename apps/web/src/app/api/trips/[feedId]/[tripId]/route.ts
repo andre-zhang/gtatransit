@@ -1,11 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
-import { isUnixTimestamp, gtfsTimeToSec, secToTime, unixToTorontoSec } from "@/lib/calendar";
+import {
+  gtfsTimeToSec,
+  normalizeServiceSec,
+  secToTime,
+  torontoNowSec,
+} from "@/lib/calendar";
+import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
 import { useDemoFixtures } from "@/lib/demo-mode";
+import { resolveDemoTrip } from "@/lib/demo-trip-resolve";
 import { getTripStops } from "@/lib/demo-schedules";
 import { getStopTripRt, getTripRt, refreshRtCache } from "@/lib/rt-cache";
+import { resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
+
+async function rtForFixtureStop(
+  feedId: string,
+  liveTripId: string,
+  fixtureStopId: string,
+) {
+  const liveIds =
+    feedId === "ttc"
+      ? await resolveTtcRtStopIds([{ feedId: "ttc", stopId: fixtureStopId }])
+      : [fixtureStopId];
+  for (const liveId of liveIds) {
+    const rt = getStopTripRt(feedId, liveTripId, liveId);
+    if (rt) return rt;
+  }
+  return undefined;
+}
 
 export async function GET(
   req: NextRequest,
@@ -18,7 +42,11 @@ export async function GET(
   if (await useDemoFixtures()) {
     const { ensureDemoAssets } = await import("@/lib/demo-assets");
     await ensureDemoAssets();
-    const stops = await getTripStops(feedId, tripId);
+
+    const resolved = await resolveDemoTrip(feedId, tripId);
+    const scheduleTripId = resolved.scheduleTripId ?? tripId;
+    const liveTripId = resolved.liveTripId;
+    const stops = await getTripStops(feedId, scheduleTripId);
     if (!stops.length) {
       return NextResponse.json({ tripId, feedId, stops: [], fromStop });
     }
@@ -26,37 +54,43 @@ export async function GET(
     const startIdx =
       fromStop != null ? stops.findIndex((s) => s.stopId === fromStop) : 0;
     const slice = startIdx >= 0 ? stops.slice(startIdx) : stops;
-    const tripRt = getTripRt(feedId, tripId);
+    const tripRt = getTripRt(feedId, liveTripId);
+    const now = torontoNowSec();
 
     return NextResponse.json({
       tripId,
       feedId,
       fromStop,
       vehicleId: tripRt?.vehicleId,
-      stops: slice.map((s) => {
-        const schedSec = gtfsTimeToSec(s.departureTime);
-        const rt = getStopTripRt(feedId, tripId, s.stopId);
-        const delaySec = rt?.delaySec;
-        let predictedSec: number | undefined;
-        if (rt?.predictedSec != null) {
-          predictedSec = isUnixTimestamp(rt.predictedSec)
-            ? unixToTorontoSec(rt.predictedSec)
-            : rt.predictedSec;
-        } else if (delaySec != null) {
-          predictedSec = schedSec + delaySec;
-        }
-        return {
-          stopId: s.stopId,
-          name: s.name,
-          sequence: s.sequence,
-          scheduled: secToTime(schedSec % 86400),
-          predicted:
-            predictedSec != null ? secToTime(predictedSec % 86400) : undefined,
-          delayMin: delaySec != null ? Math.round(delaySec / 60) : undefined,
-          platform: rt?.platform,
-          passed: fromStop != null && s.sequence < (stops[startIdx]?.sequence ?? 0),
-        };
-      }),
+      stops: await Promise.all(
+        slice.map(async (s) => {
+          const schedSec = gtfsTimeToSec(s.departureTime);
+          const rt = await rtForFixtureStop(feedId, liveTripId, s.stopId);
+          const delaySec = computeDelaySec(schedSec, {
+            predictedSec: rt?.predictedSec,
+            agencyDelaySec: rt?.delaySec,
+            now,
+          });
+          let predictedSec: number | undefined;
+          if (rt?.predictedSec != null) {
+            predictedSec = normalizeServiceSec(rt.predictedSec, now);
+          } else if (delaySec != null) {
+            predictedSec = normalizeServiceSec(schedSec + delaySec, now);
+          }
+          return {
+            stopId: s.stopId,
+            name: s.name,
+            sequence: s.sequence,
+            scheduled: secToTime(schedSec % 86400),
+            predicted:
+              predictedSec != null ? secToTime(predictedSec % 86400) : undefined,
+            delayMin: delayMinFromSec(delaySec),
+            platform: rt?.platform,
+            passed:
+              fromStop != null && s.sequence < (stops[startIdx]?.sequence ?? 0),
+          };
+        }),
+      ),
     });
   }
 
@@ -81,6 +115,7 @@ export async function GET(
     fromStop != null ? rows.findIndex((r) => r.stop_id === fromStop) : 0;
   const slice = startIdx >= 0 ? rows.slice(startIdx) : rows;
   const tripRt = getTripRt(feedId, tripId);
+  const now = torontoNowSec();
 
   return NextResponse.json({
     tripId,
@@ -90,14 +125,16 @@ export async function GET(
     stops: slice.map((s) => {
       const schedSec = gtfsTimeToSec(s.departure_time);
       const rt = getStopTripRt(feedId, tripId, s.stop_id);
-      const delaySec = rt?.delaySec;
+      const delaySec = computeDelaySec(schedSec, {
+        predictedSec: rt?.predictedSec,
+        agencyDelaySec: rt?.delaySec,
+        now,
+      });
       let predictedSec: number | undefined;
       if (rt?.predictedSec != null) {
-        predictedSec = isUnixTimestamp(rt.predictedSec)
-          ? unixToTorontoSec(rt.predictedSec)
-          : rt.predictedSec;
+        predictedSec = normalizeServiceSec(rt.predictedSec, now);
       } else if (delaySec != null) {
-        predictedSec = schedSec + delaySec;
+        predictedSec = normalizeServiceSec(schedSec + delaySec, now);
       }
       return {
         stopId: s.stop_id,
@@ -106,7 +143,7 @@ export async function GET(
         scheduled: secToTime(schedSec % 86400),
         predicted:
           predictedSec != null ? secToTime(predictedSec % 86400) : undefined,
-        delayMin: delaySec != null ? Math.round(delaySec / 60) : undefined,
+        delayMin: delayMinFromSec(delaySec),
         platform: feedId === "go" ? rt?.platform : undefined,
       };
     }),

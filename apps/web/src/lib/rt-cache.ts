@@ -85,7 +85,12 @@ function rebuildStopPredictionsIndex() {
     const vehicle = getVehicleForTrip(feedId, tripId);
     const routeId = tripRt?.routeId ?? vehicle?.routeId;
     let predictedSec = rt.predictedSec;
-    if (predictedSec == null && rt.delaySec != null) continue;
+    if (predictedSec == null && rt.delaySec != null) {
+      predictedSec = tripRt?.predictedSec;
+    }
+    if (predictedSec == null && rt.delaySec != null) {
+      predictedSec = torontoNowSec() + rt.delaySec;
+    }
     if (predictedSec == null) continue;
     predictedSec = normalizePredictedSec(predictedSec);
 
@@ -256,13 +261,20 @@ async function pollFeed(feedId: string) {
 }
 
 export async function refreshRtCache(force = false) {
-  if (!force && Date.now() - lastRefresh < TTL_MS && tripMap.size > 0) return;
+  const goKey = process.env.METROLINX_API_KEY?.trim();
+  goRtEnabled = Boolean(goKey);
+
+  if (!force && Date.now() - lastRefresh < TTL_MS && tripMap.size > 0) {
+    if (goKey && Date.now() - goRtLastOk > TTL_MS) {
+      await pollGo(goKey);
+      rebuildStopPredictionsIndex();
+    }
+    return;
+  }
   if (refreshing) return refreshing;
 
   refreshing = (async () => {
     await Promise.all(Object.keys(RT_FEEDS).map((feedId) => pollFeed(feedId)));
-    const goKey = process.env.METROLINX_API_KEY?.trim();
-    goRtEnabled = Boolean(goKey);
     if (goKey) await pollGo(goKey);
 
     if (isDatabaseConfigured() && !(await useDemoFixtures())) {
@@ -470,7 +482,10 @@ export function mergeRtIntoDeparture(
 function snapshotTripUpdates(): RtTripUpdate[] {
   const out: RtTripUpdate[] = [];
   for (const [key, rt] of stopTripMap) {
-    const [feedId, tripId, stopId] = key.split(":");
+    const parts = key.split(":");
+    const feedId = parts[0];
+    const tripId = parts[1];
+    const stopId = parts.slice(2).join(":");
     if (!feedId || !tripId || !stopId) continue;
     out.push({
       feedId,

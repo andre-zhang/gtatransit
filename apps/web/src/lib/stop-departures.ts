@@ -1,4 +1,5 @@
 import {
+  computeDelaySec,
   filterUpcomingDepartures,
   gtfsTimeToSec,
   type DepartureInput,
@@ -16,10 +17,9 @@ import { getDemoCore } from "@/lib/demo";
 import type { DemoStopMeta } from "@/lib/demo";
 import type { ScheduleRow } from "@/lib/demo-schedule-types";
 import { getStopSchedule } from "@/lib/demo-schedules";
+import { routesMatch } from "@/lib/route-match";
 import {
-  getActiveVehicleForRoute,
   getRtPredictionsForStop,
-  getTripDelaySec,
   mergeRtIntoDeparture,
   refreshRtCache,
   type RtStopPrediction,
@@ -81,7 +81,13 @@ function rtPredictionToDeparture(
     let bestDelta = Infinity;
     for (const s of schedule) {
       if (s.feedId !== row.feedId) continue;
-      if (s.routeShort !== routeShort && s.routeId !== routeId) continue;
+      if (
+        routeId &&
+        !routesMatch(row.feedId, routeId, routeShort, s.routeId) &&
+        !routesMatch(row.feedId, routeId, routeShort, s.routeShort)
+      ) {
+        continue;
+      }
       const schedNorm = normalizeServiceSec(gtfsTimeToSec(s.departureTime), now);
       const delta = Math.abs(schedNorm - predNorm);
       if (delta < bestDelta && delta <= 50 * 60) {
@@ -95,13 +101,11 @@ function rtPredictionToDeparture(
     ? gtfsTimeToSec(scheduledRow.departureTime)
     : (predictedSec ?? gtfsTimeToSec(secToTime((Date.now() / 1000) % 86400)));
 
-  let delaySec = row.delaySec;
-  if (predictedSec != null && scheduledRow) {
-    const schedNorm = normalizeServiceSec(schedSec, now);
-    delaySec = predNorm! - schedNorm;
-  } else if (delaySec == null && predictedSec != null) {
-    delaySec = 0;
-  }
+  const delaySec = computeDelaySec(schedSec, {
+    predictedSec,
+    agencyDelaySec: row.delaySec,
+    now,
+  });
 
   return {
     tripId: row.tripId,
@@ -124,42 +128,6 @@ function rtPredictionToDeparture(
     realtime: true,
     vehicleId: row.vehicleId,
   };
-}
-
-function enrichNextPerRouteWithVehicles(rows: DepartureInput[]): DepartureInput[] {
-  const now = torontoNowSec();
-  const nextByRoute = new Map<string, DepartureInput>();
-
-  for (const row of rows) {
-    if (row.realtime) continue;
-    const schedSec = normalizeServiceSec(gtfsTimeToSec(row.departureTime), now);
-    if (schedSec < now - 120 || schedSec > now + 90 * 60) continue;
-    const key = `${row.feedId}:${row.routeShort || row.routeId}`;
-    const prev = nextByRoute.get(key);
-    if (!prev || schedSec < normalizeServiceSec(gtfsTimeToSec(prev.departureTime), now)) {
-      nextByRoute.set(key, row);
-    }
-  }
-
-  return rows.map((row) => {
-    const key = `${row.feedId}:${row.routeShort || row.routeId}`;
-    if (nextByRoute.get(key) !== row) return row;
-
-    const vehicle = getActiveVehicleForRoute(row.feedId, row.routeId, row.routeShort);
-    if (!vehicle?.tripId) return row;
-
-    const schedSec = gtfsTimeToSec(row.departureTime);
-    const delaySec = getTripDelaySec(row.feedId, vehicle.tripId);
-    if (delaySec == null) return row;
-    return {
-      ...row,
-      tripId: vehicle.tripId,
-      realtime: true,
-      vehicleId: vehicle.vehicleId,
-      delaySec,
-      predictedSec: schedSec + delaySec,
-    };
-  });
 }
 
 function dedupeNearLive(rows: DepartureInput[]): DepartureInput[] {
@@ -270,8 +238,7 @@ export async function buildDemoStopDepartures(
     });
   }
 
-  const enriched = enrichNextPerRouteWithVehicles(inputs);
-  const deduped = dedupeNearLive(enriched);
+  const deduped = dedupeNearLive(inputs);
 
   return {
     name: stop.name,

@@ -132,7 +132,7 @@ export function DepartureTable({
           {liveCount} live · {rows.length - liveCount} scheduled
         </div>
       )}
-      <table className="departure-board-table w-full min-w-[36rem] text-left">
+      <table className="departure-board-table w-full min-w-[28rem] text-left sm:min-w-[36rem]">
         <thead>
           <tr className="departure-board-head">
             <th className="px-5 py-3 text-right">Time</th>
@@ -174,6 +174,15 @@ export function DepartureTable({
                 <tr
                   className={`departure-board-row cursor-pointer ${isOpen ? "departure-board-row--open" : ""}`}
                   onClick={() => toggle(rowKey)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggle(rowKey);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-expanded={isOpen}
                 >
                   <td className="px-5 py-3 text-right">
                     <span
@@ -221,7 +230,7 @@ export function DepartureTable({
                       {late ? (
                         <span className="go-badge go-badge--late">+{r.latenessMin} min</span>
                       ) : early ? (
-                        <span className="go-badge go-badge--ontime">{r.latenessMin} min</span>
+                        <span className="go-badge go-badge--early">{r.latenessMin} min</span>
                       ) : r.realtime && r.latenessMin === 0 ? (
                         <span className="go-badge go-badge--ontime">On time</span>
                       ) : r.realtime && r.predicted && r.predicted !== r.time ? (

@@ -1,9 +1,10 @@
 import { ensureDemoAssets } from "./demo";
 import { loadDemoAssets } from "./demo-assets";
 import { getGroupedDemoStops, resolveStopGroupId } from "./demo-stop-groups";
-import { loadStopScheduleRows } from "./demo-schedule-data";
 import { getTripStops } from "./demo-schedules";
-import { lookupRouteFromSchedules, lookupTripFromSchedules } from "./demo-trip-lookup";
+import { lookupRouteFromSchedules } from "./demo-trip-lookup";
+import { resolveDemoTrip } from "./demo-trip-resolve";
+import { computeDelaySec, delayMinFromSec } from "./departures";
 import { getDemoRoutesGeoJson } from "./demo-routes";
 import { routeColor } from "./colors";
 import {
@@ -14,11 +15,7 @@ import {
 } from "./calendar";
 import type { ScheduleRow } from "./demo-schedule-types";
 import { loadBlockTrips, loadFeedTripMeta } from "./demo-trip-meta";
-import {
-  fixtureStopIdForLive,
-  liveStopDisplayName,
-  resolveTtcRtStopIds,
-} from "./ttc-stop-registry";
+import { liveStopDisplayName, resolveTtcRtStopIds } from "./ttc-stop-registry";
 import {
   getRtVehicle,
   getTripRt,
@@ -94,48 +91,10 @@ function stopName(feedId: string, stopId: string): string {
 async function resolveScheduleTrip(
   feedId: string,
   liveTripId: string,
-  routeId?: string,
-  routeShort?: string,
 ): Promise<{ row: ScheduleRow; fuzzy: boolean } | undefined> {
-  const exact = await lookupTripFromSchedules(feedId, liveTripId);
-  if (exact) return { row: exact, fuzzy: false };
-
-  const updates = getTripStopUpdates(feedId, liveTripId);
-  if (!updates.length) return undefined;
-
-  const now = torontoNowSec();
-  const anchor = updates.find((u) => u.predictedSec != null) ?? updates[0]!;
-  const refSec =
-    anchor.predictedSec != null
-      ? normalizeServiceSec(anchor.predictedSec, now)
-      : now;
-
-  const schedStopId =
-    feedId === "ttc"
-      ? ((await fixtureStopIdForLive(anchor.stopId)) ?? anchor.stopId)
-      : anchor.stopId;
-
-  const rows = await loadStopScheduleRows(feedId, schedStopId);
-  let best: ScheduleRow | undefined;
-  let bestDelta = Infinity;
-  for (const row of rows) {
-    if (
-      routeId &&
-      row.routeId !== routeId &&
-      row.routeShort !== routeShort &&
-      routeShort &&
-      row.routeShort !== routeShort
-    ) {
-      continue;
-    }
-    const schedNorm = normalizeServiceSec(gtfsTimeToSec(row.departureTime), now);
-    const delta = Math.abs(schedNorm - refSec);
-    if (delta < bestDelta && delta <= 50 * 60) {
-      bestDelta = delta;
-      best = row;
-    }
-  }
-  return best ? { row: best, fuzzy: true } : undefined;
+  const resolved = await resolveDemoTrip(feedId, liveTripId);
+  if (!resolved.scheduleRow) return undefined;
+  return { row: resolved.scheduleRow, fuzzy: resolved.fuzzy };
 }
 
 async function rtForScheduleStop(
@@ -188,9 +147,15 @@ async function buildUpcomingStops(
       slice.map(async (s) => {
         const schedSec = gtfsTimeToSec(s.departureTime);
         const rt = await rtForScheduleStop(feedId, s.stopId, rtByLiveId);
-        const delaySec = rt?.delaySec;
+        const delaySec = computeDelaySec(schedSec, {
+          predictedSec: rt?.predictedSec,
+          agencyDelaySec: rt?.delaySec,
+          now,
+        });
         let predictedSec = rt?.predictedSec;
-        if (predictedSec == null && delaySec != null) predictedSec = schedSec + delaySec;
+        if (predictedSec == null && delaySec != null) {
+          predictedSec = schedSec + delaySec;
+        }
         const schedFmt = formatBoardTime(schedSec, now);
         const predFmt =
           predictedSec != null ? formatBoardTime(predictedSec, now) : null;
@@ -201,7 +166,7 @@ async function buildUpcomingStops(
           scheduled: schedFmt.time,
           predicted: predFmt?.time,
           platform: rt?.platform,
-          delayMin: delaySec != null ? Math.round(delaySec / 60) : undefined,
+          delayMin: delayMinFromSec(delaySec),
         };
       }),
     );
@@ -265,12 +230,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     vehicle.routeId ?? tripRt?.routeId;
   const route = await findRouteMeta(feedId, routeId);
   const resolved = liveTripId
-    ? await resolveScheduleTrip(
-        feedId,
-        liveTripId,
-        routeId,
-        route?.short_name ?? undefined,
-      )
+    ? await resolveScheduleTrip(feedId, liveTripId)
     : undefined;
   const scheduleTrip = resolved?.row;
   const scheduleTripId = scheduleTrip?.tripId;
