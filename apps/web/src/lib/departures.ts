@@ -53,6 +53,7 @@ export function filterUpcomingDepartures(
   const mapped = rows
     .map((r) => {
       const schedSec = gtfsTimeToSec(r.departureTime);
+      const schedNorm = normalizeDepSec(schedSec, now);
       let depSec = schedSec;
       let realtime = r.realtime ?? false;
       let delaySec = r.delaySec ?? null;
@@ -70,17 +71,25 @@ export function filterUpcomingDepartures(
       depSec = normalizeDepSec(depSec, now);
       if (depSec < now - pastGrace) return null;
 
+      // Compare live prediction to scheduled time — don't trust agency delay=0 alone.
+      if (realtime) {
+        const drift = depSec - schedNorm;
+        if (delaySec == null || Math.abs(drift) > Math.abs(delaySec)) {
+          delaySec = drift;
+        }
+      }
+
       const delayMin =
         delaySec != null ? Math.round(delaySec / 60) : undefined;
       const latenessMin =
-        delayMin != null && realtime
-          ? delayMin
-          : undefined;
+        delayMin != null && realtime ? delayMin : undefined;
+
+      const showPredicted = realtime ? secToTime(depSec % 86400) : undefined;
 
       return {
         depSec,
         time: secToTime(schedSec % 86400),
-        predicted: realtime ? secToTime(depSec % 86400) : undefined,
+        predicted: showPredicted,
         routeShort: r.routeShort,
         routeColor: r.routeColor,
         destination: r.destination,

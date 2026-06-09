@@ -203,6 +203,8 @@ export function DepartureTable({
                         <span className="go-badge go-badge--ontime">{r.latenessMin} min</span>
                       ) : r.realtime && r.latenessMin === 0 ? (
                         <span className="go-badge go-badge--ontime">On time</span>
+                      ) : r.realtime && r.predicted && r.predicted !== r.time ? (
+                        <span className="go-badge go-badge--live">Live</span>
                       ) : r.realtime ? (
                         <span className="go-badge go-badge--live">Live</span>
                       ) : (

@@ -10,7 +10,8 @@ export type TtcSurfaceStop = {
 
 type StopMember = { feedId: string; stopId: string };
 
-const COORD_MATCH_M = 80;
+/** Max distance to match one fixture pin to a live Surface stop_id. */
+const COORD_MATCH_M = 20;
 const REGISTRY_TTL_MS = 24 * 60 * 60_000;
 
 let registry: Record<string, TtcSurfaceStop> | null = null;
@@ -51,11 +52,30 @@ function memberCoords(feedId: string, stopId: string): { lat: number; lon: numbe
   return null;
 }
 
-/**
- * TTC bustime GTFS-RT uses stop_ids from Surface GTFS. Demo fixtures may use an
- * older GTFS snapshot where the same numeric id points at a different location.
- * Resolve all live RT stop_ids that correspond to our map pin (by stop_code + coords).
- */
+/** Resolve live RT stop_ids for a single map pin (not all nearby stops). */
+function resolveIdsForMember(m: StopMember): string[] {
+  if (!registry) return [];
+  const ids = new Set<string>();
+
+  for (const sid of codeToIds.get(m.stopId) ?? []) ids.add(sid);
+
+  const coords = memberCoords(m.feedId, m.stopId);
+  if (coords) {
+    let closest: string | undefined;
+    let closestDist = Infinity;
+    for (const [stopId, meta] of Object.entries(registry)) {
+      const dist = haversineM(coords.lat, coords.lon, meta.lat, meta.lon);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = stopId;
+      }
+    }
+    if (closest && closestDist <= COORD_MATCH_M) ids.add(closest);
+  }
+
+  return [...ids];
+}
+
 export async function resolveTtcRtStopIds(members: StopMember[]): Promise<string[]> {
   await ensureRegistry();
   const ids = new Set<string>();
@@ -65,24 +85,13 @@ export async function resolveTtcRtStopIds(members: StopMember[]): Promise<string
       ids.add(m.stopId);
       continue;
     }
-
-    // Legacy fixture stop_id may point at a different location in current Surface GTFS.
-    for (const sid of codeToIds.get(m.stopId) ?? []) ids.add(sid);
-
-    const coords = memberCoords(m.feedId, m.stopId);
-    if (!coords || !registry) continue;
-
-    for (const [stopId, meta] of Object.entries(registry)) {
-      if (haversineM(coords.lat, coords.lon, meta.lat, meta.lon) <= COORD_MATCH_M) {
-        ids.add(stopId);
-      }
-    }
+    for (const sid of resolveIdsForMember(m)) ids.add(sid);
   }
 
   return [...ids];
 }
 
-/** True when a live RT stop_id is geographically the same stop as our group pin. */
+/** True when RT stop_id matches a specific group member pin (not a neighbour). */
 export async function isTtcRtStopAtGroup(
   rtStopId: string,
   members: StopMember[],
@@ -93,12 +102,8 @@ export async function isTtcRtStopAtGroup(
 
   for (const m of members) {
     if (m.feedId !== "ttc") continue;
-    if (live.stopCode === m.stopId) return true;
-
-    const coords = memberCoords(m.feedId, m.stopId);
-    if (coords && haversineM(coords.lat, coords.lon, live.lat, live.lon) <= COORD_MATCH_M) {
-      return true;
-    }
+    const allowed = resolveIdsForMember(m);
+    if (allowed.includes(rtStopId)) return true;
   }
 
   return false;

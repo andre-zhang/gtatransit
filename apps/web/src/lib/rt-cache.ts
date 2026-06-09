@@ -421,16 +421,20 @@ export function mergeRtIntoDeparture(
       vehicle = getVehicleForTrip(feedId, fuzzy.tripId);
       delaySec = fuzzy.delaySec ?? tripRt?.delaySec ?? vehicle?.delaySec;
       predictedSec = fuzzy.predictedSec;
-      if (delaySec == null && predictedSec != null) {
+      if (predictedSec != null) {
         const drift = predictedSec - schedSec;
-        if (Math.abs(drift) >= 30) delaySec = drift;
+        if (delaySec == null || Math.abs(drift) > Math.abs(delaySec)) {
+          delaySec = drift;
+        }
       }
     }
   }
 
-  if (predictedSec != null && delaySec == null) {
+  if (predictedSec != null) {
     const drift = predictedSec - schedSec;
-    if (Math.abs(drift) >= 30) delaySec = drift;
+    if (delaySec == null || Math.abs(drift) > Math.abs(delaySec)) {
+      delaySec = drift;
+    }
   }
 
   const vehicleId = tripRt?.vehicleId ?? vehicle?.vehicleId;

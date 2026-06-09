@@ -61,6 +61,7 @@ function scheduleHeadsignByRoute(
 function rtPredictionToDeparture(
   row: RtStopPrediction,
   headsigns: Map<string, { headsign: string; routeColor: string }>,
+  schedule: ScheduleRow[],
 ): DepartureInput | null {
   const routeId = row.routeId;
   const coreMeta = routeMetaFromCore(row.feedId, routeId);
@@ -72,9 +73,34 @@ function rtPredictionToDeparture(
   }
   if (predictedSec == null && row.delaySec == null) return null;
 
-  const schedSec = predictedSec ?? gtfsTimeToSec(secToTime((Date.now() / 1000) % 86400));
+  const now = torontoNowSec();
+  const predNorm =
+    predictedSec != null ? normalizeDepSec(predictedSec, now) : null;
+
+  let scheduledRow: ScheduleRow | undefined;
+  if (predNorm != null) {
+    let bestDelta = Infinity;
+    for (const s of schedule) {
+      if (s.feedId !== row.feedId) continue;
+      if (s.routeShort !== routeShort && s.routeId !== routeId) continue;
+      const schedNorm = normalizeDepSec(gtfsTimeToSec(s.departureTime), now);
+      const delta = Math.abs(schedNorm - predNorm);
+      if (delta < bestDelta && delta <= 50 * 60) {
+        bestDelta = delta;
+        scheduledRow = s;
+      }
+    }
+  }
+
+  const schedSec = scheduledRow
+    ? gtfsTimeToSec(scheduledRow.departureTime)
+    : (predictedSec ?? gtfsTimeToSec(secToTime((Date.now() / 1000) % 86400)));
+
   let delaySec = row.delaySec;
-  if (delaySec == null && predictedSec != null) {
+  if (predictedSec != null && scheduledRow) {
+    const schedNorm = normalizeDepSec(schedSec, now);
+    delaySec = predNorm! - schedNorm;
+  } else if (delaySec == null && predictedSec != null) {
     delaySec = 0;
   }
 
@@ -83,8 +109,15 @@ function rtPredictionToDeparture(
     feedId: row.feedId,
     routeId: routeId ?? "",
     routeShort,
-    routeColor: schedMeta?.routeColor ?? routeColor(row.feedId, routeShort, null),
-    destination: schedMeta?.headsign ?? coreMeta?.destination ?? "In service",
+    routeColor:
+      scheduledRow?.routeColor ??
+      schedMeta?.routeColor ??
+      routeColor(row.feedId, routeShort, null),
+    destination:
+      scheduledRow?.headsign ??
+      schedMeta?.headsign ??
+      coreMeta?.destination ??
+      "In service",
     departureTime: secToTime(schedSec % 86400),
     stopId: row.stopId,
     delaySec,
@@ -117,7 +150,8 @@ function enrichNextPerRouteWithVehicles(rows: DepartureInput[]): DepartureInput[
     if (!vehicle?.tripId) return row;
 
     const schedSec = gtfsTimeToSec(row.departureTime);
-    const delaySec = getTripDelaySec(row.feedId, vehicle.tripId) ?? 0;
+    const delaySec = getTripDelaySec(row.feedId, vehicle.tripId);
+    if (delaySec == null) return row;
     return {
       ...row,
       tripId: vehicle.tripId,
@@ -187,18 +221,26 @@ export async function buildDemoStopDepartures(
       if (feedId === "ttc" && !(await isTtcRtStopAtGroup(extra.stopId, stop.members))) {
         continue;
       }
-      const row = rtPredictionToDeparture(extra, headsigns);
+      const row = rtPredictionToDeparture(extra, headsigns, schedule);
       if (!row) continue;
       usedRtTrips.add(`${row.feedId}:${row.tripId}`);
       inputs.push(row);
     }
   }
 
+  const ttcRtByMember = new Map<string, string[]>();
+  async function ttcRtIdsForStop(stopId: string): Promise<string[]> {
+    let ids = ttcRtByMember.get(stopId);
+    if (!ids) {
+      ids = await resolveTtcRtStopIds([{ feedId: "ttc", stopId }]);
+      ttcRtByMember.set(stopId, ids);
+    }
+    return ids;
+  }
+
   for (const r of schedule) {
     const rtIds =
-      r.feedId === "ttc"
-        ? (rtStopIdsByFeed.get("ttc") ?? [r.stopId])
-        : [r.stopId];
+      r.feedId === "ttc" ? await ttcRtIdsForStop(r.stopId) : [r.stopId];
     const schedSec = gtfsTimeToSec(r.departureTime);
     const rt = mergeRtIntoDeparture(
       r.feedId,
