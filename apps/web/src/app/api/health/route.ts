@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { ensureDemoAssets, loadDemoAssets } from "@/lib/demo-assets";
+import { getGoRtStatus, refreshRtCache } from "@/lib/rt-cache";
 
 export async function GET() {
   const demo = await useDemoFixtures();
@@ -19,6 +20,9 @@ export async function GET() {
     }
   }
 
+  await refreshRtCache();
+  const goRt = getGoRtStatus();
+
   return NextResponse.json({
     demoMode: demo,
     demoModeEnv: process.env.DEMO_MODE ?? null,
@@ -26,5 +30,6 @@ export async function GET() {
     agencies,
     stops,
     fixturesError,
+    goRt,
   });
 }

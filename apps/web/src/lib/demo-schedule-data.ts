@@ -105,18 +105,11 @@ export async function loadStopScheduleRows(
   return [];
 }
 
-/** Feeds too large for full-route / full-feed scans on serverless (per-stop shard lookup is OK). */
-const HEAVY_SCHEDULE_FEEDS = new Set(["ttc"]);
-
-/** Collect rows for a route by scanning shards (avoids caching the full feed map). */
+/** Collect rows for a route by scanning shards (stops early once enough trips found). */
 export async function loadRouteScheduleRows(
   feedId: string,
   routeId: string,
 ): Promise<ScheduleRow[]> {
-  if (HEAVY_SCHEDULE_FEEDS.has(feedId)) {
-    return [];
-  }
-
   const matches = (row: ScheduleRow) =>
     row.routeId === routeId || row.routeShort === routeId;
 
@@ -139,13 +132,19 @@ export async function loadRouteScheduleRows(
   }
 
   const rows: ScheduleRow[] = [];
+  const tripIds = new Set<string>();
+  const MAX_TRIPS = 220;
+
   for (const file of files) {
     const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(file);
     for (const sched of Object.values(part)) {
       for (const row of sched) {
-        if (matches(row)) rows.push(row);
+        if (!matches(row)) continue;
+        rows.push(row);
+        tripIds.add(row.tripId);
       }
     }
+    if (tripIds.size >= MAX_TRIPS) break;
   }
   return rows;
 }

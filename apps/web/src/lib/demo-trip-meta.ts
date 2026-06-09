@@ -8,6 +8,7 @@ type BlockTrip = {
 
 type BlockIndex = {
   blocks: Record<string, BlockTrip[]>;
+  tripToBlock?: Record<string, string>;
 };
 
 const cache = new Map<string, BlockIndex>();
@@ -28,10 +29,12 @@ async function loadBlockIndex(feedId: string): Promise<BlockIndex> {
 }
 
 function findBlockForTrip(
-  blocks: Record<string, BlockTrip[]>,
+  idx: BlockIndex,
   tripId: string,
 ): BlockTrip[] | undefined {
-  for (const list of Object.values(blocks)) {
+  const blockId = idx.tripToBlock?.[tripId];
+  if (blockId && idx.blocks[blockId]) return idx.blocks[blockId];
+  for (const list of Object.values(idx.blocks)) {
     if (list.some((t) => t.trip_id === tripId)) return list;
   }
   return undefined;
@@ -42,6 +45,8 @@ export async function loadFeedTripMeta(
   tripId: string,
 ): Promise<{ blockId: string | null }> {
   const idx = await loadBlockIndex(feedId);
+  const mapped = idx.tripToBlock?.[tripId];
+  if (mapped) return { blockId: mapped };
   for (const [blockId, list] of Object.entries(idx.blocks)) {
     if (list.some((t) => t.trip_id === tripId)) return { blockId };
   }
@@ -61,7 +66,7 @@ export async function loadBlockTrips(
   }>
 > {
   const idx = await loadBlockIndex(feedId);
-  const list = findBlockForTrip(idx.blocks, tripId);
+  const list = findBlockForTrip(idx, tripId);
   if (!list || list.length <= 1) return [];
 
   return list.map((t) => ({

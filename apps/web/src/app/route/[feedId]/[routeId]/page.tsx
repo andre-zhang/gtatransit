@@ -28,10 +28,10 @@ export default async function RoutePage({
   if (!data) {
     return (
       <PageShell>
-        <PageHeader title="Route not found" />
+        <PageHeader title="Route unavailable" />
         <div className="px-6 py-12 text-center text-go-slate">
-          Route not found. Import GTFS into Postgres and set DEMO_MODE=0, or enable
-          demo fixtures with DEMO_MODE=1.
+          Could not load this route. It may not exist in the schedule, or the server
+          timed out — try again in a moment.
         </div>
       </PageShell>
     );

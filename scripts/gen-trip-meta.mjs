@@ -8,11 +8,16 @@ import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const dataDir = join(root, "data", "gtfs", "extracted-demo");
+const gtfsRoot = join(root, "data", "gtfs");
 const outDir = join(root, "apps", "web", "public", "demo");
-const FEEDS = ["go", "miway"];
-/** Match demo fixture service day (GO/MiWay trip ids embed this date). */
+const FEEDS = ["go", "miway", "ttc"];
+/** Match demo fixture service day (GO trip ids embed this date). */
 const SERVICE_DATE = process.env.SERVICE_DATE ?? "20260602";
+
+function gtfsDirFor(feedId) {
+  if (feedId === "ttc") return join(gtfsRoot, "tmp", "surface");
+  return join(gtfsRoot, "extracted-demo", feedId);
+}
 
 function pick(row, key) {
   return row[key] ?? "";
@@ -39,7 +44,7 @@ async function readCsv(path) {
 }
 
 async function buildBlockIndex(feedId) {
-  const gtfsDir = join(dataDir, feedId);
+  const gtfsDir = gtfsDirFor(feedId);
   const trips = await readCsv(join(gtfsDir, "trips.txt"));
   if (!trips.length) {
     console.warn(`skip ${feedId}: no trips.txt`);
@@ -79,15 +84,23 @@ async function buildBlockIndex(feedId) {
   }
 
   const blockIndex = {};
+  const tripToBlock = {};
   for (const [blockId, list] of blocks) {
     if (list.length <= 1) continue;
     list.sort((a, b) => a.first_departure.localeCompare(b.first_departure));
-    blockIndex[blockId] = list;
+    const compact = list.map((t) => ({
+      trip_id: t.trip_id,
+      first_departure: (t.first_departure ?? "—").slice(0, 5),
+      ...(feedId !== "ttc" && t.headsign ? { headsign: t.headsign } : {}),
+    }));
+    blockIndex[blockId] = compact;
+    for (const t of compact) tripToBlock[t.trip_id] = blockId;
   }
 
+  const payload = { blocks: blockIndex, tripToBlock };
   const outPath = join(outDir, `${feedId}-block-index.json`);
-  writeFileSync(outPath, JSON.stringify({ blocks: blockIndex }));
-  const kb = Math.round((JSON.stringify({ blocks: blockIndex }).length || 0) / 1024);
+  writeFileSync(outPath, JSON.stringify(payload));
+  const kb = Math.round(JSON.stringify(payload).length / 1024);
   console.log(`${feedId}: ${Object.keys(blockIndex).length} blocks (~${kb} KB)`);
 }
 

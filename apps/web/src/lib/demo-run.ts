@@ -10,11 +10,15 @@ import {
   formatBoardTime,
   gtfsTimeToSec,
   normalizeServiceSec,
-  secToTime,
   torontoNowSec,
 } from "./calendar";
 import type { ScheduleRow } from "./demo-schedule-types";
 import { loadBlockTrips, loadFeedTripMeta } from "./demo-trip-meta";
+import {
+  fixtureStopIdForLive,
+  liveStopDisplayName,
+  resolveTtcRtStopIds,
+} from "./ttc-stop-registry";
 import {
   getRtVehicle,
   getTripRt,
@@ -92,9 +96,9 @@ async function resolveScheduleTrip(
   liveTripId: string,
   routeId?: string,
   routeShort?: string,
-): Promise<ScheduleRow | undefined> {
+): Promise<{ row: ScheduleRow; fuzzy: boolean } | undefined> {
   const exact = await lookupTripFromSchedules(feedId, liveTripId);
-  if (exact) return exact;
+  if (exact) return { row: exact, fuzzy: false };
 
   const updates = getTripStopUpdates(feedId, liveTripId);
   if (!updates.length) return undefined;
@@ -106,11 +110,24 @@ async function resolveScheduleTrip(
       ? normalizeServiceSec(anchor.predictedSec, now)
       : now;
 
-  const rows = await loadStopScheduleRows(feedId, anchor.stopId);
+  const schedStopId =
+    feedId === "ttc"
+      ? ((await fixtureStopIdForLive(anchor.stopId)) ?? anchor.stopId)
+      : anchor.stopId;
+
+  const rows = await loadStopScheduleRows(feedId, schedStopId);
   let best: ScheduleRow | undefined;
   let bestDelta = Infinity;
   for (const row of rows) {
-    if (routeId && row.routeId !== routeId && row.routeShort !== routeShort) continue;
+    if (
+      routeId &&
+      row.routeId !== routeId &&
+      row.routeShort !== routeShort &&
+      routeShort &&
+      row.routeShort !== routeShort
+    ) {
+      continue;
+    }
     const schedNorm = normalizeServiceSec(gtfsTimeToSec(row.departureTime), now);
     const delta = Math.abs(schedNorm - refSec);
     if (delta < bestDelta && delta <= 50 * 60) {
@@ -118,7 +135,21 @@ async function resolveScheduleTrip(
       best = row;
     }
   }
-  return best;
+  return best ? { row: best, fuzzy: true } : undefined;
+}
+
+async function rtForScheduleStop(
+  feedId: string,
+  fixtureStopId: string,
+  rtByLiveId: Map<string, ReturnType<typeof getTripStopUpdates>[number]>,
+) {
+  if (feedId !== "ttc") return rtByLiveId.get(fixtureStopId);
+  const liveIds = await resolveTtcRtStopIds([{ feedId: "ttc", stopId: fixtureStopId }]);
+  for (const liveId of liveIds) {
+    const hit = rtByLiveId.get(liveId);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 type UpcomingStop = {
@@ -135,15 +166,17 @@ async function buildUpcomingStops(
   feedId: string,
   liveTripId: string,
   scheduleTripId: string | undefined,
+  useScheduleStops: boolean,
   fromSequence: number | undefined,
 ): Promise<UpcomingStop[]> {
   const now = torontoNowSec();
-  const schedStops = scheduleTripId
-    ? await getTripStops(feedId, scheduleTripId)
-    : [];
-  const rtByStop = new Map(
-    getTripStopUpdates(feedId, liveTripId).map((u) => [u.stopId, u]),
-  );
+  const rtUpdates = getTripStopUpdates(feedId, liveTripId);
+  const rtByLiveId = new Map(rtUpdates.map((u) => [u.stopId, u]));
+
+  const schedStops =
+    useScheduleStops && scheduleTripId
+      ? await getTripStops(feedId, scheduleTripId)
+      : [];
 
   if (schedStops.length) {
     const startIdx =
@@ -151,39 +184,48 @@ async function buildUpcomingStops(
         ? schedStops.findIndex((s) => s.sequence >= fromSequence)
         : 0;
     const slice = startIdx >= 0 ? schedStops.slice(startIdx) : schedStops;
-    return slice.map((s) => {
-      const schedSec = gtfsTimeToSec(s.departureTime);
-      const rt = rtByStop.get(s.stopId);
-      const delaySec = rt?.delaySec;
-      let predictedSec = rt?.predictedSec;
-      if (predictedSec == null && delaySec != null) predictedSec = schedSec + delaySec;
-      const schedFmt = formatBoardTime(schedSec, now);
-      const predFmt =
-        predictedSec != null ? formatBoardTime(predictedSec, now) : null;
-      return {
-        stop_id: s.stopId,
-        name: s.name,
-        sequence: s.sequence,
-        scheduled: schedFmt.time,
-        predicted: predFmt?.time,
-        platform: rt?.platform,
-        delayMin: delaySec != null ? Math.round(delaySec / 60) : undefined,
-      };
-    });
+    const mapped = await Promise.all(
+      slice.map(async (s) => {
+        const schedSec = gtfsTimeToSec(s.departureTime);
+        const rt = await rtForScheduleStop(feedId, s.stopId, rtByLiveId);
+        const delaySec = rt?.delaySec;
+        let predictedSec = rt?.predictedSec;
+        if (predictedSec == null && delaySec != null) predictedSec = schedSec + delaySec;
+        const schedFmt = formatBoardTime(schedSec, now);
+        const predFmt =
+          predictedSec != null ? formatBoardTime(predictedSec, now) : null;
+        return {
+          stop_id: s.stopId,
+          name: s.name,
+          sequence: s.sequence,
+          scheduled: schedFmt.time,
+          predicted: predFmt?.time,
+          platform: rt?.platform,
+          delayMin: delaySec != null ? Math.round(delaySec / 60) : undefined,
+        };
+      }),
+    );
+    return mapped;
   }
 
-  return getTripStopUpdates(feedId, liveTripId).map((u) => {
-    const schedSec = u.predictedSec ?? now;
-    const fmt = formatBoardTime(schedSec, now);
-    return {
-      stop_id: u.stopId,
-      name: stopName(feedId, u.stopId),
-      scheduled: fmt.time,
-      predicted: fmt.time,
-      platform: u.platform,
-      delayMin: u.delaySec != null ? Math.round(u.delaySec / 60) : undefined,
-    };
-  });
+  return Promise.all(
+    rtUpdates.map(async (u) => {
+      const name =
+        feedId === "ttc"
+          ? ((await liveStopDisplayName(u.stopId)) ?? stopName(feedId, u.stopId))
+          : stopName(feedId, u.stopId);
+      const schedSec = u.predictedSec ?? now;
+      const fmt = formatBoardTime(schedSec, now);
+      return {
+        stop_id: u.stopId,
+        name,
+        scheduled: fmt.time,
+        predicted: fmt.time,
+        platform: u.platform,
+        delayMin: u.delaySec != null ? Math.round(u.delaySec / 60) : undefined,
+      };
+    }),
+  );
 }
 
 function inferCurrentStopIndex(
@@ -222,7 +264,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
   const routeId =
     vehicle.routeId ?? tripRt?.routeId;
   const route = await findRouteMeta(feedId, routeId);
-  const scheduleTrip = liveTripId
+  const resolved = liveTripId
     ? await resolveScheduleTrip(
         feedId,
         liveTripId,
@@ -230,7 +272,11 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
         route?.short_name ?? undefined,
       )
     : undefined;
-  const scheduleTripId = scheduleTrip?.tripId ?? liveTripId;
+  const scheduleTrip = resolved?.row;
+  const scheduleTripId = scheduleTrip?.tripId;
+  const useScheduleStops = Boolean(
+    scheduleTripId && (!resolved?.fuzzy || scheduleTripId === liveTripId),
+  );
   const shape = findShape(feedId, routeId);
   const headsign = scheduleTrip?.headsign ?? null;
 
@@ -239,6 +285,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
         feedId,
         liveTripId,
         scheduleTripId,
+        useScheduleStops,
         vehicle.currentStopSequence,
       )
     : [];
@@ -255,11 +302,12 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     tripRt?.delaySec ??
     vehicle.delaySec;
 
-  const blockTrips = scheduleTripId
-    ? await loadBlockTrips(feedId, scheduleTripId, liveTripId ?? scheduleTripId)
+  const blockTripKey = liveTripId ?? scheduleTripId;
+  const blockTrips = blockTripKey
+    ? await loadBlockTrips(feedId, blockTripKey, liveTripId ?? blockTripKey)
     : [];
-  const tripMeta = scheduleTripId
-    ? await loadFeedTripMeta(feedId, scheduleTripId)
+  const tripMeta = blockTripKey
+    ? await loadFeedTripMeta(feedId, blockTripKey)
     : undefined;
 
   return {

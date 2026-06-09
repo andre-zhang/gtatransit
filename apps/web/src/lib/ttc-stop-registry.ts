@@ -108,3 +108,17 @@ export async function isTtcRtStopAtGroup(
 
   return false;
 }
+
+/** Demo fixtures key stops by stop_code; live RT uses Surface stop_id. */
+export async function fixtureStopIdForLive(
+  liveStopId: string,
+): Promise<string | null> {
+  await ensureRegistry();
+  const live = registry?.[liveStopId];
+  return live?.stopCode ?? null;
+}
+
+export async function liveStopDisplayName(liveStopId: string): Promise<string | null> {
+  await ensureRegistry();
+  return registry?.[liveStopId]?.name ?? null;
+}

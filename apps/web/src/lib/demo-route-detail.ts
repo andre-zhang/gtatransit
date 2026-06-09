@@ -1,13 +1,9 @@
 import type { LineString } from "geojson";
 import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
-import { getDemoCore } from "./demo";
 import { loadRouteScheduleRows, loadUnionSchedule } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
 import { getRtVehicles } from "./rt-cache";
-import { lookupTripFromSchedules } from "./demo-trip-lookup";
-
-const FEEDS_WITH_SCHEDULE_FILES = ["go", "ttc", "miway"] as const;
 
 type RouteMeta = {
   short_name: string | null;
@@ -54,7 +50,7 @@ async function collectScheduleRows(
   const matches = (row: ScheduleRow) =>
     row.routeId === routeId || row.routeShort === routeId;
 
-  if ((FEEDS_WITH_SCHEDULE_FILES as readonly string[]).includes(feedId)) {
+  if (feedId === "go" || feedId === "ttc" || feedId === "miway") {
     return loadRouteScheduleRows(feedId, routeId);
   }
 
@@ -65,19 +61,51 @@ async function collectScheduleRows(
   return rows;
 }
 
+function routeMatchesId(
+  feedId: string,
+  routeId: string,
+  meta: RouteMeta,
+  props: Record<string, unknown>,
+): boolean {
+  if (props.feedId !== feedId) return false;
+  const rid = String(props.routeId ?? "");
+  const rshort = String(props.routeShort ?? "");
+  return (
+    rid === routeId ||
+    rshort === routeId ||
+    rid === meta.short_name ||
+    rshort === meta.short_name
+  );
+}
+
 function findRouteShape(
   feedId: string,
   routeId: string,
   direction: number,
+  meta: RouteMeta,
 ): LineString | null {
   const fc = loadDemoAssets().routesGeo;
   const hit = fc.features.find((f) => {
     const p = f.properties as Record<string, unknown> | null;
-    if (!p || p.feedId !== feedId || p.routeId !== routeId) return false;
+    if (!p || !routeMatchesId(feedId, routeId, meta, p)) return false;
     return Number(p.directionId ?? 0) === direction;
   });
   if (!hit?.geometry || hit.geometry.type !== "LineString") return null;
   return hit.geometry as LineString;
+}
+
+function vehicleMatchesRoute(
+  feedId: string,
+  routeId: string,
+  meta: RouteMeta,
+  vRouteId: string | undefined,
+): boolean {
+  if (!vRouteId) return false;
+  return (
+    vRouteId === routeId ||
+    vRouteId === meta.short_name ||
+    meta.short_name === routeId
+  );
 }
 
 export async function getDemoRouteDetail(
@@ -91,7 +119,9 @@ export async function getDemoRouteDetail(
   if (!meta) {
     const union = await loadUnionSchedule();
     const sample = union.find(
-      (row) => row.feedId === feedId && row.routeId === routeId,
+      (row) =>
+        row.feedId === feedId &&
+        (row.routeId === routeId || row.routeShort === routeId),
     );
     if (sample) {
       meta = {
@@ -125,35 +155,27 @@ export async function getDemoRouteDetail(
     .sort((a, b) => a.first_departure.localeCompare(b.first_departure))
     .slice(0, 200);
 
-  const vehicles = await Promise.all(
-    getRtVehicles()
-      .filter(
-        (v) =>
-          v.feedId === feedId &&
-          (v.routeId === routeId ||
-            v.routeId === meta!.short_name ||
-            meta!.short_name === routeId),
-      )
-      .map(async (v) => {
-        const sched = v.tripId
-          ? await lookupTripFromSchedules(feedId, v.tripId)
-          : undefined;
-        return {
-          vehicle_id: v.vehicleId,
-          label: v.label?.trim() || v.vehicleId,
-          lat: v.lat!,
-          lon: v.lon!,
-          headsign: sched?.headsign ?? null,
-          delay_sec: v.delaySec ?? null,
-        };
-      }),
-  );
+  const vehicles = getRtVehicles()
+    .filter(
+      (v) =>
+        v.feedId === feedId &&
+        vehicleMatchesRoute(feedId, routeId, meta!, v.routeId),
+    )
+    .slice(0, 80)
+    .map((v) => ({
+      vehicle_id: v.vehicleId,
+      label: v.label?.trim() || v.vehicleId,
+      lat: v.lat!,
+      lon: v.lon!,
+      headsign: null as string | null,
+      delay_sec: v.delaySec ?? null,
+    }));
 
   return {
     route: meta,
     direction,
     trips,
     vehicles,
-    shape: findRouteShape(feedId, routeId, direction),
+    shape: findRouteShape(feedId, routeId, direction, meta),
   };
 }

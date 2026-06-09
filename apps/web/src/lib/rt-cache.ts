@@ -32,6 +32,8 @@ const vehicleMap = new Map<string, RtVehicle & { updatedAt: number }>();
 const predictionsByStop = new Map<string, IndexedPrediction[]>();
 let lastRefresh = 0;
 let refreshing: Promise<void> | null = null;
+let goRtEnabled = Boolean(process.env.METROLINX_API_KEY?.trim());
+let goRtLastOk = 0;
 
 type IndexedPrediction = {
   feedId: string;
@@ -146,6 +148,7 @@ function findFuzzyRtMatch(
 async function pollGo(key: string) {
   const headers = { "Ocp-Apim-Subscription-Key": key };
   const now = Date.now();
+  let sawData = false;
 
   for (const [kind, path] of [
     ["vehicles", "GTFS/VehiclePositions"],
@@ -157,6 +160,7 @@ async function pollGo(key: string) {
       if (!res.ok) continue;
       const { decodeFeed } = await import("@gta/gtfs-rt");
       const msg = decodeFeed(await res.arrayBuffer());
+      sawData = true;
 
       if (kind === "vehicles") {
         for (const v of parseVehicles("go", msg)) {
@@ -198,6 +202,8 @@ async function pollGo(key: string) {
       /* ignore per-feed errors */
     }
   }
+
+  if (sawData) goRtLastOk = now;
 }
 
 async function pollFeed(feedId: string) {
@@ -258,7 +264,8 @@ export async function refreshRtCache(force = false) {
 
   refreshing = (async () => {
     await Promise.all(Object.keys(RT_FEEDS).map((feedId) => pollFeed(feedId)));
-    const goKey = process.env.METROLINX_API_KEY;
+    const goKey = process.env.METROLINX_API_KEY?.trim();
+    goRtEnabled = Boolean(goKey);
     if (goKey) await pollGo(goKey);
 
     if (isDatabaseConfigured() && !(await useDemoFixtures())) {
@@ -478,6 +485,19 @@ function snapshotTripUpdates(): RtTripUpdate[] {
     });
   }
   return out;
+}
+
+export function getGoRtStatus(): {
+  configured: boolean;
+  active: boolean;
+} {
+  const configured = goRtEnabled;
+  const active =
+    configured &&
+    goRtLastOk > 0 &&
+    Date.now() - goRtLastOk < 5 * 60_000 &&
+    [...vehicleMap.values()].some((v) => v.feedId === "go");
+  return { configured, active };
 }
 
 export function getRtVehicles(): RtVehicle[] {
