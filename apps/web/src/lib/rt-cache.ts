@@ -15,6 +15,7 @@ import {
   torontoNowSec,
   unixToTorontoSec,
 } from "./calendar";
+import { routesMatch } from "./route-match";
 
 type StopRt = {
   delaySec?: number;
@@ -61,17 +62,13 @@ function normalizePredictedSec(raw: number): number {
 }
 
 function routeMatches(
+  feedId: string,
   rtRoute: string | undefined,
   routeId: string | undefined,
   routeShort: string | undefined,
 ): boolean {
-  if (!rtRoute) return false;
-  return (
-    rtRoute === routeId ||
-    rtRoute === routeShort ||
-    routeId === rtRoute ||
-    routeShort === rtRoute
-  );
+  if (!routeId && !routeShort) return false;
+  return routesMatch(feedId, routeId ?? routeShort ?? "", routeShort, rtRoute);
 }
 
 function rebuildStopPredictionsIndex() {
@@ -133,7 +130,7 @@ function findFuzzyRtMatch(
     for (const p of preds) {
       const usedKey = `${feedId}:${p.tripId}`;
       if (usedRtTrips.has(usedKey) || usedRtTrips.has(p.tripId)) continue;
-      if (!routeMatches(p.routeId, routeId, routeShort)) continue;
+      if (!routeMatches(feedId, p.routeId, routeId, routeShort)) continue;
       const predSec = normalizeServiceSec(p.predictedSec, now);
       const delta = Math.abs(predSec - targetSec);
       if (delta > FUZZY_MATCH_SEC || delta >= bestDelta) continue;
@@ -515,7 +512,7 @@ export function getActiveVehicleForRoute(
 ): RtVehicle | undefined {
   for (const v of getRtVehicles()) {
     if (v.feedId !== feedId || !v.tripId) continue;
-    if (routeMatches(v.routeId, routeId, routeShort)) return v;
+    if (routeMatches(feedId, v.routeId, routeId, routeShort)) return v;
   }
   return undefined;
 }

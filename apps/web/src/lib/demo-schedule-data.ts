@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { resolveDemoDir } from "./demo-dir";
 import { readDemoJsonFile } from "./demo-read";
 import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
+import { routesMatch } from "./route-match";
 
 const scheduleCache = new Map<string, Record<string, ScheduleRow[]>>();
 const tripStopCache = new Map<string, Record<string, TripStopRow[]>>();
@@ -111,7 +112,8 @@ export async function loadRouteScheduleRows(
   routeId: string,
 ): Promise<ScheduleRow[]> {
   const matches = (row: ScheduleRow) =>
-    row.routeId === routeId || row.routeShort === routeId;
+    routesMatch(feedId, routeId, routeId, row.routeId) ||
+    routesMatch(feedId, routeId, routeId, row.routeShort);
 
   const files = listShardFiles(`${feedId}-schedules`);
   if (!files.length) {

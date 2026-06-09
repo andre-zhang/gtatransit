@@ -3,7 +3,8 @@ import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
 import { loadRouteScheduleRows, loadUnionSchedule } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
-import { getRtVehicles } from "./rt-cache";
+import { routesMatch } from "./route-match";
+import { getRtVehicles, getTripRt } from "./rt-cache";
 
 type RouteMeta = {
   short_name: string | null;
@@ -94,20 +95,6 @@ function findRouteShape(
   return hit.geometry as LineString;
 }
 
-function vehicleMatchesRoute(
-  feedId: string,
-  routeId: string,
-  meta: RouteMeta,
-  vRouteId: string | undefined,
-): boolean {
-  if (!vRouteId) return false;
-  return (
-    vRouteId === routeId ||
-    vRouteId === meta.short_name ||
-    meta.short_name === routeId
-  );
-}
-
 export async function getDemoRouteDetail(
   feedId: string,
   routeId: string,
@@ -159,7 +146,7 @@ export async function getDemoRouteDetail(
     .filter(
       (v) =>
         v.feedId === feedId &&
-        vehicleMatchesRoute(feedId, routeId, meta!, v.routeId),
+        routesMatch(feedId, routeId, meta.short_name, v.routeId),
     )
     .slice(0, 80)
     .map((v) => ({
@@ -168,7 +155,9 @@ export async function getDemoRouteDetail(
       lat: v.lat!,
       lon: v.lon!,
       headsign: null as string | null,
-      delay_sec: v.delaySec ?? null,
+      delay_sec:
+        v.delaySec ??
+        (v.tripId ? (getTripRt(feedId, v.tripId)?.delaySec ?? null) : null),
     }));
 
   return {
