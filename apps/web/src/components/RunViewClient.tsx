@@ -138,7 +138,7 @@ export function RunViewClient({
                   {t.first_departure}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-go-navy">
-                  {t.headsign ?? t.trip_id}
+                  {t.headsign ?? "Headsign unavailable"}
                 </span>
                 {t.active && (
                   <span className="go-badge go-badge--live shrink-0">Active</span>

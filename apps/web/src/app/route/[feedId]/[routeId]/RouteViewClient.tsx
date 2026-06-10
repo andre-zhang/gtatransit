@@ -69,7 +69,7 @@ export function RouteViewClient({
                       {v.label ?? v.vehicle_id}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-go-slate">
-                      {v.headsign ?? "In service"}
+                      {v.headsign ?? "Headsign unavailable"}
                     </span>
                     {late ? (
                       <span className="go-badge go-badge--late">+{delayMin} min</span>
@@ -99,7 +99,7 @@ export function RouteViewClient({
                   href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
                   className="flex items-center justify-between gap-4 px-5 py-3 transition hover:bg-go-bg/60"
                 >
-                  <span className="truncate text-go-navy">{t.headsign ?? "—"}</span>
+                  <span className="truncate text-go-navy">{t.headsign ?? "Headsign unavailable"}</span>
                   <span className="shrink-0 text-lg font-bold tabular-nums text-go-navy">
                     {t.first_departure}
                   </span>

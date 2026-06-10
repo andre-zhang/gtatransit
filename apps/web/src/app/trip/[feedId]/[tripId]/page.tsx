@@ -21,7 +21,7 @@ async function load(feedId: string, tripId: string, fromStop?: string) {
     { cache: "no-store" },
   );
   if (!res.ok) return null;
-  return res.json() as Promise<{ stops: Stop[]; vehicleId?: string }>;
+  return res.json() as Promise<{ stops: Stop[]; vehicleId?: string; headsign?: string | null }>;
 }
 
 export default async function TripPage({
@@ -49,7 +49,7 @@ export default async function TripPage({
   if (!data.stops.length) {
     return (
       <PageShell>
-        <PageHeader title="Upcoming stops" subtitle={tripId} />
+        <PageHeader title="Upcoming stops" subtitle={data.headsign ?? tripId} />
         <div className="departure-board-empty">
           <p className="departure-board-emptyTitle">No upcoming stops</p>
           <p className="departure-board-emptyHint">
@@ -62,7 +62,7 @@ export default async function TripPage({
 
   return (
     <PageShell>
-      <PageHeader title="Upcoming stops" subtitle={tripId} />
+      <PageHeader title="Upcoming stops" subtitle={data.headsign ?? tripId} />
       {data.vehicleId && (
         <div className="border-b border-go-bg px-5 py-3 text-sm text-go-slate">
           Vehicle{" "}

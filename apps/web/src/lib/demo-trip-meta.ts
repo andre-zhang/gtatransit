@@ -1,3 +1,4 @@
+import { enrichHeadsign } from "./demo-trip-headsign";
 import { readDemoJsonFile } from "./demo-read";
 
 type BlockTrip = {
@@ -69,8 +70,9 @@ export async function loadBlockTrips(
   const list = findBlockForTrip(idx, tripId);
   if (!list || list.length <= 1) return [];
 
-  return list.map((t) => ({
+  const mapped = list.map((t) => ({
     ...t,
     active: t.trip_id === activeTripId || t.trip_id === tripId,
   }));
+  return enrichHeadsign(feedId, mapped);
 }

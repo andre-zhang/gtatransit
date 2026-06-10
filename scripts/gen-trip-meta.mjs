@@ -91,7 +91,7 @@ async function buildBlockIndex(feedId) {
     const compact = list.map((t) => ({
       trip_id: t.trip_id,
       first_departure: (t.first_departure ?? "—").slice(0, 5),
-      ...(feedId !== "ttc" && t.headsign ? { headsign: t.headsign } : {}),
+      ...(t.headsign ? { headsign: t.headsign } : {}),
     }));
     blockIndex[blockId] = compact;
     for (const t of compact) tripToBlock[t.trip_id] = blockId;

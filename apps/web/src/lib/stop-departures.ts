@@ -16,6 +16,7 @@ import { routeColor } from "@/lib/colors";
 import { getDemoCore } from "@/lib/demo";
 import type { DemoStopMeta } from "@/lib/demo";
 import type { ScheduleRow } from "@/lib/demo-schedule-types";
+import { needsHeadsignLookup, tripHeadsign } from "@/lib/demo-trip-headsign";
 import { getStopSchedule } from "@/lib/demo-schedules";
 import { routesMatch } from "@/lib/route-match";
 import {
@@ -240,8 +241,16 @@ export async function buildDemoStopDepartures(
 
   const deduped = dedupeNearLive(inputs);
 
+  const withHeadsigns = await Promise.all(
+    deduped.map(async (row) => {
+      if (!needsHeadsignLookup(row.destination)) return row;
+      const hs = await tripHeadsign(row.feedId, row.tripId);
+      return hs ? { ...row, destination: hs } : row;
+    }),
+  );
+
   return {
     name: stop.name,
-    rows: filterUpcomingDepartures(deduped),
+    rows: filterUpcomingDepartures(withHeadsigns),
   };
 }

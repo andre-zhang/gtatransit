@@ -9,6 +9,7 @@ import {
 import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { resolveDemoTrip } from "@/lib/demo-trip-resolve";
+import { tripHeadsign } from "@/lib/demo-trip-headsign";
 import { getTripStops } from "@/lib/demo-schedules";
 import { getStopTripRt, getTripRt, refreshRtCache } from "@/lib/rt-cache";
 import { resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
@@ -56,11 +57,13 @@ export async function GET(
     const slice = startIdx >= 0 ? stops.slice(startIdx) : stops;
     const tripRt = getTripRt(feedId, liveTripId);
     const now = torontoNowSec();
+    const headsign = await tripHeadsign(feedId, liveTripId);
 
     return NextResponse.json({
       tripId,
       feedId,
       fromStop,
+      headsign,
       vehicleId: tripRt?.vehicleId,
       stops: await Promise.all(
         slice.map(async (s) => {
@@ -95,6 +98,9 @@ export async function GET(
   }
 
   const db = getSql();
+  const tripMeta = await db<Array<{ headsign: string | null }>>`
+    SELECT headsign FROM trips WHERE feed_id = ${feedId} AND trip_id = ${tripId} LIMIT 1
+  `;
   const rows = await db<
     Array<{
       stop_id: string;
@@ -116,11 +122,13 @@ export async function GET(
   const slice = startIdx >= 0 ? rows.slice(startIdx) : rows;
   const tripRt = getTripRt(feedId, tripId);
   const now = torontoNowSec();
+  const headsign = tripMeta[0]?.headsign ?? null;
 
   return NextResponse.json({
     tripId,
     feedId,
     fromStop,
+    headsign,
     vehicleId: tripRt?.vehicleId,
     stops: slice.map((s) => {
       const schedSec = gtfsTimeToSec(s.departure_time);

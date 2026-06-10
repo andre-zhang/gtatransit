@@ -3,7 +3,7 @@ import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
 import { loadRouteScheduleRows, loadUnionSchedule } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
-import { resolveDemoTrip } from "./demo-trip-resolve";
+import { enrichHeadsign, needsHeadsignLookup, tripHeadsign } from "./demo-trip-headsign";
 import { routesMatch } from "./route-match";
 import { getRtVehicles, getTripRt } from "./rt-cache";
 
@@ -173,39 +173,51 @@ export async function getDemoRouteDetail(
       routesMatch(feedId, routeId, meta.short_name, v.routeId),
   );
 
-  const vehicles = await Promise.all(
-    liveVehicles.slice(0, 80).map(async (v) => {
-      let headsign: string | null = null;
-      if (v.tripId) {
-        const resolved = await resolveDemoTrip(feedId, v.tripId);
-        headsign = resolved.scheduleRow?.headsign ?? null;
-        if (
-          headsign &&
-          directionLabels[direction] &&
-          headsign !== directionLabels[direction]
-        ) {
-          return null;
+  const vehicles = (
+    await Promise.all(
+      liveVehicles.slice(0, 80).map(async (v) => {
+        let headsign: string | null = null;
+        if (v.tripId) {
+          headsign = await tripHeadsign(feedId, v.tripId);
+          if (
+            headsign &&
+            directionLabels[direction] &&
+            headsign !== directionLabels[direction]
+          ) {
+            return null;
+          }
         }
-      }
-      return {
-        vehicle_id: v.vehicleId,
-        label: v.label?.trim() || v.vehicleId,
-        lat: v.lat!,
-        lon: v.lon!,
-        headsign,
-        delay_sec:
-          v.delaySec ??
-          (v.tripId ? (getTripRt(feedId, v.tripId)?.delaySec ?? null) : null),
-      };
-    }),
+        return {
+          vehicle_id: v.vehicleId,
+          label: v.label?.trim() || v.vehicleId,
+          lat: v.lat!,
+          lon: v.lon!,
+          headsign,
+          delay_sec:
+            v.delaySec ??
+            (v.tripId ? (getTripRt(feedId, v.tripId)?.delaySec ?? null) : null),
+        };
+      }),
+    )
+  ).filter((v): v is NonNullable<typeof v> => v != null);
+
+  const tripsWithHeadsigns = await enrichHeadsign(
+    feedId,
+    trips.map((t) => ({
+      ...t,
+      headsign:
+        t.headsign?.trim() && !needsHeadsignLookup(t.headsign)
+          ? t.headsign.trim()
+          : null,
+    })),
   );
 
   return {
     route: meta,
     direction,
     directionLabels,
-    trips,
-    vehicles: vehicles.filter((v): v is NonNullable<typeof v> => v != null),
+    trips: tripsWithHeadsigns,
+    vehicles,
     shape: findRouteShape(feedId, routeId, direction, meta),
   };
 }

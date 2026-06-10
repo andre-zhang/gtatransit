@@ -138,7 +138,7 @@ export function DepartureTable({
             <th className="px-5 py-3 text-right">Time</th>
             {showAgency && <th className="px-2 py-3">Agency</th>}
             <th className="px-3 py-3">Route</th>
-            <th className="px-3 py-3">Destination</th>
+            <th className="px-3 py-3">Headsign</th>
             {showPlatform && <th className="px-3 py-3 text-center">Plat</th>}
             <th className="px-5 py-3 text-right">Status</th>
           </tr>

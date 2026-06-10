@@ -43,7 +43,7 @@ export default async function RunPage({
   };
 
   const headsign =
-    trip?.headsign ?? route?.long_name ?? route?.short_name ?? "In service";
+    trip?.headsign ?? route?.long_name ?? route?.short_name ?? "Headsign unavailable";
   const routeLabel = route?.short_name ?? trip?.route_id ?? "?";
 
   return (
