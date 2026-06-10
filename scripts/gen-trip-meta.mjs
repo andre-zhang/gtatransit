@@ -43,6 +43,29 @@ async function readCsv(path) {
   return rows;
 }
 
+async function buildTripHeadsignIndex(feedId, trips) {
+  const index = {};
+  for (const row of trips) {
+    const tripId = pick(row, "trip_id");
+    const serviceId = pick(row, "service_id");
+    if (!tripId) continue;
+    if (
+      feedId === "go" &&
+      serviceId &&
+      serviceId !== SERVICE_DATE &&
+      !tripId.includes(SERVICE_DATE)
+    ) {
+      continue;
+    }
+    const headsign = pick(row, "trip_headsign");
+    if (headsign) index[tripId] = headsign;
+  }
+  const outPath = join(outDir, `${feedId}-trip-headsigns.json`);
+  writeFileSync(outPath, JSON.stringify(index));
+  const kb = Math.round(JSON.stringify(index).length / 1024);
+  console.log(`${feedId}: ${Object.keys(index).length} trip headsigns (~${kb} KB)`);
+}
+
 async function buildBlockIndex(feedId) {
   const gtfsDir = gtfsDirFor(feedId);
   const trips = await readCsv(join(gtfsDir, "trips.txt"));
@@ -50,6 +73,7 @@ async function buildBlockIndex(feedId) {
     console.warn(`skip ${feedId}: no trips.txt`);
     return;
   }
+  await buildTripHeadsignIndex(feedId, trips);
   const stopTimes = await readCsv(join(gtfsDir, "stop_times.txt"));
 
   const firstDep = new Map();
@@ -91,7 +115,7 @@ async function buildBlockIndex(feedId) {
     const compact = list.map((t) => ({
       trip_id: t.trip_id,
       first_departure: (t.first_departure ?? "—").slice(0, 5),
-      ...(t.headsign ? { headsign: t.headsign } : {}),
+      ...(feedId !== "ttc" && t.headsign ? { headsign: t.headsign } : {}),
     }));
     blockIndex[blockId] = compact;
     for (const t of compact) tripToBlock[t.trip_id] = blockId;

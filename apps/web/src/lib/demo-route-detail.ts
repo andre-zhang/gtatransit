@@ -3,7 +3,7 @@ import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
 import { loadRouteScheduleRows, loadUnionSchedule } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
-import { enrichHeadsign, needsHeadsignLookup, tripHeadsign } from "./demo-trip-headsign";
+import { preloadTripHeadsignIndex, tripHeadsign } from "./demo-trip-headsign";
 import { routesMatch } from "./route-match";
 import { getRtVehicles, getTripRt } from "./rt-cache";
 
@@ -167,6 +167,8 @@ export async function getDemoRouteDetail(
     .sort((a, b) => a.first_departure.localeCompare(b.first_departure))
     .slice(0, 200);
 
+  await preloadTripHeadsignIndex(feedId);
+
   const liveVehicles = getRtVehicles().filter(
     (v) =>
       v.feedId === feedId &&
@@ -201,22 +203,11 @@ export async function getDemoRouteDetail(
     )
   ).filter((v): v is NonNullable<typeof v> => v != null);
 
-  const tripsWithHeadsigns = await enrichHeadsign(
-    feedId,
-    trips.map((t) => ({
-      ...t,
-      headsign:
-        t.headsign?.trim() && !needsHeadsignLookup(t.headsign)
-          ? t.headsign.trim()
-          : null,
-    })),
-  );
-
   return {
     route: meta,
     direction,
     directionLabels,
-    trips: tripsWithHeadsigns,
+    trips,
     vehicles,
     shape: findRouteShape(feedId, routeId, direction, meta),
   };

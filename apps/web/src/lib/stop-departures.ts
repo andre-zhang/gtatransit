@@ -16,7 +16,11 @@ import { routeColor } from "@/lib/colors";
 import { getDemoCore } from "@/lib/demo";
 import type { DemoStopMeta } from "@/lib/demo";
 import type { ScheduleRow } from "@/lib/demo-schedule-types";
-import { needsHeadsignLookup, tripHeadsign } from "@/lib/demo-trip-headsign";
+import {
+  needsHeadsignLookup,
+  preloadTripHeadsignIndex,
+  tripHeadsigns,
+} from "@/lib/demo-trip-headsign";
 import { getStopSchedule } from "@/lib/demo-schedules";
 import { routesMatch } from "@/lib/route-match";
 import {
@@ -241,13 +245,38 @@ export async function buildDemoStopDepartures(
 
   const deduped = dedupeNearLive(inputs);
 
-  const withHeadsigns = await Promise.all(
-    deduped.map(async (row) => {
-      if (!needsHeadsignLookup(row.destination)) return row;
-      const hs = await tripHeadsign(row.feedId, row.tripId);
-      return hs ? { ...row, destination: hs } : row;
+  const scheduleHeadsigns = new Map<string, string>();
+  for (const row of schedule) {
+    const hs = row.headsign?.trim();
+    if (hs) scheduleHeadsigns.set(`${row.feedId}:${row.tripId}`, hs);
+  }
+
+  const missingByFeed = new Map<string, Set<string>>();
+  for (const row of deduped) {
+    if (!needsHeadsignLookup(row.destination)) continue;
+    const key = `${row.feedId}:${row.tripId}`;
+    if (scheduleHeadsigns.has(key)) continue;
+    if (!missingByFeed.has(row.feedId)) missingByFeed.set(row.feedId, new Set());
+    missingByFeed.get(row.feedId)!.add(row.tripId);
+  }
+
+  const resolved = new Map<string, string | null>();
+  await Promise.all(
+    [...missingByFeed.entries()].map(async ([feedId, tripIds]) => {
+      await preloadTripHeadsignIndex(feedId);
+      const hits = await tripHeadsigns(feedId, [...tripIds]);
+      for (const [tripId, hs] of hits) {
+        resolved.set(`${feedId}:${tripId}`, hs);
+      }
     }),
   );
+
+  const withHeadsigns = deduped.map((row) => {
+    if (!needsHeadsignLookup(row.destination)) return row;
+    const key = `${row.feedId}:${row.tripId}`;
+    const hs = scheduleHeadsigns.get(key) ?? resolved.get(key);
+    return hs ? { ...row, destination: hs } : row;
+  });
 
   return {
     name: stop.name,

@@ -1,4 +1,4 @@
-import { enrichHeadsign } from "./demo-trip-headsign";
+import { preloadTripHeadsignIndex, tripHeadsigns } from "./demo-trip-headsign";
 import { readDemoJsonFile } from "./demo-read";
 
 type BlockTrip = {
@@ -74,5 +74,15 @@ export async function loadBlockTrips(
     ...t,
     active: t.trip_id === activeTripId || t.trip_id === tripId,
   }));
-  return enrichHeadsign(feedId, mapped);
+
+  await preloadTripHeadsignIndex(feedId);
+  const hits = await tripHeadsigns(
+    feedId,
+    mapped.map((t) => t.trip_id),
+  );
+
+  return mapped.map((t) => ({
+    ...t,
+    headsign: t.headsign ?? hits.get(t.trip_id) ?? null,
+  }));
 }

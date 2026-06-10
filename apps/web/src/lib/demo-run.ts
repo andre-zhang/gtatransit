@@ -14,7 +14,7 @@ import {
   torontoNowSec,
 } from "./calendar";
 import type { ScheduleRow } from "./demo-schedule-types";
-import { enrichHeadsign, needsHeadsignLookup, tripHeadsign } from "./demo-trip-headsign";
+import { needsHeadsignLookup, preloadTripHeadsignIndex, tripHeadsign } from "./demo-trip-headsign";
 import { loadBlockTrips, loadFeedTripMeta } from "./demo-trip-meta";
 import { liveStopDisplayName, resolveTtcRtStopIds } from "./ttc-stop-registry";
 import {
@@ -239,6 +239,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     scheduleTripId && (!resolved?.fuzzy || scheduleTripId === liveTripId),
   );
   const shape = findShape(feedId, routeId);
+  await preloadTripHeadsignIndex(feedId);
   const headsign =
     (scheduleTrip?.headsign?.trim() && !needsHeadsignLookup(scheduleTrip.headsign)
       ? scheduleTrip.headsign.trim()
