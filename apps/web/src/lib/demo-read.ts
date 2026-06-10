@@ -12,8 +12,22 @@ function vercelOrigin(): string | null {
   return base.replace(/\/$/, "");
 }
 
+const fileCache = new Map<string, { at: number; data: unknown }>();
+const FILE_CACHE_TTL_MS = 60 * 60_000;
+
 /** Read demo JSON from disk locally, or from this deployment's /demo/* static URLs on Vercel. */
 export async function readDemoJsonFile<T>(filename: string): Promise<T> {
+  const hit = fileCache.get(filename);
+  if (hit && Date.now() - hit.at < FILE_CACHE_TTL_MS) {
+    return hit.data as T;
+  }
+
+  const data = await readDemoJsonFileUncached<T>(filename);
+  fileCache.set(filename, { at: Date.now(), data });
+  return data;
+}
+
+async function readDemoJsonFileUncached<T>(filename: string): Promise<T> {
   const origin = vercelOrigin();
 
   // On Vercel, never touch public/demo via fs (Next traces the whole folder into lambdas).

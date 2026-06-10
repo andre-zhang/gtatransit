@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { resolveDemoDir } from "./demo-dir";
 import { readDemoJsonFile } from "./demo-read";
 import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
+import { isDemoFixtureTripId } from "./demo-trip-id";
 import { routesMatch } from "./route-match";
 
 const scheduleCache = new Map<string, Record<string, ScheduleRow[]>>();
@@ -133,22 +134,24 @@ export async function loadRouteScheduleRows(
     }
   }
 
-  const rows: ScheduleRow[] = [];
-  const tripIds = new Set<string>();
-  const MAX_TRIPS = 220;
+  const byTrip = new Map<string, ScheduleRow>();
 
   for (const file of files) {
     const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(file);
     for (const sched of Object.values(part)) {
       for (const row of sched) {
         if (!matches(row)) continue;
-        rows.push(row);
-        tripIds.add(row.tripId);
+        const prev = byTrip.get(row.tripId);
+        if (!prev || row.departureTime < prev.departureTime) {
+          byTrip.set(row.tripId, row);
+        }
       }
     }
-    if (tripIds.size >= MAX_TRIPS) break;
   }
-  return rows;
+
+  return [...byTrip.values()].sort((a, b) =>
+    a.departureTime.localeCompare(b.departureTime),
+  );
 }
 
 /** Find a single trip without loading and retaining every schedule shard. */
@@ -156,6 +159,8 @@ export async function lookupTripScheduleRow(
   feedId: string,
   tripId: string,
 ): Promise<ScheduleRow | undefined> {
+  if (!isDemoFixtureTripId(feedId, tripId)) return undefined;
+
   const files = listShardFiles(`${feedId}-schedules`);
   if (!files.length) {
     try {

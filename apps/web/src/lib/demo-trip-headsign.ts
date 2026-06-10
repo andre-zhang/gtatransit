@@ -12,10 +12,20 @@ type BlockIndex = {
   tripToBlock?: Record<string, string>;
 };
 
+/** Compact tuple: [headsign, directionId?] */
+type TripMetaTuple = [string, number?];
+
+type FeedMeta = {
+  headsigns: Record<string, string>;
+  directions: Record<string, number>;
+};
+
+const META_TTL_MS = 60 * 60_000;
 const headsignCache = new Map<string, string | null>();
+const directionCache = new Map<string, number | null>();
 const inflight = new Map<string, Promise<string | null>>();
-const feedIndexLoaders = new Map<string, Promise<Record<string, string>>>();
-const feedIndexCache = new Map<string, Record<string, string>>();
+const feedMetaLoaders = new Map<string, Promise<FeedMeta>>();
+const feedMetaCache = new Map<string, { at: number; meta: FeedMeta }>();
 
 async function loadBlockIndex(feedId: string): Promise<BlockIndex> {
   try {
@@ -25,43 +35,70 @@ async function loadBlockIndex(feedId: string): Promise<BlockIndex> {
   }
 }
 
-async function loadFeedHeadsignIndex(feedId: string): Promise<Record<string, string>> {
-  const cached = feedIndexCache.get(feedId);
-  if (cached) return cached;
+function parseTripMetaFile(raw: Record<string, TripMetaTuple | string>): FeedMeta {
+  const headsigns: Record<string, string> = {};
+  const directions: Record<string, number> = {};
+  for (const [tripId, value] of Object.entries(raw)) {
+    if (typeof value === "string") {
+      if (value.trim()) headsigns[tripId] = value.trim();
+      continue;
+    }
+    const hs = value[0]?.trim();
+    if (hs) headsigns[tripId] = hs;
+    if (value[1] != null) directions[tripId] = value[1];
+  }
+  return { headsigns, directions };
+}
 
-  let loader = feedIndexLoaders.get(feedId);
+async function loadFeedMeta(feedId: string): Promise<FeedMeta> {
+  const cached = feedMetaCache.get(feedId);
+  if (cached && Date.now() - cached.at < META_TTL_MS) return cached.meta;
+
+  let loader = feedMetaLoaders.get(feedId);
   if (!loader) {
     loader = (async () => {
       try {
-        const data = await readDemoJsonFile<Record<string, string>>(
-          `${feedId}-trip-headsigns.json`,
+        const raw = await readDemoJsonFile<Record<string, TripMetaTuple | string>>(
+          `${feedId}-trip-meta.json`,
         );
-        feedIndexCache.set(feedId, data);
-        return data;
+        const meta = parseTripMetaFile(raw);
+        feedMetaCache.set(feedId, { at: Date.now(), meta });
+        return meta;
       } catch {
-        const idx = await loadBlockIndex(feedId);
-        const fallback: Record<string, string> = {};
-        for (const list of Object.values(idx.blocks)) {
-          for (const trip of list) {
-            if (trip.headsign?.trim()) fallback[trip.trip_id] = trip.headsign.trim();
+        try {
+          const legacy = await readDemoJsonFile<Record<string, string>>(
+            `${feedId}-trip-headsigns.json`,
+          );
+          const meta = parseTripMetaFile(legacy);
+          feedMetaCache.set(feedId, { at: Date.now(), meta });
+          return meta;
+        } catch {
+          const idx = await loadBlockIndex(feedId);
+          const headsigns: Record<string, string> = {};
+          for (const list of Object.values(idx.blocks)) {
+            for (const trip of list) {
+              if (trip.headsign?.trim()) headsigns[trip.trip_id] = trip.headsign.trim();
+            }
           }
+          const meta = { headsigns, directions: {} };
+          feedMetaCache.set(feedId, { at: Date.now(), meta });
+          return meta;
         }
-        feedIndexCache.set(feedId, fallback);
-        return fallback;
       }
     })();
-    feedIndexLoaders.set(feedId, loader);
+    feedMetaLoaders.set(feedId, loader);
   }
 
   return loader;
 }
 
-function headsignFromIndex(
-  index: Record<string, string>,
-  tripId: string,
-): string | null {
-  const hit = index[tripId]?.trim();
-  return hit || null;
+function headsignFromMeta(meta: FeedMeta, tripId: string): string | null {
+  return meta.headsigns[tripId]?.trim() || null;
+}
+
+function directionFromMeta(meta: FeedMeta, tripId: string): number | null {
+  const d = meta.directions[tripId];
+  return d != null ? d : null;
 }
 
 export function looksLikeBareTripId(value: string): boolean {
@@ -79,8 +116,8 @@ export function needsHeadsignLookup(destination: string | null | undefined): boo
 }
 
 async function resolveHeadsign(feedId: string, tripId: string): Promise<string | null> {
-  const index = await loadFeedHeadsignIndex(feedId);
-  const indexed = headsignFromIndex(index, tripId);
+  const meta = await loadFeedMeta(feedId);
+  const indexed = headsignFromMeta(meta, tripId);
   if (indexed) return indexed;
 
   const resolved = await resolveDemoTrip(feedId, tripId);
@@ -90,7 +127,19 @@ async function resolveHeadsign(feedId: string, tripId: string): Promise<string |
   return null;
 }
 
-/** O(1) headsign lookup after the per-feed index is warm. */
+export async function tripDirection(
+  feedId: string,
+  tripId: string,
+): Promise<number | null> {
+  const key = `${feedId}:${tripId}`;
+  if (directionCache.has(key)) return directionCache.get(key) ?? null;
+  const meta = await loadFeedMeta(feedId);
+  const dir = directionFromMeta(meta, tripId);
+  directionCache.set(key, dir);
+  return dir;
+}
+
+/** O(1) headsign lookup after the per-feed meta index is warm. */
 export async function tripHeadsign(
   feedId: string,
   tripId: string,
@@ -114,7 +163,7 @@ export async function tripHeadsigns(
   feedId: string,
   tripIds: string[],
 ): Promise<Map<string, string | null>> {
-  const index = await loadFeedHeadsignIndex(feedId);
+  const meta = await loadFeedMeta(feedId);
   const out = new Map<string, string | null>();
   const missing: string[] = [];
 
@@ -124,7 +173,7 @@ export async function tripHeadsigns(
       out.set(tripId, headsignCache.get(cacheKey) ?? null);
       continue;
     }
-    const indexed = headsignFromIndex(index, tripId);
+    const indexed = headsignFromMeta(meta, tripId);
     if (indexed) {
       headsignCache.set(cacheKey, indexed);
       out.set(tripId, indexed);
@@ -145,38 +194,20 @@ export async function tripHeadsigns(
   return out;
 }
 
-export async function enrichHeadsign<T extends { trip_id: string; headsign?: string | null }>(
-  feedId: string,
-  rows: T[],
-): Promise<Array<T & { headsign: string | null }>> {
-  const index = await loadFeedHeadsignIndex(feedId);
-  const missing: string[] = [];
-
-  for (const row of rows) {
-    const existing = row.headsign?.trim();
-    if (existing && !needsHeadsignLookup(existing)) continue;
-    if (headsignFromIndex(index, row.trip_id)) continue;
-    missing.push(row.trip_id);
-  }
-
-  if (missing.length) await tripHeadsigns(feedId, missing);
-
-  return rows.map((row) => {
-    const existing = row.headsign?.trim();
-    if (existing && !needsHeadsignLookup(existing)) {
-      return { ...row, headsign: existing };
-    }
-    const cacheKey = `${feedId}:${row.trip_id}`;
-    const cached = headsignCache.get(cacheKey);
-    const indexed = headsignFromIndex(index, row.trip_id);
-    return {
-      ...row,
-      headsign: cached ?? indexed ?? existing ?? null,
-    };
-  });
+/** Warm the trip meta index for a feed (call once per request path). */
+export function preloadTripHeadsignIndex(feedId: string): Promise<void> {
+  return loadFeedMeta(feedId).then(() => undefined);
 }
 
-/** Warm the headsign index for a feed (call once per request path). */
-export function preloadTripHeadsignIndex(feedId: string): Promise<void> {
-  return loadFeedHeadsignIndex(feedId).then(() => undefined);
+/** Sync lookups — only valid after `preloadTripHeadsignIndex` for this feed. */
+export function headsignFromWarmIndex(feedId: string, tripId: string): string | null {
+  const cached = feedMetaCache.get(feedId);
+  if (!cached) return null;
+  return headsignFromMeta(cached.meta, tripId);
+}
+
+export function directionFromWarmIndex(feedId: string, tripId: string): number | null {
+  const cached = feedMetaCache.get(feedId);
+  if (!cached) return null;
+  return directionFromMeta(cached.meta, tripId);
 }

@@ -43,7 +43,7 @@ async function readCsv(path) {
   return rows;
 }
 
-async function buildTripHeadsignIndex(feedId, trips) {
+async function buildTripMetaIndex(feedId, trips) {
   const index = {};
   for (const row of trips) {
     const tripId = pick(row, "trip_id");
@@ -58,12 +58,15 @@ async function buildTripHeadsignIndex(feedId, trips) {
       continue;
     }
     const headsign = pick(row, "trip_headsign");
-    if (headsign) index[tripId] = headsign;
+    if (!headsign) continue;
+    const direction = pick(row, "direction_id");
+    const dir = direction !== "" ? Number(direction) : undefined;
+    index[tripId] = dir != null && !Number.isNaN(dir) ? [headsign, dir] : [headsign];
   }
-  const outPath = join(outDir, `${feedId}-trip-headsigns.json`);
+  const outPath = join(outDir, `${feedId}-trip-meta.json`);
   writeFileSync(outPath, JSON.stringify(index));
   const kb = Math.round(JSON.stringify(index).length / 1024);
-  console.log(`${feedId}: ${Object.keys(index).length} trip headsigns (~${kb} KB)`);
+  console.log(`${feedId}: ${Object.keys(index).length} trip meta (~${kb} KB)`);
 }
 
 async function buildBlockIndex(feedId) {
@@ -73,7 +76,7 @@ async function buildBlockIndex(feedId) {
     console.warn(`skip ${feedId}: no trips.txt`);
     return;
   }
-  await buildTripHeadsignIndex(feedId, trips);
+  await buildTripMetaIndex(feedId, trips);
   const stopTimes = await readCsv(join(gtfsDir, "stop_times.txt"));
 
   const firstDep = new Map();

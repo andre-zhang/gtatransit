@@ -49,28 +49,13 @@ function routeMetaFromCore(feedId: string, routeId: string | undefined) {
   return null;
 }
 
-function scheduleHeadsignByRoute(
-  schedule: ScheduleRow[],
-): Map<string, { headsign: string; routeColor: string }> {
-  const map = new Map<string, { headsign: string; routeColor: string }>();
-  for (const row of schedule) {
-    const key = `${row.feedId}:${row.routeShort || row.routeId}`;
-    if (!map.has(key)) {
-      map.set(key, { headsign: row.headsign, routeColor: row.routeColor });
-    }
-  }
-  return map;
-}
-
 function rtPredictionToDeparture(
   row: RtStopPrediction,
-  headsigns: Map<string, { headsign: string; routeColor: string }>,
   schedule: ScheduleRow[],
 ): DepartureInput | null {
   const routeId = row.routeId;
   const coreMeta = routeMetaFromCore(row.feedId, routeId);
   const routeShort = coreMeta?.routeShort ?? routeId ?? "?";
-  const schedMeta = routeId ? headsigns.get(`${row.feedId}:${routeShort}`) : undefined;
   let predictedSec = row.predictedSec;
   if (predictedSec != null && isUnixTimestamp(predictedSec)) {
     predictedSec = unixToTorontoSec(predictedSec);
@@ -118,14 +103,8 @@ function rtPredictionToDeparture(
     routeId: routeId ?? "",
     routeShort,
     routeColor:
-      scheduledRow?.routeColor ??
-      schedMeta?.routeColor ??
-      routeColor(row.feedId, routeShort, null),
-    destination:
-      scheduledRow?.headsign ??
-      schedMeta?.headsign ??
-      coreMeta?.destination ??
-      "In service",
+      scheduledRow?.routeColor ?? routeColor(row.feedId, routeShort, null),
+    destination: scheduledRow?.headsign ?? "In service",
     departureTime: secToTime(schedSec % 86400),
     stopId: row.stopId,
     delaySec,
@@ -172,7 +151,6 @@ export async function buildDemoStopDepartures(
 
   await refreshRtCache();
   const schedule = await getStopSchedule(groupId);
-  const headsigns = scheduleHeadsignByRoute(schedule);
   const rtStopIdsByFeed = new Map<string, string[]>();
 
   for (const m of stop.members) {
@@ -193,7 +171,7 @@ export async function buildDemoStopDepartures(
       if (feedId === "ttc" && !(await isTtcRtStopAtGroup(extra.stopId, stop.members))) {
         continue;
       }
-      const row = rtPredictionToDeparture(extra, headsigns, schedule);
+      const row = rtPredictionToDeparture(extra, schedule);
       if (!row) continue;
       usedRtTrips.add(`${row.feedId}:${row.tripId}`);
       inputs.push(row);
@@ -253,11 +231,12 @@ export async function buildDemoStopDepartures(
 
   const missingByFeed = new Map<string, Set<string>>();
   for (const row of deduped) {
-    if (!needsHeadsignLookup(row.destination)) continue;
     const key = `${row.feedId}:${row.tripId}`;
     if (scheduleHeadsigns.has(key)) continue;
-    if (!missingByFeed.has(row.feedId)) missingByFeed.set(row.feedId, new Set());
-    missingByFeed.get(row.feedId)!.add(row.tripId);
+    if (row.realtime || needsHeadsignLookup(row.destination)) {
+      if (!missingByFeed.has(row.feedId)) missingByFeed.set(row.feedId, new Set());
+      missingByFeed.get(row.feedId)!.add(row.tripId);
+    }
   }
 
   const resolved = new Map<string, string | null>();
@@ -272,10 +251,11 @@ export async function buildDemoStopDepartures(
   );
 
   const withHeadsigns = deduped.map((row) => {
-    if (!needsHeadsignLookup(row.destination)) return row;
     const key = `${row.feedId}:${row.tripId}`;
     const hs = scheduleHeadsigns.get(key) ?? resolved.get(key);
-    return hs ? { ...row, destination: hs } : row;
+    if (!hs) return row;
+    if (!row.realtime && !needsHeadsignLookup(row.destination)) return row;
+    return { ...row, destination: hs };
   });
 
   return {

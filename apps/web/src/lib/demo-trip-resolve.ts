@@ -5,6 +5,7 @@ import {
 } from "./calendar";
 import { loadStopScheduleRows } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedule-types";
+import { isDemoFixtureTripId } from "./demo-trip-id";
 import { lookupTripFromSchedules } from "./demo-trip-lookup";
 import { routesMatch } from "./route-match";
 import { getTripRt, getTripStopUpdates } from "./rt-cache";
@@ -21,7 +22,9 @@ export async function resolveDemoTrip(
   feedId: string,
   tripId: string,
 ): Promise<ResolvedTrip> {
-  const exact = await lookupTripFromSchedules(feedId, tripId);
+  const exact = isDemoFixtureTripId(feedId, tripId)
+    ? await lookupTripFromSchedules(feedId, tripId)
+    : undefined;
   if (exact) {
     return {
       liveTripId: tripId,

@@ -3,7 +3,12 @@ import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
 import { loadRouteScheduleRows, loadUnionSchedule } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
-import { preloadTripHeadsignIndex, tripHeadsign } from "./demo-trip-headsign";
+import {
+  directionFromWarmIndex,
+  headsignFromWarmIndex,
+  preloadTripHeadsignIndex,
+  tripHeadsign,
+} from "./demo-trip-headsign";
 import { routesMatch } from "./route-match";
 import { getRtVehicles, getTripRt } from "./rt-cache";
 
@@ -91,10 +96,34 @@ function predominantHeadsigns(rows: ScheduleRow[]): [string, string] {
   return [sorted[0] ?? "Outbound", sorted[1] ?? sorted[0] ?? "Inbound"];
 }
 
+function directionLabelsForRoute(
+  feedId: string,
+  rows: ScheduleRow[],
+): [string, string] {
+  let label0: string | null = null;
+  let label1: string | null = null;
+  for (const row of rows) {
+    const dir = directionFromWarmIndex(feedId, row.tripId);
+    if (dir === 0 && !label0) label0 = row.headsign?.trim() || null;
+    if (dir === 1 && !label1) label1 = row.headsign?.trim() || null;
+    if (label0 && label1) break;
+  }
+  if (label0 || label1) {
+    return [label0 ?? "Outbound", label1 ?? label0 ?? "Inbound"];
+  }
+  return predominantHeadsigns(rows);
+}
+
 function filterRowsByDirection(
+  feedId: string,
   rows: ScheduleRow[],
   direction: number,
 ): ScheduleRow[] {
+  const byDir = rows.filter(
+    (row) => directionFromWarmIndex(feedId, row.tripId) === direction,
+  );
+  if (byDir.length >= Math.min(3, rows.length)) return byDir;
+
   const [a, b] = predominantHeadsigns(rows);
   const target = direction === 0 ? a : b;
   const filtered = rows.filter((row) => row.headsign === target);
@@ -123,6 +152,7 @@ export async function getDemoRouteDetail(
   direction: number,
 ) {
   await ensureDemoAssets();
+  await preloadTripHeadsignIndex(feedId);
 
   let meta = findRouteMeta(feedId, routeId);
   if (!meta) {
@@ -149,9 +179,9 @@ export async function getDemoRouteDetail(
   >();
 
   const allRows = await collectScheduleRows(feedId, routeId);
-  const directionLabels = predominantHeadsigns(allRows);
+  const directionLabels = directionLabelsForRoute(feedId, allRows);
 
-  for (const row of filterRowsByDirection(allRows, direction)) {
+  for (const row of filterRowsByDirection(feedId, allRows, direction)) {
     const dep = formatDeparture(row.departureTime);
     const existing = tripMap.get(row.tripId);
     if (!existing || dep < existing.first_departure) {
@@ -167,8 +197,6 @@ export async function getDemoRouteDetail(
     .sort((a, b) => a.first_departure.localeCompare(b.first_departure))
     .slice(0, 200);
 
-  await preloadTripHeadsignIndex(feedId);
-
   const liveVehicles = getRtVehicles().filter(
     (v) =>
       v.feedId === feedId &&
@@ -180,14 +208,11 @@ export async function getDemoRouteDetail(
       liveVehicles.slice(0, 80).map(async (v) => {
         let headsign: string | null = null;
         if (v.tripId) {
-          headsign = await tripHeadsign(feedId, v.tripId);
-          if (
-            headsign &&
-            directionLabels[direction] &&
-            headsign !== directionLabels[direction]
-          ) {
-            return null;
-          }
+          const dir = directionFromWarmIndex(feedId, v.tripId);
+          if (dir != null && dir !== direction) return null;
+          headsign =
+            headsignFromWarmIndex(feedId, v.tripId) ??
+            (await tripHeadsign(feedId, v.tripId));
         }
         return {
           vehicle_id: v.vehicleId,
