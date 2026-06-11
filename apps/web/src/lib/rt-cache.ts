@@ -1,4 +1,5 @@
 import {
+  GO_RT_API,
   RT_FEEDS,
   fetchRt,
   parseTripUpdates,
@@ -36,6 +37,8 @@ let lastRefresh = 0;
 let refreshing: Promise<void> | null = null;
 let goRtEnabled = Boolean(process.env.METROLINX_API_KEY?.trim());
 let goRtLastOk = 0;
+let goRtLastError: string | null = null;
+let goRtStats = { tripUpdates: 0, vehicles: 0, predictions: 0 };
 
 type IndexedPrediction = {
   feedId: string;
@@ -152,15 +155,21 @@ async function pollGo(key: string) {
   const headers = { "Ocp-Apim-Subscription-Key": key };
   const now = Date.now();
   let sawData = false;
+  let tripUpdates = 0;
+  let vehicles = 0;
+  const errors: string[] = [];
 
   for (const [kind, path] of [
-    ["vehicles", "GTFS/VehiclePositions"],
-    ["trips", "GTFS/TripUpdates"],
+    ["vehicles", GO_RT_API.vehiclePositions],
+    ["trips", GO_RT_API.tripUpdates],
   ] as const) {
     try {
-      const url = `https://api.openmetrolinx.com/OpenDataAPI/${path}`;
+      const url = `${GO_RT_API.base}/${path}`;
       const res = await fetch(url, { headers, next: { revalidate: 0 } });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        errors.push(`${kind}:${res.status}`);
+        continue;
+      }
       const { decodeFeed } = await import("@gta/gtfs-rt");
       const msg = decodeFeed(await res.arrayBuffer());
       sawData = true;
@@ -168,6 +177,7 @@ async function pollGo(key: string) {
       if (kind === "vehicles") {
         for (const v of parseVehicles("go", msg)) {
           if (v.lat == null || v.lon == null) continue;
+          vehicles++;
           vehicleMap.set(`go:${v.vehicleId}`, { ...v, updatedAt: now });
           if (!v.tripId) continue;
           const k = tripKey("go", v.tripId);
@@ -182,6 +192,7 @@ async function pollGo(key: string) {
         }
       } else {
         for (const u of parseTripUpdates("go", msg)) {
+          tripUpdates++;
           const platform = platformFromUpdate(u);
           const entry: StopRt = {
             delaySec: u.delaySec,
@@ -202,12 +213,18 @@ async function pollGo(key: string) {
           });
         }
       }
-    } catch {
-      /* ignore per-feed errors */
+    } catch (e) {
+      errors.push(`${kind}:${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  if (sawData) goRtLastOk = now;
+  if (sawData) {
+    goRtLastOk = now;
+    goRtLastError = errors.length ? errors.join("; ") : null;
+    goRtStats = { ...goRtStats, tripUpdates, vehicles };
+  } else if (errors.length) {
+    goRtLastError = errors.join("; ");
+  }
 }
 
 async function pollFeed(feedId: string) {
@@ -270,6 +287,11 @@ export async function refreshRtCache(force = false) {
     if (goKey && Date.now() - goRtLastOk > TTL_MS) {
       await pollGo(goKey);
       rebuildStopPredictionsIndex();
+      goRtStats = {
+        ...goRtStats,
+        predictions: [...predictionsByStop.keys()].filter((k) => k.startsWith("go:"))
+          .length,
+      };
     }
     return;
   }
@@ -291,6 +313,11 @@ export async function refreshRtCache(force = false) {
     }
 
     rebuildStopPredictionsIndex();
+    goRtStats = {
+      ...goRtStats,
+      predictions: [...predictionsByStop.keys()].filter((k) => k.startsWith("go:"))
+        .length,
+    };
     lastRefresh = Date.now();
     refreshing = null;
   })();
@@ -556,14 +583,26 @@ function snapshotTripUpdates(): RtTripUpdate[] {
 export function getGoRtStatus(): {
   configured: boolean;
   active: boolean;
+  lastOk: string | null;
+  lastError: string | null;
+  tripUpdates: number;
+  vehicles: number;
+  predictions: number;
 } {
   const configured = goRtEnabled;
-  const active =
-    configured &&
-    goRtLastOk > 0 &&
-    Date.now() - goRtLastOk < 5 * 60_000 &&
-    [...vehicleMap.values()].some((v) => v.feedId === "go");
-  return { configured, active };
+  const fresh = goRtLastOk > 0 && Date.now() - goRtLastOk < 5 * 60_000;
+  const hasVehicles = [...vehicleMap.values()].some((v) => v.feedId === "go");
+  const hasPredictions = [...predictionsByStop.keys()].some((k) =>
+    k.startsWith("go:"),
+  );
+  const active = configured && fresh && (hasVehicles || hasPredictions);
+  return {
+    configured,
+    active,
+    lastOk: goRtLastOk ? new Date(goRtLastOk).toISOString() : null,
+    lastError: goRtLastError,
+    ...goRtStats,
+  };
 }
 
 export function getRtVehicles(): RtVehicle[] {

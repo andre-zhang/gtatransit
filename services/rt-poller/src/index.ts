@@ -100,8 +100,8 @@ async function pollGo() {
   const headers = { "Ocp-Apim-Subscription-Key": key };
 
   for (const [kind, path] of [
-    ["vehicles", "GTFS/VehiclePositions"],
-    ["trips", "GTFS/TripUpdates"],
+    ["vehicles", "api/V1/Gtfs/Feed/VehiclePosition"],
+    ["trips", "api/V1/Gtfs/Feed/TripUpdates"],
   ] as const) {
     try {
       const url = `https://api.openmetrolinx.com/OpenDataAPI/${path}`;

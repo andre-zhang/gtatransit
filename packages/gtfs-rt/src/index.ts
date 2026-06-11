@@ -106,6 +106,13 @@ export function parseTripUpdates(
   return out;
 }
 
+/** Metrolinx Open Data API — legacy GTFS/* paths return 500; use V1 feed routes. */
+export const GO_RT_API = {
+  base: "https://api.openmetrolinx.com/OpenDataAPI",
+  tripUpdates: "api/V1/Gtfs/Feed/TripUpdates",
+  vehiclePositions: "api/V1/Gtfs/Feed/VehiclePosition",
+} as const;
+
 export const RT_FEEDS: Record<
   string,
   { vehicles?: string; tripUpdates?: string; headers?: Record<string, string> }
