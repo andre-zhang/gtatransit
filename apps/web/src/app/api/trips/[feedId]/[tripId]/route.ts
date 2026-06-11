@@ -8,29 +8,12 @@ import {
 } from "@/lib/calendar";
 import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
 import { useDemoFixtures } from "@/lib/demo-mode";
+import { buildDemoTripStops } from "@/lib/demo-trip-stops";
 import { resolveDemoTrip } from "@/lib/demo-trip-resolve";
 import { preloadTripHeadsignIndex, tripHeadsign } from "@/lib/demo-trip-headsign";
-import { getTripStops } from "@/lib/demo-schedules";
 import { getStopTripRt, getTripRt, refreshRtCache } from "@/lib/rt-cache";
-import { resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
-
-async function rtForFixtureStop(
-  feedId: string,
-  liveTripId: string,
-  fixtureStopId: string,
-) {
-  const liveIds =
-    feedId === "ttc"
-      ? await resolveTtcRtStopIds([{ feedId: "ttc", stopId: fixtureStopId }])
-      : [fixtureStopId];
-  for (const liveId of liveIds) {
-    const rt = getStopTripRt(feedId, liveTripId, liveId);
-    if (rt) return rt;
-  }
-  return undefined;
-}
 
 export async function GET(
   req: NextRequest,
@@ -38,6 +21,7 @@ export async function GET(
 ) {
   const { feedId, tripId } = await params;
   const fromStop = req.nextUrl.searchParams.get("fromStop") ?? undefined;
+  const scheduleTripParam = req.nextUrl.searchParams.get("scheduleTrip") ?? undefined;
   await refreshRtCache();
 
   if (await useDemoFixtures()) {
@@ -46,55 +30,27 @@ export async function GET(
     await preloadTripHeadsignIndex(feedId);
 
     const resolved = await resolveDemoTrip(feedId, tripId);
-    const scheduleTripId = resolved.scheduleTripId ?? tripId;
+    const scheduleTripId =
+      scheduleTripParam ?? resolved.scheduleTripId ?? tripId;
     const liveTripId = resolved.liveTripId;
-    const stops = await getTripStops(feedId, scheduleTripId);
-    if (!stops.length) {
-      return NextResponse.json({ tripId, feedId, stops: [], fromStop });
-    }
-
-    const startIdx =
-      fromStop != null ? stops.findIndex((s) => s.stopId === fromStop) : 0;
-    const slice = startIdx >= 0 ? stops.slice(startIdx) : stops;
     const tripRt = getTripRt(feedId, liveTripId);
-    const now = torontoNowSec();
     const headsign = await tripHeadsign(feedId, liveTripId);
+
+    const stops = await buildDemoTripStops({
+      feedId,
+      liveTripId,
+      scheduleTripId,
+      fromStop,
+    });
 
     return NextResponse.json({
       tripId,
       feedId,
       fromStop,
       headsign,
+      scheduleTripId,
       vehicleId: tripRt?.vehicleId,
-      stops: await Promise.all(
-        slice.map(async (s) => {
-          const schedSec = gtfsTimeToSec(s.departureTime);
-          const rt = await rtForFixtureStop(feedId, liveTripId, s.stopId);
-          const delaySec = computeDelaySec(schedSec, {
-            predictedSec: rt?.predictedSec,
-            agencyDelaySec: rt?.delaySec,
-            now,
-          });
-          let predictedSec: number | undefined;
-          if (rt?.predictedSec != null) {
-            predictedSec = normalizeServiceSec(rt.predictedSec, now);
-          } else if (delaySec != null) {
-            predictedSec = normalizeServiceSec(schedSec + delaySec, now);
-          }
-          return {
-            stopId: s.stopId,
-            name: s.name,
-            sequence: s.sequence,
-            scheduled: secToTime(schedSec % 86400),
-            predicted:
-              predictedSec != null ? secToTime(predictedSec % 86400) : undefined,
-            delayMin: delayMinFromSec(delaySec),
-            platform: rt?.platform,
-            passed:
-              fromStop != null && s.sequence < (stops[startIdx]?.sequence ?? 0),
-          };
-        }),
-      ),
+      stops,
     });
   }
 

@@ -6,6 +6,7 @@ import maplibregl from "maplibre-gl";
 import { LayerPanel } from "./LayerPanel";
 import { MapZoomHint } from "./MapZoomHint";
 import { BASEMAP_STYLE, GTA_CENTER, GTA_DEFAULT_ZOOM } from "@/lib/basemap";
+import { readSavedMapView, saveMapView } from "@/lib/map-view-state";
 import { ensureVehicleArrowImage, VEHICLE_ARROW_IMAGE_ID } from "@/lib/map-icons";
 import { ZOOM_ROUTES, ZOOM_STOPS } from "@/lib/map-zoom";
 import type { FilterTree } from "@/lib/types";
@@ -85,7 +86,15 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
 
   const lastFetchKey = useRef("");
 
+  const persistMapView = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const c = map.getCenter();
+    saveMapView([c.lng, c.lat], map.getZoom());
+  };
+
   const navigate = (href: string) => {
+    persistMapView();
     window.location.assign(href);
   };
 
@@ -142,11 +151,12 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
     aliveRef.current = true;
     const container = containerRef.current;
 
+    const saved = readSavedMapView();
     const map = new maplibregl.Map({
       container,
       style: BASEMAP_STYLE,
-      center: GTA_CENTER,
-      zoom: GTA_DEFAULT_ZOOM,
+      center: saved?.center ?? GTA_CENTER,
+      zoom: saved?.zoom ?? GTA_DEFAULT_ZOOM,
       attributionControl: { compact: true },
     });
     map.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -165,12 +175,18 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
       console.error("MapLibre error:", e.error?.message ?? e);
     });
 
-    map.on("moveend", scheduleRefresh);
+    map.on("moveend", () => {
+      const c = map.getCenter();
+      saveMapView([c.lng, c.lat], map.getZoom());
+      scheduleRefresh();
+    });
     map.on("zoomend", () => setZoom(map.getZoom()));
 
     map.on("load", () => {
       map.resize();
-      map.fitBounds(GTA_BOUNDS, { padding: 48, duration: 0 });
+      if (!saved) {
+        map.fitBounds(GTA_BOUNDS, { padding: 48, duration: 0 });
+      }
       setZoom(map.getZoom());
 
       map.addSource("routes", { type: "geojson", data: EMPTY_FC });

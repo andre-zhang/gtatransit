@@ -42,6 +42,8 @@ export function delayMinFromSec(delaySec: number | null | undefined): number | u
 
 export type DepartureInput = {
   tripId: string;
+  /** Fixture schedule trip id when tripId is a live RT id. */
+  scheduleTripId?: string;
   feedId: string;
   routeId: string;
   routeShort: string;
@@ -65,6 +67,7 @@ export type DepartureRowOut = {
   feedId: string;
   routeId: string;
   tripId: string;
+  scheduleTripId?: string;
   stopId?: string;
   platform?: string;
   vehicleId?: string;
@@ -132,6 +135,7 @@ export function filterUpcomingDepartures(
         feedId: r.feedId,
         routeId: r.routeId,
         tripId: r.tripId,
+        scheduleTripId: r.scheduleTripId,
         stopId: r.stopId,
         platform: r.platform,
         vehicleId: r.vehicleId,
@@ -141,8 +145,22 @@ export function filterUpcomingDepartures(
       };
     })
     .filter((x): x is NonNullable<typeof x> => x != null)
-    .sort((a, b) => a.depSec - b.depSec)
-    .slice(0, limit);
+    .sort((a, b) => a.depSec - b.depSec);
 
-  return mapped.map(({ depSec: _, ...rest }) => rest);
+  const deduped: typeof mapped = [];
+  for (const row of mapped) {
+    const prev = deduped[deduped.length - 1];
+    if (
+      prev &&
+      prev.feedId === row.feedId &&
+      prev.routeShort === row.routeShort &&
+      Math.abs(prev.depSec - row.depSec) < 90
+    ) {
+      if (row.realtime && !prev.realtime) deduped[deduped.length - 1] = row;
+      continue;
+    }
+    deduped.push(row);
+  }
+
+  return deduped.slice(0, limit).map(({ depSec: _, ...rest }) => rest);
 }

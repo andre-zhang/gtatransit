@@ -52,11 +52,14 @@ function isTerminalLike(
 ): boolean {
   if (feedId === "go" && stopId.length <= 3 && /^[A-Z0-9]+$/.test(stopId)) return true;
   const n = name.trim().toLowerCase();
-  if (/\bterminal\b/.test(n)) return true;
-  if (/\bunion station\b/.test(n)) return true;
-  if (n.includes("toronto union")) return true;
-  // GTFS station entity (subway/GO hub), not regular street stops
-  if (meta?.locationType === 1) return true;
+  if (/\b(bus )?terminal\b/.test(n) && !/\bavenue\b/.test(n) && !/\bave\b/.test(n)) {
+    return true;
+  }
+  if (/\b(union|go) station\b/.test(n) || n.includes("toronto union")) return true;
+  if (/\bstation\b/.test(n) && (meta?.locationType === 1 || !meta?.parentStation)) {
+    return true;
+  }
+  if (meta?.locationType === 1 && !meta?.parentStation) return true;
   return false;
 }
 
@@ -134,7 +137,8 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
         a.parentStation &&
         b.parentStation &&
         a.feedId === b.feedId &&
-        a.parentStation === b.parentStation
+        a.parentStation === b.parentStation &&
+        dist <= TERMINAL_RADIUS_M
       ) {
         uf.union(a.groupId, b.groupId);
         continue;
@@ -143,7 +147,8 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
         a.isTerminal &&
         b.isTerminal &&
         a.feedId === b.feedId &&
-        (a.parentStation === b.stopId || b.parentStation === a.stopId)
+        (a.parentStation === b.stopId || b.parentStation === a.stopId) &&
+        dist <= TERMINAL_RADIUS_M
       ) {
         uf.union(a.groupId, b.groupId);
         continue;

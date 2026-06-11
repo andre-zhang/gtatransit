@@ -73,9 +73,24 @@ export function formatGtfsTime(sec: number): string {
 }
 
 const SERVICE_ROLLOVER_SEC = 3 * 3600;
+const LATE_NIGHT_END_SEC = 6 * 3600;
 
 /** Normalize a departure second-of-day into upcoming service context. */
 export function normalizeServiceSec(schedSec: number, now: number): number {
+  // GTFS post-midnight times (24:00+ = same service night as 00:00–03:00 clock times).
+  if (schedSec >= 86400) {
+    const clockSec = schedSec % 86400;
+    if (now > clockSec + 180 && now - clockSec < 20 * 3600) {
+      return clockSec;
+    }
+    return schedSec;
+  }
+
+  // After midnight, compare clock times directly (don't roll 02:00 to tomorrow when it's past).
+  if (schedSec < LATE_NIGHT_END_SEC && now < LATE_NIGHT_END_SEC) {
+    return schedSec;
+  }
+
   let depSec = schedSec;
   for (let i = 0; i < 3; i++) {
     if (depSec >= now - 120) break;

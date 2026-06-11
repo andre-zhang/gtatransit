@@ -29,6 +29,7 @@ import {
   refreshRtCache,
   type RtStopPrediction,
 } from "@/lib/rt-cache";
+import { expandGoStopId, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
 import { isTtcRtStopAtGroup, resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
 
 function routeMetaFromCore(feedId: string, routeId: string | undefined) {
@@ -99,6 +100,7 @@ function rtPredictionToDeparture(
 
   return {
     tripId: row.tripId,
+    scheduleTripId: scheduledRow?.tripId ?? row.tripId,
     feedId: row.feedId,
     routeId: routeId ?? "",
     routeShort,
@@ -156,6 +158,12 @@ export async function buildDemoStopDepartures(
   for (const m of stop.members) {
     if (m.feedId === "ttc") {
       rtStopIdsByFeed.set("ttc", await resolveTtcRtStopIds(stop.members));
+    } else if (m.feedId === "go" && !rtStopIdsByFeed.has("go")) {
+      const ids = new Set<string>();
+      for (const x of stop.members.filter((x) => x.feedId === "go")) {
+        for (const id of expandGoStopId(x.stopId)) ids.add(id);
+      }
+      rtStopIdsByFeed.set("go", [...ids]);
     } else if (!rtStopIdsByFeed.has(m.feedId)) {
       rtStopIdsByFeed.set(
         m.feedId,
@@ -190,7 +198,11 @@ export async function buildDemoStopDepartures(
 
   for (const r of schedule) {
     const rtIds =
-      r.feedId === "ttc" ? await ttcRtIdsForStop(r.stopId) : [r.stopId];
+      r.feedId === "ttc"
+        ? await ttcRtIdsForStop(r.stopId)
+        : r.feedId === "go"
+          ? resolveGoRtStopIds(r.stopId, stop.members)
+          : [r.stopId];
     const schedSec = gtfsTimeToSec(r.departureTime);
     const rt = mergeRtIntoDeparture(
       r.feedId,
@@ -206,6 +218,7 @@ export async function buildDemoStopDepartures(
     );
     inputs.push({
       tripId: rt.liveTripId ?? r.tripId,
+      scheduleTripId: r.tripId,
       feedId: r.feedId,
       routeId: r.routeId,
       routeShort: r.routeShort,

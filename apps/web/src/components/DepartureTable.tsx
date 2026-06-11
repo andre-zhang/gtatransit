@@ -14,6 +14,7 @@ export type DepartureRow = {
   feedId: string;
   routeId: string;
   tripId: string;
+  scheduleTripId?: string;
   stopId?: string;
   vehicleId?: string;
   platform?: string;
@@ -35,10 +36,12 @@ type TripStop = {
 function TripStopsPanel({
   feedId,
   tripId,
+  scheduleTripId,
   fromStop,
 }: {
   feedId: string;
   tripId: string;
+  scheduleTripId?: string;
   fromStop?: string;
 }) {
   const [stops, setStops] = useState<TripStop[] | null>(null);
@@ -49,7 +52,12 @@ function TripStopsPanel({
     setLoading(true);
     setError(false);
     try {
-      const qs = fromStop ? `?fromStop=${encodeURIComponent(fromStop)}` : "";
+      const params = new URLSearchParams();
+      if (fromStop) params.set("fromStop", fromStop);
+      if (scheduleTripId && scheduleTripId !== tripId) {
+        params.set("scheduleTrip", scheduleTripId);
+      }
+      const qs = params.toString() ? `?${params}` : "";
       const res = await fetch(
         `/api/trips/${feedId}/${encodeURIComponent(tripId)}${qs}`,
         { cache: "no-store" },
@@ -62,7 +70,7 @@ function TripStopsPanel({
     } finally {
       setLoading(false);
     }
-  }, [feedId, tripId, fromStop]);
+  }, [feedId, tripId, scheduleTripId, fromStop]);
 
   useEffect(() => {
     void load();
@@ -265,6 +273,7 @@ export function DepartureTable({
                       <TripStopsPanel
                         feedId={r.feedId}
                         tripId={r.tripId}
+                        scheduleTripId={r.scheduleTripId}
                         fromStop={r.stopId}
                       />
                     </td>
