@@ -90,7 +90,11 @@ async function pollFeed(feedId: string) {
 }
 
 async function pollGo() {
-  const key = process.env.METROLINX_API_KEY;
+  const raw = process.env.METROLINX_API_KEY;
+  let key = raw?.trim();
+  if (key && ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'")))) {
+    key = key.slice(1, -1).trim();
+  }
   if (!key) {
     console.warn("METROLINX_API_KEY not set — skipping GO RT");
     return;

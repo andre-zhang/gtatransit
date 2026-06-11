@@ -1,5 +1,6 @@
 import type { FeatureCollection } from "geojson";
 import { parseDirs, parseList } from "./parse-filters";
+import { routesMatch } from "./route-match";
 
 export type MapFilters = {
   agencies: string[];
@@ -76,8 +77,15 @@ export function vehicleMatchesFilters(
 ): boolean {
   if (filters.agencies.length && !filters.agencies.includes(v.feedId)) return false;
   if (filters.routes.length && v.routeId) {
-    const keys = routeKeys(v.feedId, v.routeId);
-    if (!keys.some((k) => filters.routes.includes(k))) return false;
+    for (const filterRoute of filters.routes) {
+      const colon = filterRoute.indexOf(":");
+      if (colon < 0) continue;
+      const feedId = filterRoute.slice(0, colon);
+      const pageRouteId = filterRoute.slice(colon + 1);
+      if (feedId !== v.feedId) continue;
+      if (routesMatch(v.feedId, pageRouteId, null, v.routeId)) return true;
+    }
+    return false;
   }
   return true;
 }

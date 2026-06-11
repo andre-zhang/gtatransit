@@ -35,7 +35,23 @@ const vehicleMap = new Map<string, RtVehicle & { updatedAt: number }>();
 const predictionsByStop = new Map<string, IndexedPrediction[]>();
 let lastRefresh = 0;
 let refreshing: Promise<void> | null = null;
-let goRtEnabled = Boolean(process.env.METROLINX_API_KEY?.trim());
+export function normalizeMetrolinxKey(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  let key = raw.trim();
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1).trim();
+  }
+  return key || undefined;
+}
+
+function readMetrolinxKey(): string | undefined {
+  return normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
+}
+
+let goRtEnabled = Boolean(readMetrolinxKey());
 let goRtLastOk = 0;
 let goRtLastError: string | null = null;
 let goRtStats = { tripUpdates: 0, vehicles: 0, predictions: 0 };
@@ -280,7 +296,7 @@ async function pollFeed(feedId: string) {
 }
 
 export async function refreshRtCache(force = false) {
-  const goKey = process.env.METROLINX_API_KEY?.trim();
+  const goKey = readMetrolinxKey();
   goRtEnabled = Boolean(goKey);
 
   if (!force && Date.now() - lastRefresh < TTL_MS && tripMap.size > 0) {
@@ -582,6 +598,7 @@ function snapshotTripUpdates(): RtTripUpdate[] {
 
 export function getGoRtStatus(): {
   configured: boolean;
+  keyLength: number;
   active: boolean;
   lastOk: string | null;
   lastError: string | null;
@@ -589,7 +606,8 @@ export function getGoRtStatus(): {
   vehicles: number;
   predictions: number;
 } {
-  const configured = goRtEnabled;
+  const key = readMetrolinxKey();
+  const configured = Boolean(key);
   const fresh = goRtLastOk > 0 && Date.now() - goRtLastOk < 5 * 60_000;
   const hasVehicles = [...vehicleMap.values()].some((v) => v.feedId === "go");
   const hasPredictions = [...predictionsByStop.keys()].some((k) =>
@@ -598,6 +616,7 @@ export function getGoRtStatus(): {
   const active = configured && fresh && (hasVehicles || hasPredictions);
   return {
     configured,
+    keyLength: key?.length ?? 0,
     active,
     lastOk: goRtLastOk ? new Date(goRtLastOk).toISOString() : null,
     lastError: goRtLastError,
