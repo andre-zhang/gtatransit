@@ -1,3 +1,4 @@
+import { cleanHeadsign } from "./headsign";
 import { resolveDemoTrip } from "./demo-trip-resolve";
 import { readDemoJsonFile } from "./demo-read";
 
@@ -40,10 +41,11 @@ function parseTripMetaFile(raw: Record<string, TripMetaTuple | string>): FeedMet
   const directions: Record<string, number> = {};
   for (const [tripId, value] of Object.entries(raw)) {
     if (typeof value === "string") {
-      if (value.trim()) headsigns[tripId] = value.trim();
+      const hs = cleanHeadsign(value);
+      if (hs) headsigns[tripId] = hs;
       continue;
     }
-    const hs = value[0]?.trim();
+    const hs = cleanHeadsign(value[0]);
     if (hs) headsigns[tripId] = hs;
     if (value[1] != null) directions[tripId] = value[1];
   }
@@ -77,7 +79,8 @@ async function loadFeedMeta(feedId: string): Promise<FeedMeta> {
           const headsigns: Record<string, string> = {};
           for (const list of Object.values(idx.blocks)) {
             for (const trip of list) {
-              if (trip.headsign?.trim()) headsigns[trip.trip_id] = trip.headsign.trim();
+              const hs = cleanHeadsign(trip.headsign);
+              if (hs) headsigns[trip.trip_id] = hs;
             }
           }
           const meta = { headsigns, directions: {} };
@@ -121,7 +124,7 @@ async function resolveHeadsign(feedId: string, tripId: string): Promise<string |
   if (indexed) return indexed;
 
   const resolved = await resolveDemoTrip(feedId, tripId);
-  const hs = resolved.scheduleRow?.headsign?.trim();
+  const hs = cleanHeadsign(resolved.scheduleRow?.headsign);
   if (hs && !looksLikeBareTripId(hs)) return hs;
 
   return null;

@@ -27,7 +27,7 @@ export function PageHeader({
             strokeLinejoin="round"
           />
         </svg>
-        Back to map
+        Back
       </Link>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {routeBadge && (

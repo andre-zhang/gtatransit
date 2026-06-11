@@ -15,6 +15,7 @@ import {
   torontoNowSec,
   unixToTorontoSec,
 } from "./calendar";
+import { formatGoPlatform, goTripSuffix, goTripsMatch } from "./go-stop-aliases";
 import { routesMatch } from "./route-match";
 
 type StopRt = {
@@ -193,6 +194,7 @@ async function pollGo(key: string) {
           const prev = tripMap.get(tk) ?? { updatedAt: now };
           tripMap.set(tk, {
             ...prev,
+            routeId: u.routeId ?? prev.routeId,
             delaySec: u.delaySec ?? prev.delaySec,
             predictedSec: u.departureTime ?? prev.predictedSec,
             platform: platform ?? prev.platform,
@@ -319,7 +321,34 @@ function getStopTripRtAny(
     const hit = stopTripMap.get(stopTripKey(feedId, tripId, stopId));
     if (hit) return hit;
   }
+
+  if (feedId === "go") {
+    const suffix = goTripSuffix(tripId);
+    for (const [key, rt] of stopTripMap) {
+      const parts = key.split(":");
+      const keyFeed = parts[0];
+      const keyTrip = parts[1];
+      const keyStop = parts.slice(2).join(":");
+      if (keyFeed !== feedId || !keyTrip || !keyStop) continue;
+      if (goTripSuffix(keyTrip) !== suffix) continue;
+      if (!stopIds.includes(keyStop)) continue;
+      return rt;
+    }
+  }
+
   return undefined;
+}
+
+function platformForTripAtStops(
+  feedId: string,
+  tripId: string,
+  stopIds: string[],
+): string | undefined {
+  const stopRt = getStopTripRtAny(feedId, tripId, stopIds);
+  const tripRt = getTripRt(feedId, tripId);
+  const raw = stopRt?.platform ?? tripRt?.platform;
+  if (feedId === "go") return formatGoPlatform(raw);
+  return raw;
 }
 
 export type RtStopPrediction = {
@@ -330,6 +359,7 @@ export type RtStopPrediction = {
   predictedSec?: number;
   vehicleId?: string;
   routeId?: string;
+  platform?: string;
 };
 
 /** Live predictions at a stop that may not appear in static schedule (e.g. trip id drift). */
@@ -353,6 +383,8 @@ export function getRtPredictionsForStop(
         predictedSec: p.predictedSec,
         vehicleId: p.vehicleId,
         routeId: p.routeId,
+        platform:
+          feedId === "go" ? formatGoPlatform(p.platform) : p.platform,
       });
     }
   }
@@ -395,7 +427,7 @@ export function mergeRtIntoDeparture(
   realtime: boolean;
 } {
   const stopIds = stopId ? [stopId, ...altStopIds.filter((id) => id !== stopId)] : altStopIds;
-  const stopRt = stopIds.length
+  let stopRt = stopIds.length
     ? getStopTripRtAny(feedId, tripId, stopIds)
     : undefined;
   let tripRt = getTripRt(feedId, tripId);
@@ -431,7 +463,9 @@ export function mergeRtIntoDeparture(
       opts.usedRtTrips.add(`${feedId}:${fuzzy.tripId}`);
       tripRt = getTripRt(feedId, fuzzy.tripId);
       vehicle = getVehicleForTrip(feedId, fuzzy.tripId);
-      delaySec = fuzzy.delaySec ?? tripRt?.delaySec ?? vehicle?.delaySec;
+      stopRt = getStopTripRtAny(feedId, fuzzy.tripId, stopIds) ?? stopRt;
+      delaySec =
+        fuzzy.delaySec ?? stopRt?.delaySec ?? tripRt?.delaySec ?? vehicle?.delaySec;
       predictedSec = fuzzy.predictedSec;
       if (predictedSec != null) {
         const drift = predictedSec - schedSec;
@@ -450,12 +484,23 @@ export function mergeRtIntoDeparture(
   }
 
   const vehicleId = tripRt?.vehicleId ?? vehicle?.vehicleId;
-  const fuzzyPlatform =
-    liveTripId != null
-      ? predictionsByStop
-          .get(`${feedId}:${stopId ?? stopIds[0] ?? ""}`)
-          ?.find((p) => p.tripId === liveTripId)?.platform
-      : undefined;
+  let fuzzyPlatform: string | undefined;
+  if (liveTripId != null) {
+    for (const sid of stopIds) {
+      const pred = predictionsByStop
+        .get(`${feedId}:${sid}`)
+        ?.find(
+          (p) =>
+            p.tripId === liveTripId ||
+            (feedId === "go" && goTripsMatch(liveTripId, p.tripId)),
+        );
+      if (pred?.platform) {
+        fuzzyPlatform =
+          feedId === "go" ? formatGoPlatform(pred.platform) : pred.platform;
+        break;
+      }
+    }
+  }
 
   const hasStopUpdate =
     stopRt != null && (stopRt.delaySec != null || stopRt.predictedSec != null);
@@ -469,10 +514,19 @@ export function mergeRtIntoDeparture(
     hasVehicle ||
     (delaySec != null && predictedSec != null);
 
+  const rawPlatform = stopRt?.platform ?? tripRt?.platform ?? fuzzyPlatform;
+  const platform =
+    feedId === "go"
+      ? formatGoPlatform(rawPlatform) ??
+        (liveTripId != null
+          ? platformForTripAtStops(feedId, liveTripId, stopIds)
+          : undefined)
+      : rawPlatform;
+
   return {
     delaySec,
     predictedSec,
-    platform: stopRt?.platform ?? tripRt?.platform ?? fuzzyPlatform,
+    platform,
     vehicleId,
     liveTripId,
     realtime,

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
+import { cleanHeadsign } from "@/lib/headsign";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 type Stop = {
@@ -50,7 +51,7 @@ export default async function TripPage({
   if (!data) {
     return (
       <PageShell>
-        <PageHeader title="Trip unavailable" subtitle={tripId} />
+        <PageHeader title="Trip unavailable" />
         <div className="px-6 py-12 text-center text-go-slate">
           Could not load this trip. It may have ended or is not in today&apos;s schedule.
         </div>
@@ -61,12 +62,9 @@ export default async function TripPage({
   if (!data.stops.length) {
     return (
       <PageShell>
-        <PageHeader title="Upcoming stops" subtitle={data.headsign ?? tripId} />
+        <PageHeader title={cleanHeadsign(data.headsign) || "Trip"} />
         <div className="departure-board-empty">
           <p className="departure-board-emptyTitle">No upcoming stops</p>
-          <p className="departure-board-emptyHint">
-            Could not load stop list for this trip.
-          </p>
         </div>
       </PageShell>
     );
@@ -74,7 +72,7 @@ export default async function TripPage({
 
   return (
     <PageShell>
-      <PageHeader title="Upcoming stops" subtitle={data.headsign ?? tripId} />
+      <PageHeader title={cleanHeadsign(data.headsign) || "Trip"} />
       {data.vehicleId && (
         <div className="border-b border-go-bg px-5 py-3 text-sm text-go-slate">
           Vehicle{" "}

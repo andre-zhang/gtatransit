@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 export function Nav({
   rtUpdated,
@@ -10,29 +9,11 @@ export function Nav({
   rtUpdated?: string | null;
   demo?: boolean;
 }) {
-  const path = usePathname();
-
   return (
-    <header className="relative z-20 flex h-12 shrink-0 items-center gap-6 border-b border-[#a61e14] bg-go-green px-4 text-white">
-      <Link href="/" className="flex items-baseline gap-2">
-        <span className="text-lg font-bold tracking-tight">GTA Transit</span>
-        <span className="hidden text-xs font-medium text-white/75 sm:inline">
-          Map &amp; departures
-        </span>
+    <header className="relative z-20 flex h-12 shrink-0 items-center gap-4 border-b border-[#a61e14] bg-go-green px-4 text-white">
+      <Link href="/" className="text-lg font-bold tracking-tight">
+        GTA Transit
       </Link>
-
-      <nav className="flex gap-0.5">
-        <Link
-          href="/"
-          className={`px-3 py-1.5 text-sm font-semibold ${
-            path === "/"
-              ? "bg-white/15 text-white"
-              : "text-white/85 hover:bg-white/10 hover:text-white"
-          }`}
-        >
-          Map
-        </Link>
-      </nav>
 
       <div className="ml-auto flex items-center gap-3">
         {demo && (

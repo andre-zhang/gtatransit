@@ -33,8 +33,17 @@ function extractPlatform(stu: Record<string, unknown>): string | undefined {
     (stu.track as string | undefined) ??
     (stu.platformCode as string | undefined);
   if (direct) return String(direct);
+
+  const props = (stu.stopTimeProperties ?? stu.stop_time_properties) as
+    | Record<string, unknown>
+    | undefined;
+  const assigned = props?.assignedStopId ?? props?.assigned_stop_id;
+  if (assigned) return String(assigned);
+
   const nyct = stu.NyctStopTimeUpdate as Record<string, unknown> | undefined;
   if (nyct?.scheduledTrack) return String(nyct.scheduledTrack);
+  if (nyct?.actualTrack) return String(nyct.actualTrack);
+
   return undefined;
 }
 

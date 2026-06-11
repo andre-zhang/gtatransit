@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { cleanHeadsign } from "@/lib/headsign";
 import { RunMap } from "./RunMap";
 import { Section } from "./Section";
 
@@ -56,7 +57,6 @@ export function RunViewClient({
   initial: RunData;
 }) {
   const [data, setData] = useState(initial);
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -65,7 +65,6 @@ export function RunViewClient({
       });
       if (res.ok) {
         setData(await res.json());
-        setUpdatedAt(new Date());
       }
     } catch {
       /* keep last good snapshot */
@@ -138,7 +137,7 @@ export function RunViewClient({
                   {t.first_departure}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-go-navy">
-                  {t.headsign ?? "Headsign unavailable"}
+                  {cleanHeadsign(t.headsign) || "—"}
                 </span>
                 {t.active && (
                   <span className="go-badge go-badge--live shrink-0">Active</span>
@@ -188,17 +187,6 @@ export function RunViewClient({
         </div>
       )}
 
-      {trip && (
-        <div className="border-t border-go-bg px-5 py-3 text-xs text-go-slate">
-          Trip {trip.trip_id}
-          {trip.block_id ? ` · Block ${trip.block_id}` : ""}
-          {updatedAt && (
-            <span className="float-right tabular-nums">
-              Updated {updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-            </span>
-          )}
-        </div>
-      )}
     </>
   );
 }

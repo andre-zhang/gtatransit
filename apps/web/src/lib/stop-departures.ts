@@ -29,7 +29,12 @@ import {
   refreshRtCache,
   type RtStopPrediction,
 } from "@/lib/rt-cache";
-import { expandGoStopId, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
+import {
+  expandGoStopId,
+  formatGoPlatform,
+  resolveGoRtStopIds,
+} from "@/lib/go-stop-aliases";
+import { cleanHeadsign } from "@/lib/headsign";
 import { isTtcRtStopAtGroup, resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
 
 function routeMetaFromCore(feedId: string, routeId: string | undefined) {
@@ -106,9 +111,10 @@ function rtPredictionToDeparture(
     routeShort,
     routeColor:
       scheduledRow?.routeColor ?? routeColor(row.feedId, routeShort, null),
-    destination: scheduledRow?.headsign ?? "In service",
+    destination: cleanHeadsign(scheduledRow?.headsign) || "In service",
     departureTime: secToTime(schedSec % 86400),
     stopId: row.stopId,
+    platform: row.feedId === "go" ? row.platform : undefined,
     delaySec,
     predictedSec: predictedSec ?? undefined,
     realtime: true,
@@ -223,10 +229,10 @@ export async function buildDemoStopDepartures(
       routeId: r.routeId,
       routeShort: r.routeShort,
       routeColor: r.routeColor,
-      destination: r.headsign,
+      destination: cleanHeadsign(r.headsign),
       departureTime: r.departureTime,
       stopId: r.stopId,
-      platform: r.feedId === "go" ? rt.platform : undefined,
+      platform: r.feedId === "go" ? formatGoPlatform(rt.platform) : undefined,
       delaySec: rt.delaySec,
       predictedSec: rt.predictedSec,
       realtime: rt.realtime,
@@ -268,7 +274,7 @@ export async function buildDemoStopDepartures(
     const hs = scheduleHeadsigns.get(key) ?? resolved.get(key);
     if (!hs) return row;
     if (!row.realtime && !needsHeadsignLookup(row.destination)) return row;
-    return { ...row, destination: hs };
+    return { ...row, destination: cleanHeadsign(hs) };
   });
 
   return {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { cleanHeadsign } from "@/lib/headsign";
 import { AgencyMark } from "./AgencyMark";
 import { RoutePill } from "./RoutePill";
 
@@ -116,9 +117,11 @@ export function DepartureTable({
   stopName?: string;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const showPlatform = stopName?.includes("GO") || stopName?.includes("Union") || rows.some((r) => r.feedId === "go");
+  const showPlatform =
+    stopName?.includes("GO") ||
+    stopName?.includes("Union") ||
+    rows.some((r) => r.feedId === "go");
   const showAgency = new Set(rows.map((r) => r.feedId)).size > 1;
-  const liveCount = rows.filter((r) => r.realtime).length;
 
   if (!rows.length) {
     return (
@@ -135,11 +138,6 @@ export function DepartureTable({
 
   return (
     <div className="overflow-x-auto">
-      {liveCount > 0 && (
-        <div className="border-b border-[#e5e5e5] bg-[#fafafa] px-5 py-2 text-xs font-medium text-go-navy">
-          {liveCount} live · {rows.length - liveCount} scheduled
-        </div>
-      )}
       <table className="departure-board-table w-full min-w-[28rem] text-left sm:min-w-[36rem]">
         <thead>
           <tr className="departure-board-head">
@@ -229,7 +227,7 @@ export function DepartureTable({
                         r.realtime ? "departure-board-dest--live" : "departure-board-dest--sched"
                       }`}
                     >
-                      {r.destination}
+                      {cleanHeadsign(r.destination)}
                     </span>
                   </td>
                   {showPlatform && (
@@ -245,13 +243,9 @@ export function DepartureTable({
                         <span className="go-badge go-badge--early">{r.latenessMin} min</span>
                       ) : r.realtime && r.latenessMin === 0 ? (
                         <span className="go-badge go-badge--ontime">On time</span>
-                      ) : r.realtime && r.predicted && r.predicted !== r.time ? (
-                        <span className="go-badge go-badge--live">Live</span>
-                      ) : r.realtime ? (
-                        <span className="go-badge go-badge--live">Live</span>
-                      ) : (
+                      ) : !r.realtime ? (
                         <span className="go-badge go-badge--sched">Scheduled</span>
-                      )}
+                      ) : null}
                       {r.vehicleId && (
                         <Link
                           href={`/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`}

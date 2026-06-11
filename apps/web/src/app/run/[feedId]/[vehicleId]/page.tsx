@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { RunViewClient } from "@/components/RunViewClient";
+import { cleanHeadsign } from "@/lib/headsign";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 async function load(feedId: string, vehicleId: string) {
@@ -24,7 +25,7 @@ export default async function RunPage({
   if (!data) {
     return (
       <PageShell>
-        <PageHeader title="Vehicle unavailable" subtitle={vehicleId} />
+        <PageHeader title="Vehicle unavailable" />
         <div className="px-6 py-12 text-center text-go-slate">
           Vehicle not found or no longer reporting location.
         </div>
@@ -42,15 +43,15 @@ export default async function RunPage({
     } | null;
   };
 
-  const headsign =
-    trip?.headsign ?? route?.long_name ?? route?.short_name ?? "Headsign unavailable";
+  const headsign = cleanHeadsign(
+    trip?.headsign ?? route?.long_name ?? route?.short_name,
+  ) || "Vehicle";
   const routeLabel = route?.short_name ?? trip?.route_id ?? "?";
 
   return (
     <PageShell>
       <PageHeader
-        title={`Vehicle ${vehicle.label}`}
-        subtitle={headsign}
+        title={headsign}
         routeBadge={
           route || trip
             ? {

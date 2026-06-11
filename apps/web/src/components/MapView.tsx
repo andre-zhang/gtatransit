@@ -399,11 +399,6 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         </div>
       </div>
       <MapZoomHint zoom={zoom} showRoutes={showRoutes} showStops={showStops} />
-      {rtUpdated && (
-        <div className="absolute bottom-5 right-5 z-10 rounded-full bg-go-surface/95 px-4 py-2 text-xs font-semibold text-go-slate shadow-[var(--shadow-panel)] backdrop-blur">
-          {rtUpdated}
-        </div>
-      )}
     </div>
   );
 }
