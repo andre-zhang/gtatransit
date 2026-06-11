@@ -28,14 +28,13 @@ export async function ensureDemoAssets(): Promise<void> {
   if (loading) return loading;
 
   loading = (async () => {
-    // Sequential loads avoid EMFILE on serverless when combined with GTFS-RT polling.
-    const core = await readDemoJsonFile<DemoCoreFile>("fixtures.json");
-    const stopsGeo = await readDemoJsonFile<FeatureCollection>("stops.json");
-    const stopMeta = await readDemoJsonFile<Record<string, Record<string, unknown>>>(
-      "stop-meta.json",
-    );
-    const unionSchedule = await readDemoJsonFile<ScheduleRow[]>("union-schedule.json");
-    const routesGeo = await readDemoJsonFile<FeatureCollection>("routes.json");
+    const [core, stopsGeo, stopMeta, unionSchedule, routesGeo] = await Promise.all([
+      readDemoJsonFile<DemoCoreFile>("fixtures.json"),
+      readDemoJsonFile<FeatureCollection>("stops.json"),
+      readDemoJsonFile<Record<string, Record<string, unknown>>>("stop-meta.json"),
+      readDemoJsonFile<ScheduleRow[]>("union-schedule.json"),
+      readDemoJsonFile<FeatureCollection>("routes.json"),
+    ]);
     cache = { core, stopsGeo, stopMeta, unionSchedule, routesGeo };
   })();
 

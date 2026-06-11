@@ -136,7 +136,7 @@ export function DepartureTable({
   return (
     <div className="overflow-x-auto">
       {liveCount > 0 && (
-        <div className="border-b border-go-bg px-5 py-2 text-xs font-medium text-go-green">
+        <div className="border-b border-[#e5e5e5] bg-[#fafafa] px-5 py-2 text-xs font-medium text-go-navy">
           {liveCount} live · {rows.length - liveCount} scheduled
         </div>
       )}
@@ -163,9 +163,13 @@ export function DepartureTable({
             const early = r.latenessMin != null && r.latenessMin < 0;
             const rowKey = `${r.tripId}-${i}`;
             const isOpen = expanded === rowKey;
-            const tripHref = `/trip/${r.feedId}/${encodeURIComponent(r.tripId)}${
-              r.stopId ? `?fromStop=${encodeURIComponent(r.stopId)}` : ""
-            }`;
+            const tripParams = new URLSearchParams();
+            if (r.stopId) tripParams.set("fromStop", r.stopId);
+            if (r.scheduleTripId && r.scheduleTripId !== r.tripId) {
+              tripParams.set("scheduleTrip", r.scheduleTripId);
+            }
+            const tripQs = tripParams.toString() ? `?${tripParams}` : "";
+            const tripHref = `/trip/${r.feedId}/${encodeURIComponent(r.tripId)}${tripQs}`;
 
             return (
               <Fragment key={rowKey}>

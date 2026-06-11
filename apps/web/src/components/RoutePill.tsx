@@ -26,7 +26,7 @@ export function RoutePill({
 
   return (
     <span
-      className={`inline-flex items-center justify-center rounded-md font-bold shadow-sm ${sizes}`}
+      className={`inline-flex items-center justify-center rounded-sm font-bold ${sizes}`}
       style={{
         backgroundColor: bg,
         color: textColor ?? contrastText(bg),

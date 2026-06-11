@@ -56,7 +56,6 @@ export function StopBoardClient({
       }
     };
 
-    void load();
     const id = setInterval(load, 20_000);
     return () => {
       cancelled = true;

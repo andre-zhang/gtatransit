@@ -225,7 +225,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 1.5, 14, 2, 16, 2.75],
           "circle-color": "#ffffff",
           "circle-stroke-width": 1,
-          "circle-stroke-color": "#007934",
+          "circle-stroke-color": "#da291c",
         },
       });
       map.addLayer({
@@ -336,7 +336,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
   };
 
   return (
-    <div className="relative h-[calc(100vh-3.5rem)]">
+    <div className="relative h-[calc(100vh-3rem)]">
       <div ref={containerRef} className="absolute inset-0 h-full w-full bg-[#e8ecf0]" />
       <div className="pointer-events-none absolute inset-0 z-10 flex p-4">
         <div className="pointer-events-auto w-[min(100%,20rem)]">

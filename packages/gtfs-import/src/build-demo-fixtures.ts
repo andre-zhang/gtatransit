@@ -444,15 +444,15 @@ async function main() {
   writeFileSync(outPath, JSON.stringify(core));
   writeFileSync(join(outDir, "routes.json"), JSON.stringify({ type: "FeatureCollection", features }));
   writeFileSync(join(outDir, "stops.json"), JSON.stringify({ type: "FeatureCollection", features: stopFeatures }));
-  writeFileSync(join(outDir, "go-schedules.json"), JSON.stringify(goSchedules));
-  writeFileSync(join(outDir, "go-trip-stops.json"), JSON.stringify(goTripStops));
+  writeShardedRecord(outDir, "go-schedules", goSchedules);
+  writeShardedRecord(outDir, "go-trip-stops", goTripStops);
   if (Object.keys(ttcSchedules).length) {
     writeShardedRecord(outDir, "ttc-schedules", ttcSchedules);
     writeShardedRecord(outDir, "ttc-trip-stops", ttcTripStops);
   }
   if (Object.keys(miwaySchedules).length) {
-    writeFileSync(join(outDir, "miway-schedules.json"), JSON.stringify(miwaySchedules));
-    writeFileSync(join(outDir, "miway-trip-stops.json"), JSON.stringify(miwayTripStops));
+    writeShardedRecord(outDir, "miway-schedules", miwaySchedules);
+    writeShardedRecord(outDir, "miway-trip-stops", miwayTripStops);
   }
   writeFileSync(join(outDir, "union-schedule.json"), JSON.stringify(unionSchedule));
 

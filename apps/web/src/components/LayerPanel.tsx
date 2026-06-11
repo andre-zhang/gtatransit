@@ -90,8 +90,8 @@ export function LayerPanel(props: Props) {
   const [stopsOpen, setStopsOpen] = useState(true);
 
   return (
-    <div className="flex max-h-[min(32rem,calc(100vh-7rem))] flex-col overflow-hidden rounded-[var(--radius-panel)] bg-go-surface shadow-[var(--shadow-panel)]">
-      <div className="border-b border-go-bg bg-go-green px-4 py-3 text-white">
+    <div className="flex max-h-[min(32rem,calc(100vh-6rem))] flex-col overflow-hidden border border-[#d9d9d9] bg-go-surface shadow-[var(--shadow-panel)]">
+      <div className="border-b border-[#a61e14] bg-go-green px-4 py-2.5 text-white">
         <h2 className="text-sm font-bold tracking-wide">Layers</h2>
       </div>
 

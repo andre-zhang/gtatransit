@@ -3,10 +3,11 @@ import {
   normalizeServiceSec,
   torontoNowSec,
 } from "./calendar";
-import { loadStopScheduleRows } from "./demo-schedule-data";
+import { loadStopScheduleRows, loadTripStopsForTrip } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedule-types";
 import { isDemoFixtureTripId } from "./demo-trip-id";
 import { lookupTripFromSchedules } from "./demo-trip-lookup";
+import { expandGoStopId } from "./go-stop-aliases";
 import { routesMatch } from "./route-match";
 import { getTripRt, getTripStopUpdates } from "./rt-cache";
 import { fixtureStopIdForLive } from "./ttc-stop-registry";
@@ -55,7 +56,9 @@ export async function resolveDemoTrip(
   const schedStopId =
     feedId === "ttc"
       ? ((await fixtureStopIdForLive(anchor.stopId)) ?? anchor.stopId)
-      : anchor.stopId;
+      : expandGoStopId(anchor.stopId).includes("UN")
+        ? "UN"
+        : anchor.stopId;
 
   const rows = await loadStopScheduleRows(feedId, schedStopId);
   let best: ScheduleRow | undefined;
@@ -81,4 +84,52 @@ export async function resolveDemoTrip(
     scheduleRow: best,
     fuzzy: true,
   };
+}
+
+/** Validate client-supplied schedule trip id against live RT / fuzzy resolve. */
+export async function pickScheduleTripId(
+  feedId: string,
+  liveTripId: string,
+  candidate: string | undefined,
+  resolved: ResolvedTrip,
+): Promise<string> {
+  const fallback = resolved.scheduleTripId ?? liveTripId;
+  if (!candidate || candidate === liveTripId) return fallback;
+
+  const stops = await loadTripStopsForTrip(feedId, candidate);
+  if (!stops.length) return fallback;
+
+  const candidateRow = await lookupTripFromSchedules(feedId, candidate);
+  const rt = getTripRt(feedId, liveTripId);
+
+  if (candidateRow && rt?.routeId) {
+    const routeOk =
+      routesMatch(feedId, rt.routeId, rt.routeId, candidateRow.routeId) ||
+      routesMatch(feedId, rt.routeId, rt.routeId, candidateRow.routeShort);
+    if (!routeOk) return fallback;
+  }
+
+  if (
+    resolved.scheduleTripId &&
+    candidate !== resolved.scheduleTripId &&
+    candidateRow &&
+    resolved.scheduleRow
+  ) {
+    const sameRoute =
+      routesMatch(
+        feedId,
+        candidateRow.routeId,
+        candidateRow.routeShort,
+        resolved.scheduleRow.routeId,
+      ) ||
+      routesMatch(
+        feedId,
+        candidateRow.routeId,
+        candidateRow.routeShort,
+        resolved.scheduleRow.routeShort,
+      );
+    if (!sameRoute) return fallback;
+  }
+
+  return candidate;
 }

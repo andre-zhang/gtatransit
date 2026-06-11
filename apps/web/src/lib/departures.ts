@@ -150,14 +150,23 @@ export function filterUpcomingDepartures(
   const deduped: typeof mapped = [];
   for (const row of mapped) {
     const prev = deduped[deduped.length - 1];
-    if (
+    const nearDuplicate =
       prev &&
       prev.feedId === row.feedId &&
       prev.routeShort === row.routeShort &&
-      Math.abs(prev.depSec - row.depSec) < 90
-    ) {
-      if (row.realtime && !prev.realtime) deduped[deduped.length - 1] = row;
-      continue;
+      Math.abs(prev.depSec - row.depSec) < 90;
+
+    if (nearDuplicate) {
+      const schedLivePair =
+        (row.realtime && !prev.realtime) || (!row.realtime && prev.realtime);
+      if (schedLivePair) {
+        if (row.realtime && !prev.realtime) deduped[deduped.length - 1] = row;
+        continue;
+      }
+      if (row.tripId === prev.tripId) {
+        if (row.realtime && !prev.realtime) deduped[deduped.length - 1] = row;
+        continue;
+      }
     }
     deduped.push(row);
   }

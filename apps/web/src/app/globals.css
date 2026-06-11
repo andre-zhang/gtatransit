@@ -2,18 +2,19 @@
 @import "maplibre-gl/dist/maplibre-gl.css";
 
 @theme {
-  --color-go-green: #007934;
-  --color-go-green-dark: #005c28;
-  --color-go-green-light: #78be20;
-  --color-go-navy: #1c2840;
-  --color-go-slate: #4a5568;
-  --color-go-bg: #eef1f4;
+  /* TTC-forward palette (token names kept for compatibility) */
+  --color-go-green: #da291c;
+  --color-go-green-dark: #a61e14;
+  --color-go-green-light: #da291c;
+  --color-go-navy: #1a1a1a;
+  --color-go-slate: #5c5c5c;
+  --color-go-bg: #f0f0f0;
   --color-go-surface: #ffffff;
-  --color-go-late: #c8102e;
-  --color-go-ontime: #007934;
-  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
-  --shadow-panel: 0 8px 32px rgb(28 40 64 / 0.12), 0 2px 8px rgb(28 40 64 / 0.06);
-  --radius-panel: 12px;
+  --color-go-late: #da291c;
+  --color-go-ontime: #1a1a1a;
+  --font-sans: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --shadow-panel: 0 1px 3px rgb(0 0 0 / 0.12);
+  --radius-panel: 2px;
 }
 
 html,
@@ -28,9 +29,9 @@ body {
 
 /* Map */
 .maplibregl-ctrl-group {
-  border-radius: 10px !important;
+  border-radius: 2px !important;
   box-shadow: var(--shadow-panel) !important;
-  border: none !important;
+  border: 1px solid #d9d9d9 !important;
   overflow: hidden;
 }
 
@@ -43,12 +44,12 @@ body {
 }
 
 .maplibregl-popup-content {
-  padding: 10px 14px;
+  padding: 8px 12px;
   font-size: 13px;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: 2px;
   box-shadow: var(--shadow-panel);
-  border: none;
+  border: 1px solid #d9d9d9;
 }
 
 /* Custom checkbox */
@@ -69,12 +70,12 @@ body {
 
 .go-check-box {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  border: 2px solid #c5cdd8;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  border: 1px solid #999;
   background: #fff;
-  transition: all 0.15s ease;
+  transition: background 0.1s ease, border-color 0.1s ease;
   position: relative;
 }
 
@@ -86,8 +87,8 @@ body {
 .go-check input:checked + .go-check-box::after {
   content: "";
   position: absolute;
-  left: 5px;
-  top: 2px;
+  left: 4px;
+  top: 1px;
   width: 4px;
   height: 8px;
   border: solid #fff;
@@ -96,56 +97,56 @@ body {
 }
 
 .go-check input:focus-visible + .go-check-box {
-  outline: 2px solid var(--color-go-green-light);
-  outline-offset: 2px;
+  outline: 2px solid #1a1a1a;
+  outline-offset: 1px;
 }
 
 /* Section headers */
 .go-section-title {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--color-go-green);
+  color: var(--color-go-navy);
 }
 
 /* Status badges */
 .go-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
+  padding: 1px 6px;
+  border-radius: 2px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 .go-badge--late {
-  background: #fde8eb;
+  background: #fde8e6;
   color: var(--color-go-late);
 }
 
 .go-badge--ontime {
-  background: #e6f4ea;
-  color: var(--color-go-ontime);
+  background: #f0f0f0;
+  color: var(--color-go-navy);
 }
 
 .go-badge--early {
-  background: #eef1f4;
+  background: #f0f0f0;
   color: var(--color-go-slate);
 }
 
 .go-badge--live {
-  background: #e8f0fe;
-  color: #1a5fb4;
+  background: #fde8e6;
+  color: var(--color-go-green);
 }
 
 .go-badge--sched {
-  background: #eef1f4;
+  background: #f0f0f0;
   color: var(--color-go-slate);
 }
 
-/* Departure board — explicit colors so the panel never renders as blank white */
+/* Departure board */
 .departure-board {
   background: var(--color-go-surface);
   color: var(--color-go-navy);
@@ -157,11 +158,11 @@ body {
 }
 
 .departure-board-head {
-  border-bottom: 1px solid var(--color-go-bg);
-  background: #f4f6f8;
+  border-bottom: 2px solid var(--color-go-navy);
+  background: #fff;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-go-slate);
 }
@@ -171,19 +172,23 @@ body {
 }
 
 .departure-board-row {
-  border-bottom: 1px solid var(--color-go-bg);
+  border-bottom: 1px solid #e5e5e5;
 }
 
 .departure-board-row--open {
-  background: #f4f6f8;
+  background: #fafafa;
 }
 
 .departure-board-expand {
-  border-top: 1px solid var(--color-go-bg);
+  border-top: 1px solid #e5e5e5;
 }
 
 .departure-board-row:last-child {
   border-bottom: none;
+}
+
+.departure-board-daybreak {
+  background: #f5f5f5;
 }
 
 .departure-board-link {
@@ -202,14 +207,14 @@ body {
 }
 
 .departure-board-time--live {
-  color: var(--color-go-green);
+  color: var(--color-go-navy);
 }
 
 .departure-board-time--live::before {
   content: "";
   display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.45rem;
+  height: 0.45rem;
   margin-right: 0.375rem;
   border-radius: 9999px;
   background: var(--color-go-green);

@@ -12,9 +12,9 @@ export function PageShell({
   return (
     <div className="flex min-h-screen flex-col bg-go-bg">
       <Nav rtUpdated={rtUpdated} />
-      <main className="flex flex-1 justify-center p-4 md:p-6">
+      <main className="flex flex-1 justify-center p-3 md:p-5">
         <div
-          className={`w-full overflow-hidden rounded-2xl bg-go-surface shadow-[var(--shadow-panel)] ${
+          className={`w-full overflow-hidden border border-[#d9d9d9] bg-go-surface shadow-[var(--shadow-panel)] ${
             wide ? "max-w-3xl" : "max-w-xl"
           }`}
         >

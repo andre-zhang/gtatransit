@@ -9,7 +9,7 @@ import {
 import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { buildDemoTripStops } from "@/lib/demo-trip-stops";
-import { resolveDemoTrip } from "@/lib/demo-trip-resolve";
+import { pickScheduleTripId, resolveDemoTrip } from "@/lib/demo-trip-resolve";
 import { preloadTripHeadsignIndex, tripHeadsign } from "@/lib/demo-trip-headsign";
 import { getStopTripRt, getTripRt, refreshRtCache } from "@/lib/rt-cache";
 
@@ -30,8 +30,12 @@ export async function GET(
     await preloadTripHeadsignIndex(feedId);
 
     const resolved = await resolveDemoTrip(feedId, tripId);
-    const scheduleTripId =
-      scheduleTripParam ?? resolved.scheduleTripId ?? tripId;
+    const scheduleTripId = await pickScheduleTripId(
+      feedId,
+      tripId,
+      scheduleTripParam,
+      resolved,
+    );
     const liveTripId = resolved.liveTripId;
     const tripRt = getTripRt(feedId, liveTripId);
     const headsign = await tripHeadsign(feedId, liveTripId);

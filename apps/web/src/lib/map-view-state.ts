@@ -14,7 +14,14 @@ export function readSavedMapView(): SavedMapView | null {
     if (
       !Array.isArray(data.center) ||
       data.center.length !== 2 ||
-      typeof data.zoom !== "number"
+      typeof data.zoom !== "number" ||
+      !Number.isFinite(data.center[0]) ||
+      !Number.isFinite(data.center[1]) ||
+      !Number.isFinite(data.zoom) ||
+      Math.abs(data.center[1]) > 90 ||
+      Math.abs(data.center[0]) > 180 ||
+      data.zoom < 0 ||
+      data.zoom > 22
     ) {
       return null;
     }

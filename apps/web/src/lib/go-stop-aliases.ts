@@ -9,6 +9,21 @@ export function expandGoStopId(stopId: string): string[] {
   return [...ids];
 }
 
+/** Prefer station code keys used in go-schedules.json (UN over platform ids). */
+export function goScheduleLookupKeys(stopId: string): string[] {
+  const expanded = expandGoStopId(stopId);
+  if (expanded.length > 1) {
+    return ["UN", ...expanded.filter((id) => id !== "UN")];
+  }
+  return expanded;
+}
+
+export function goStopIdsMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  const aliases = expandGoStopId(a);
+  return aliases.includes(b);
+}
+
 export function resolveGoRtStopIds(
   stopId: string,
   members: Array<{ feedId: string; stopId: string }>,

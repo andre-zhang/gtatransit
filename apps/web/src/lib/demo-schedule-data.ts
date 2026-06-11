@@ -4,6 +4,7 @@ import { resolveDemoDir } from "./demo-dir";
 import { readDemoJsonFile } from "./demo-read";
 import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 import { isDemoFixtureTripId } from "./demo-trip-id";
+import { goScheduleLookupKeys } from "./go-stop-aliases";
 import { routesMatch } from "./route-match";
 
 const scheduleCache = new Map<string, Record<string, ScheduleRow[]>>();
@@ -18,7 +19,39 @@ const SHARD_MANIFEST: Record<string, string[]> = {
     "ttc-schedules.2.json",
   ],
   "ttc-trip-stops": ["ttc-trip-stops.0.json", "ttc-trip-stops.1.json"],
+  "go-schedules": ["go-schedules.0.json", "go-schedules.1.json"],
+  "go-trip-stops": ["go-trip-stops.json"],
+  "miway-schedules": [
+    "miway-schedules.0.json",
+    "miway-schedules.1.json",
+    "miway-schedules.2.json",
+    "miway-schedules.3.json",
+    "miway-schedules.4.json",
+    "miway-schedules.5.json",
+  ],
+  "miway-trip-stops": [
+    "miway-trip-stops.0.json",
+    "miway-trip-stops.1.json",
+    "miway-trip-stops.2.json",
+    "miway-trip-stops.3.json",
+  ],
 };
+
+const shardIndexCache = new Map<string, Record<string, string>>();
+
+async function loadShardIndex(basename: string): Promise<Record<string, string>> {
+  const hit = shardIndexCache.get(basename);
+  if (hit) return hit;
+  try {
+    const idx = await readDemoJsonFile<Record<string, string>>(`${basename}-index.json`);
+    shardIndexCache.set(basename, idx);
+    return idx;
+  } catch {
+    const empty = {};
+    shardIndexCache.set(basename, empty);
+    return empty;
+  }
+}
 
 function listShardFiles(basename: string): string[] {
   if (process.env.VERCEL) return SHARD_MANIFEST[basename] ?? [];
@@ -73,37 +106,81 @@ export async function loadFeedSchedules(
 }
 
 const stopRowCache = new Map<string, ScheduleRow[]>();
+const fullScheduleFileCache = new Map<string, Record<string, ScheduleRow[]>>();
+
+async function loadFullScheduleFile(
+  feedId: string,
+): Promise<Record<string, ScheduleRow[]>> {
+  const hit = fullScheduleFileCache.get(feedId);
+  if (hit) return hit;
+  try {
+    const data = await readDemoJsonFile<Record<string, ScheduleRow[]>>(
+      `${feedId}-schedules.json`,
+    );
+    fullScheduleFileCache.set(feedId, data);
+    return data;
+  } catch {
+    const empty = {};
+    fullScheduleFileCache.set(feedId, empty);
+    return empty;
+  }
+}
+
+async function loadStopScheduleRowsDirect(
+  feedId: string,
+  stopId: string,
+): Promise<ScheduleRow[]> {
+  const basename = `${feedId}-schedules`;
+  const files = listShardFiles(basename);
+  if (!files.length) {
+    const data = await loadFullScheduleFile(feedId);
+    return data[stopId] ?? [];
+  }
+
+  const index = await loadShardIndex(basename);
+  const indexedFile = index[stopId];
+  if (indexedFile) {
+    const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(indexedFile);
+    return part[stopId] ?? [];
+  }
+
+  for (const file of files) {
+    const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(file);
+    const rows = part[stopId];
+    if (rows?.length) return rows;
+  }
+  return [];
+}
+
+function cacheStopRows(feedId: string, keys: string[], rows: ScheduleRow[]) {
+  for (const key of keys) stopRowCache.set(`${feedId}:${key}`, rows);
+}
 
 /** Load one stop's rows without merging every schedule shard into memory. */
 export async function loadStopScheduleRows(
   feedId: string,
   stopId: string,
 ): Promise<ScheduleRow[]> {
-  const cacheKey = `${feedId}:${stopId}`;
-  const cached = stopRowCache.get(cacheKey);
-  if (cached) return cached;
+  const lookupKeys =
+    feedId === "go" ? goScheduleLookupKeys(stopId) : [stopId];
 
-  const files = listShardFiles(`${feedId}-schedules`);
-  if (!files.length) {
-    try {
-      const data = await readDemoJsonFile<Record<string, ScheduleRow[]>>(
-        `${feedId}-schedules.json`,
-      );
-      return data[stopId] ?? [];
-    } catch {
-      return [];
+  for (const key of lookupKeys) {
+    const cached = stopRowCache.get(`${feedId}:${key}`);
+    if (cached?.length) {
+      cacheStopRows(feedId, lookupKeys, cached);
+      return cached;
     }
   }
 
-  for (const file of files) {
-    const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(file);
-    const rows = part[stopId];
-    if (rows?.length) {
-      stopRowCache.set(cacheKey, rows);
+  for (const key of lookupKeys) {
+    const rows = await loadStopScheduleRowsDirect(feedId, key);
+    if (rows.length) {
+      cacheStopRows(feedId, lookupKeys, rows);
       return rows;
     }
   }
-  stopRowCache.set(cacheKey, []);
+
+  cacheStopRows(feedId, lookupKeys, []);
   return [];
 }
 
@@ -214,6 +291,14 @@ export async function loadTripStopsForTrip(
     } catch {
       return [];
     }
+  }
+
+  const basename = `${feedId}-trip-stops`;
+  const index = await loadShardIndex(basename);
+  const indexedFile = index[tripId];
+  if (indexedFile) {
+    const part = await readDemoJsonFile<Record<string, TripStopRow[]>>(indexedFile);
+    return part[tripId] ?? [];
   }
 
   for (const file of files) {

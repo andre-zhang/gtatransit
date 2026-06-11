@@ -44,21 +44,23 @@ function metaFor(feedId: string, stopId: string): StopMeta | undefined {
   return feed?.[stopId];
 }
 
+function isGoRailStation(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  return /\bgo\s*$/i.test(n) || n.includes(" go ");
+}
+
 function isTerminalLike(
   feedId: string,
   meta: StopMeta | undefined,
   name: string,
-  stopId: string,
+  _stopId: string,
 ): boolean {
-  if (feedId === "go" && stopId.length <= 3 && /^[A-Z0-9]+$/.test(stopId)) return true;
   const n = name.trim().toLowerCase();
+  if (feedId === "go" && isGoRailStation(name)) return true;
   if (/\b(bus )?terminal\b/.test(n) && !/\bavenue\b/.test(n) && !/\bave\b/.test(n)) {
     return true;
   }
   if (/\b(union|go) station\b/.test(n) || n.includes("toronto union")) return true;
-  if (/\bstation\b/.test(n) && (meta?.locationType === 1 || !meta?.parentStation)) {
-    return true;
-  }
   if (meta?.locationType === 1 && !meta?.parentStation) return true;
   return false;
 }
@@ -125,10 +127,11 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
   const uf = new UnionFind();
   for (const p of points) uf.find(p.groupId);
 
-  for (let i = 0; i < points.length; i++) {
-    for (let j = i + 1; j < points.length; j++) {
-      const a = points[i]!;
-      const b = points[j]!;
+  const terminals = points.filter((p) => p.isTerminal);
+  for (let i = 0; i < terminals.length; i++) {
+    for (let j = i + 1; j < terminals.length; j++) {
+      const a = terminals[i]!;
+      const b = terminals[j]!;
       const dist = haversineM(a.lat, a.lon, b.lat, b.lon);
 
       if (
@@ -154,7 +157,8 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
         continue;
       }
 
-      const terminalCluster = a.isTerminal && b.isTerminal;
+      const terminalCluster =
+        a.isTerminal && b.isTerminal && a.feedId === b.feedId;
       if (!terminalCluster || dist > TERMINAL_RADIUS_M) continue;
       uf.union(a.groupId, b.groupId);
     }

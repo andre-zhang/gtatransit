@@ -22,6 +22,9 @@ const DAY_COLS = [
 ] as const;
 
 export function activeServiceSql(feedId: string, date: string) {
+  if (!/^[a-z0-9_]+$/.test(feedId) || !/^\d{8}$/.test(date)) {
+    throw new Error("Invalid activeServiceSql parameters");
+  }
   const wd = weekdayIndex(new Date(
     Number(date.slice(0, 4)),
     Number(date.slice(4, 6)) - 1,
@@ -74,6 +77,8 @@ export function formatGtfsTime(sec: number): string {
 
 const SERVICE_ROLLOVER_SEC = 3 * 3600;
 const LATE_NIGHT_END_SEC = 6 * 3600;
+const EVENING_START_SEC = 18 * 3600;
+const SAME_DAY_GAP_SEC = 12 * 3600;
 
 /** Normalize a departure second-of-day into upcoming service context. */
 export function normalizeServiceSec(schedSec: number, now: number): number {
@@ -89,6 +94,16 @@ export function normalizeServiceSec(schedSec: number, now: number): number {
   // After midnight, compare clock times directly (don't roll 02:00 to tomorrow when it's past).
   if (schedSec < LATE_NIGHT_END_SEC && now < LATE_NIGHT_END_SEC) {
     return schedSec;
+  }
+
+  // Before dawn, evening departures are from the previous service day.
+  if (now < LATE_NIGHT_END_SEC && schedSec >= EVENING_START_SEC) {
+    return schedSec - 86400;
+  }
+
+  // Morning now with an evening clock time → previous night (e.g. 23:00 at 07:00).
+  if (schedSec - now > SAME_DAY_GAP_SEC) {
+    return schedSec - 86400;
   }
 
   let depSec = schedSec;
@@ -113,7 +128,9 @@ export function formatBoardTime(
 ): { time: string; dayOffset: number } {
   const norm = normalizeServiceSec(sec, now);
   const dayOffset = serviceDayOffset(norm, now);
-  const time = sec >= 86400 ? formatGtfsTime(sec) : secToTime(sec % 86400);
+  const displaySec = norm >= 86400 ? norm : ((norm % 86400) + 86400) % 86400;
+  const time =
+    norm >= 86400 ? formatGtfsTime(norm) : secToTime(displaySec);
   return { time, dayOffset };
 }
 

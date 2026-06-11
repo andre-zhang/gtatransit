@@ -2,14 +2,17 @@ import {
   formatBoardTime,
   gtfsTimeToSec,
   normalizeServiceSec,
-  secToTime,
   torontoNowSec,
 } from "./calendar";
 import { computeDelaySec, delayMinFromSec } from "./departures";
 import { loadDemoAssets } from "./demo-assets";
 import { getTripStops } from "./demo-schedules";
-import { liveStopDisplayName, resolveTtcRtStopIds } from "./ttc-stop-registry";
-import { expandGoStopId } from "./go-stop-aliases";
+import { expandGoStopId, goStopIdsMatch } from "./go-stop-aliases";
+import {
+  fixtureStopIdForLive,
+  liveStopDisplayName,
+  resolveTtcRtStopIds,
+} from "./ttc-stop-registry";
 import { getStopTripRt, getTripStopUpdates } from "./rt-cache";
 
 export type TripStopOut = {
@@ -46,6 +49,41 @@ async function rtForFixtureStop(
   return undefined;
 }
 
+async function resolveFromStopCandidates(
+  feedId: string,
+  fromStop: string,
+): Promise<Set<string>> {
+  const ids = new Set<string>([fromStop]);
+  if (feedId === "go") {
+    for (const id of expandGoStopId(fromStop)) ids.add(id);
+    return ids;
+  }
+  if (feedId === "ttc") {
+    for (const id of await resolveTtcRtStopIds([{ feedId: "ttc", stopId: fromStop }])) {
+      ids.add(id);
+    }
+    const fixture = await fixtureStopIdForLive(fromStop);
+    if (fixture) ids.add(fixture);
+  }
+  return ids;
+}
+
+function findStopIndex(
+  stops: Array<{ stopId: string }>,
+  candidates: Set<string>,
+  feedId: string,
+): number {
+  return stops.findIndex((s) => {
+    if (candidates.has(s.stopId)) return true;
+    if (feedId === "go") {
+      for (const id of candidates) {
+        if (goStopIdsMatch(id, s.stopId)) return true;
+      }
+    }
+    return false;
+  });
+}
+
 export async function buildDemoTripStops(opts: {
   feedId: string;
   liveTripId: string;
@@ -56,14 +94,16 @@ export async function buildDemoTripStops(opts: {
   const scheduleTripId = opts.scheduleTripId ?? liveTripId;
   const now = torontoNowSec();
   const rtUpdates = getTripStopUpdates(feedId, liveTripId);
-  const rtByLiveId = new Map(rtUpdates.map((u) => [u.stopId, u]));
 
   const schedStops = await getTripStops(feedId, scheduleTripId);
+  const fromCandidates =
+    fromStop != null ? await resolveFromStopCandidates(feedId, fromStop) : null;
 
   if (schedStops.length) {
     const startIdx =
-      fromStop != null ? schedStops.findIndex((s) => s.stopId === fromStop) : 0;
+      fromCandidates != null ? findStopIndex(schedStops, fromCandidates, feedId) : 0;
     const slice = startIdx >= 0 ? schedStops.slice(startIdx) : schedStops;
+    const baseSeq = startIdx >= 0 ? schedStops[startIdx]!.sequence : 0;
     return Promise.all(
       slice.map(async (s) => {
         const schedSec = gtfsTimeToSec(s.departureTime);
@@ -91,7 +131,9 @@ export async function buildDemoTripStops(opts: {
           delayMin: delayMinFromSec(delaySec),
           platform: rt?.platform,
           passed:
-            fromStop != null && s.sequence < (schedStops[startIdx]?.sequence ?? 0),
+            fromCandidates != null &&
+            startIdx >= 0 &&
+            s.sequence < baseSeq,
         };
       }),
     );
@@ -100,16 +142,22 @@ export async function buildDemoTripStops(opts: {
   if (!rtUpdates.length) return [];
 
   const startIdx =
-    fromStop != null
+    fromCandidates != null
       ? rtUpdates.findIndex((u) => {
-          if (u.stopId === fromStop) return true;
-          return expandGoStopId(fromStop).includes(u.stopId);
+          if (fromCandidates.has(u.stopId)) return true;
+          if (feedId === "go") {
+            for (const id of fromCandidates) {
+              if (goStopIdsMatch(id, u.stopId)) return true;
+            }
+          }
+          return false;
         })
       : 0;
   const slice = startIdx >= 0 ? rtUpdates.slice(startIdx) : rtUpdates;
+  const baseSeq = startIdx >= 0 ? startIdx + 1 : 1;
 
   return Promise.all(
-    slice.map(async (u) => {
+    slice.map(async (u, i) => {
       const name =
         feedId === "ttc"
           ? ((await liveStopDisplayName(u.stopId)) ?? stopName(feedId, u.stopId))
@@ -119,7 +167,7 @@ export async function buildDemoTripStops(opts: {
       return {
         stopId: u.stopId,
         name,
-        sequence: 0,
+        sequence: baseSeq + i,
         scheduled: fmt.time,
         predicted: fmt.time,
         platform: u.platform,

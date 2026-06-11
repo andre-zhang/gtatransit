@@ -10,6 +10,9 @@ import { parseDirs, parseList } from "@/lib/parse-filters";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
+const cache = new Map<string, { body: string; at: number }>();
+const CACHE_MS = 5000;
+
 export async function GET(req: NextRequest) {
   const { bbox } = mapQueryParams(req.nextUrl.searchParams);
   const zoom = Number(req.nextUrl.searchParams.get("zoom") ?? 0);
@@ -22,12 +25,20 @@ export async function GET(req: NextRequest) {
     const { ensureDemoAssets } = await import("@/lib/demo-assets");
     await ensureDemoAssets();
     const filters = parseMapFilters(req.nextUrl.searchParams);
-    return NextResponse.json(
-      filterPointCollection(
-        filterDemoStops(getDemoStopsGeoJson(), filters),
-        bbox,
-      ),
+    const key = `${bbox?.join(",") ?? "all"}:${zoom}:${JSON.stringify(filters)}`;
+    const hit = cache.get(key);
+    if (hit && Date.now() - hit.at < CACHE_MS) {
+      return new NextResponse(hit.body, {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const filtered = filterPointCollection(
+      filterDemoStops(getDemoStopsGeoJson(), filters),
+      bbox,
     );
+    const body = JSON.stringify(filtered);
+    cache.set(key, { body, at: Date.now() });
+    return new NextResponse(body, { headers: { "Content-Type": "application/json" } });
   }
 
   const agencies = parseList(req.nextUrl.searchParams.get("agencies"));

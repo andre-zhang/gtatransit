@@ -13,8 +13,17 @@ type Stop = {
   platform?: string;
 };
 
-async function load(feedId: string, tripId: string, fromStop?: string) {
-  const qs = fromStop ? `?fromStop=${encodeURIComponent(fromStop)}` : "";
+async function load(
+  feedId: string,
+  tripId: string,
+  opts?: { fromStop?: string; scheduleTrip?: string },
+) {
+  const params = new URLSearchParams();
+  if (opts?.fromStop) params.set("fromStop", opts.fromStop);
+  if (opts?.scheduleTrip && opts.scheduleTrip !== tripId) {
+    params.set("scheduleTrip", opts.scheduleTrip);
+  }
+  const qs = params.toString() ? `?${params}` : "";
   const base = await serverBaseUrl();
   const res = await fetch(
     `${base}/api/trips/${feedId}/${encodeURIComponent(tripId)}${qs}`,
@@ -29,11 +38,14 @@ export default async function TripPage({
   searchParams,
 }: {
   params: Promise<{ feedId: string; tripId: string }>;
-  searchParams: Promise<{ fromStop?: string }>;
+  searchParams: Promise<{ fromStop?: string; scheduleTrip?: string }>;
 }) {
   const { feedId, tripId } = await params;
   const sp = await searchParams;
-  const data = await load(feedId, tripId, sp.fromStop);
+  const data = await load(feedId, tripId, {
+    fromStop: sp.fromStop,
+    scheduleTrip: sp.scheduleTrip,
+  });
 
   if (!data) {
     return (
