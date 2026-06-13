@@ -24,6 +24,7 @@ import {
 import { getStopSchedule } from "@/lib/demo-schedules";
 import { routesMatch } from "@/lib/route-match";
 import {
+  getActiveVehicleForRoute,
   getRtPredictionsForStop,
   mergeRtIntoDeparture,
   refreshRtCache,
@@ -34,6 +35,8 @@ import {
   formatGoPlatform,
   resolveGoRtStopIds,
 } from "@/lib/go-stop-aliases";
+import { fetchGoNextService } from "@/lib/go-metrolinx-rest";
+import { normalizeMetrolinxKey } from "@/lib/rt-cache";
 import { cleanHeadsign } from "@/lib/headsign";
 import { isTtcRtStopAtGroup, resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
 
@@ -192,7 +195,35 @@ export async function buildDemoStopDepartures(
     }
   }
 
+  const goKey = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
+  if (goKey && rtStopIdsByFeed.has("go")) {
+    const goCodes = new Set<string>();
+    for (const id of rtStopIdsByFeed.get("go") ?? []) {
+      for (const code of expandGoStopId(id)) goCodes.add(code);
+    }
+    for (const stopCode of goCodes) {
+      const { rows: liveRows } = await fetchGoNextService(stopCode, goKey);
+      for (const live of liveRows) {
+        const tripKey = `${live.tripId}`;
+        if (usedRtTrips.has(`go:${tripKey}`) || usedRtTrips.has(tripKey)) continue;
+        const pred: RtStopPrediction = {
+          feedId: "go",
+          tripId: live.tripId,
+          stopId: live.stopId,
+          routeId: live.routeShort,
+          predictedSec: live.predictedSec,
+          platform: live.platform,
+        };
+        const row = rtPredictionToDeparture(pred, schedule);
+        if (!row) continue;
+        usedRtTrips.add(`go:${row.tripId}`);
+        inputs.push(row);
+      }
+    }
+  }
+
   const ttcRtByMember = new Map<string, string[]>();
+  const routeVehicleMarked = new Set<string>();
   async function ttcRtIdsForStop(stopId: string): Promise<string[]> {
     let ids = ttcRtByMember.get(stopId);
     if (!ids) {
@@ -238,6 +269,25 @@ export async function buildDemoStopDepartures(
       realtime: rt.realtime,
       vehicleId: rt.vehicleId,
     });
+
+    if (!rt.realtime && (r.feedId === "ttc" || r.feedId === "miway")) {
+      const routeKey = `${r.feedId}:${r.routeShort || r.routeId}`;
+      if (!routeVehicleMarked.has(routeKey)) {
+        const active = getActiveVehicleForRoute(r.feedId, r.routeId, r.routeShort);
+        if (active?.tripId) {
+          routeVehicleMarked.add(routeKey);
+          const last = inputs[inputs.length - 1]!;
+          inputs[inputs.length - 1] = {
+            ...last,
+            realtime: true,
+            vehicleId: active.vehicleId,
+            tripId: active.tripId ?? last.tripId,
+            delaySec: active.delaySec ?? last.delaySec,
+          };
+          usedRtTrips.add(`${r.feedId}:${active.tripId}`);
+        }
+      }
+    }
   }
 
   const deduped = dedupeNearLive(inputs);

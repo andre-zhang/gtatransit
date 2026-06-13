@@ -12,7 +12,7 @@ const gtfsRoot = join(root, "data", "gtfs");
 const outDir = join(root, "apps", "web", "public", "demo");
 const FEEDS = ["go", "miway", "ttc"];
 /** Match demo fixture service day (GO trip ids embed this date). */
-const SERVICE_DATE = process.env.SERVICE_DATE ?? "20260602";
+const SERVICE_DATE = process.env.SERVICE_DATE ?? new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
 function gtfsDirFor(feedId) {
   if (feedId === "ttc") return join(gtfsRoot, "tmp", "surface");

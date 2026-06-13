@@ -17,7 +17,12 @@ import {
   unixToTorontoSec,
 } from "./calendar";
 import { formatGoPlatform, goTripSuffix, goTripsMatch } from "./go-stop-aliases";
+import { fetchGoNextService } from "./go-metrolinx-rest";
 import { routesMatch } from "./route-match";
+
+const RT_STALE_MS = 5 * 60_000;
+/** Major GO stop codes polled via REST when GTFS-RT is unavailable. */
+const GO_REST_HUBS = ["UN", "OS", "BR", "ML", "RH", "KP", "CO", "DI"];
 
 type StopRt = {
   delaySec?: number;
@@ -55,6 +60,7 @@ let goRtEnabled = Boolean(readMetrolinxKey());
 let goRtLastOk = 0;
 let goRtLastError: string | null = null;
 let goRtStats = { tripUpdates: 0, vehicles: 0, predictions: 0 };
+let goRtSource: "gtfs-rt" | "rest" | null = null;
 
 type IndexedPrediction = {
   feedId: string;
@@ -167,6 +173,60 @@ function findFuzzyRtMatch(
   return best;
 }
 
+function isFreshRt(entry: { updatedAt: number } | undefined, now = Date.now()): boolean {
+  return entry != null && now - entry.updatedAt < RT_STALE_MS;
+}
+
+function clearRtMaps() {
+  tripMap.clear();
+  stopTripMap.clear();
+  vehicleMap.clear();
+  predictionsByStop.clear();
+}
+
+async function pollGoRest(key: string, now: number): Promise<number> {
+  let tripUpdates = 0;
+  const errors: string[] = [];
+
+  for (const stopCode of GO_REST_HUBS) {
+    const { rows, error } = await fetchGoNextService(stopCode, key);
+    if (error) {
+      errors.push(`${stopCode}:${error}`);
+      continue;
+    }
+    for (const row of rows) {
+      tripUpdates++;
+      const platform = row.platform;
+      const entry: StopRt = {
+        predictedSec: row.predictedSec,
+        platform,
+        updatedAt: now,
+      };
+      stopTripMap.set(stopTripKey("go", row.tripId, stopCode), entry);
+      const tk = tripKey("go", row.tripId);
+      const prev = tripMap.get(tk) ?? { updatedAt: now };
+      tripMap.set(tk, {
+        ...prev,
+        routeId: row.routeShort,
+        predictedSec: row.predictedSec,
+        platform: platform ?? prev.platform,
+        updatedAt: now,
+      });
+    }
+  }
+
+  if (tripUpdates > 0) {
+    goRtSource = "rest";
+    goRtLastOk = now;
+    goRtLastError = errors.length ? errors.join("; ") : null;
+    goRtStats = { ...goRtStats, tripUpdates, vehicles: goRtStats.vehicles };
+    return tripUpdates;
+  }
+
+  if (errors.length) goRtLastError = errors.join("; ");
+  return 0;
+}
+
 async function pollGo(key: string) {
   const headers = { "Ocp-Apim-Subscription-Key": key };
   const now = Date.now();
@@ -235,11 +295,15 @@ async function pollGo(key: string) {
   }
 
   if (sawData) {
+    goRtSource = "gtfs-rt";
     goRtLastOk = now;
     goRtLastError = errors.length ? errors.join("; ") : null;
     goRtStats = { ...goRtStats, tripUpdates, vehicles };
   } else if (errors.length) {
     goRtLastError = errors.join("; ");
+    await pollGoRest(key, now);
+  } else {
+    await pollGoRest(key, now);
   }
 }
 
@@ -314,6 +378,7 @@ export async function refreshRtCache(force = false) {
   if (refreshing) return refreshing;
 
   refreshing = (async () => {
+    clearRtMaps();
     await Promise.all(Object.keys(RT_FEEDS).map((feedId) => pollFeed(feedId)));
     if (goKey) await pollGo(goKey);
 
@@ -362,7 +427,7 @@ function getStopTripRtAny(
 ): StopRt | undefined {
   for (const stopId of stopIds) {
     const hit = stopTripMap.get(stopTripKey(feedId, tripId, stopId));
-    if (hit) return hit;
+    if (hit && isFreshRt(hit)) return hit;
   }
 
   if (feedId === "go") {
@@ -375,6 +440,7 @@ function getStopTripRtAny(
       if (keyFeed !== feedId || !keyTrip || !keyStop) continue;
       if (goTripSuffix(keyTrip) !== suffix) continue;
       if (!stopIds.includes(keyStop)) continue;
+      if (!isFreshRt(rt)) continue;
       return rt;
     }
   }
@@ -599,6 +665,7 @@ function snapshotTripUpdates(): RtTripUpdate[] {
 export function getGoRtStatus(): {
   configured: boolean;
   keyLength: number;
+  source: "gtfs-rt" | "rest" | null;
   active: boolean;
   lastOk: string | null;
   lastError: string | null;
@@ -617,6 +684,7 @@ export function getGoRtStatus(): {
   return {
     configured,
     keyLength: key?.length ?? 0,
+    source: goRtSource,
     active,
     lastOk: goRtLastOk ? new Date(goRtLastOk).toISOString() : null,
     lastError: goRtLastError,

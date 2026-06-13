@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { ensureDemoAssets, loadDemoAssets } from "@/lib/demo-assets";
-import {
-  getGoRtStatus,
-  normalizeMetrolinxKey,
-  refreshRtCache,
-} from "@/lib/rt-cache";
-import { GO_RT_API } from "@gta/gtfs-rt";
+import { getGoRtStatus, normalizeMetrolinxKey, refreshRtCache } from "@/lib/rt-cache";
+import { probeMetrolinxKey } from "@/lib/go-metrolinx-rest";
 
 export async function GET() {
   const demo = await useDemoFixtures();
@@ -28,19 +24,10 @@ export async function GET() {
   await refreshRtCache();
   const goRt = getGoRtStatus();
 
-  let metrolinxProbe: { stopApi?: number; gtfsRt?: number } | null = null;
-  const key = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
-  if (key && goRt.lastError?.includes("401")) {
-    const headers = { "Ocp-Apim-Subscription-Key": key };
-    try {
-      const [stopRes, gtfsRes] = await Promise.all([
-        fetch(`${GO_RT_API.base}/api/V1/Stop/NextService/UN`, { headers }),
-        fetch(`${GO_RT_API.base}/${GO_RT_API.tripUpdates}`, { headers }),
-      ]);
-      metrolinxProbe = { stopApi: stopRes.status, gtfsRt: gtfsRes.status };
-    } catch {
-      /* ignore probe errors */
-    }
+  let metrolinxProbe: Awaited<ReturnType<typeof probeMetrolinxKey>> | null = null;
+  if (goRt.configured && !goRt.active) {
+    const key = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
+    if (key) metrolinxProbe = await probeMetrolinxKey(key);
   }
 
   return NextResponse.json({

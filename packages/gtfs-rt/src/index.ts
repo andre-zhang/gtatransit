@@ -122,8 +122,8 @@ export const RT_FEEDS: Record<
     tripUpdates: "https://bustime.ttc.ca/gtfsrt/trips",
   },
   miway: {
-    vehicles: "https://www.miapp.ca/gtfsrt/vehiclepositions",
-    tripUpdates: "https://www.miapp.ca/gtfsrt/tripupdates",
+    vehicles: "https://www.miapp.ca/GTFS_RT/Vehicle/VehiclePositions.pb",
+    tripUpdates: "https://www.miapp.ca/GTFS_RT/TripUpdate/TripUpdates.pb",
   },
 };
 
