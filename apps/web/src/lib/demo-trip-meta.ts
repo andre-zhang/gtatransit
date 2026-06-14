@@ -1,5 +1,6 @@
 import { preloadTripHeadsignIndex, tripHeadsigns } from "./demo-trip-headsign";
 import { readDemoJsonFile } from "./demo-read";
+import { goTripSuffix, goTripsMatch } from "./go-stop-aliases";
 
 type BlockTrip = {
   trip_id: string;
@@ -35,9 +36,18 @@ function findBlockForTrip(
 ): BlockTrip[] | undefined {
   const blockId = idx.tripToBlock?.[tripId];
   if (blockId && idx.blocks[blockId]) return idx.blocks[blockId];
+
   for (const list of Object.values(idx.blocks)) {
-    if (list.some((t) => t.trip_id === tripId)) return list;
+    if (list.some((t) => t.trip_id === tripId || goTripsMatch(t.trip_id, tripId))) {
+      return list;
+    }
   }
+
+  const suffix = goTripSuffix(tripId);
+  for (const [tid, bid] of Object.entries(idx.tripToBlock ?? {})) {
+    if (goTripSuffix(tid) === suffix && idx.blocks[bid]) return idx.blocks[bid];
+  }
+
   return undefined;
 }
 
@@ -49,7 +59,13 @@ export async function loadFeedTripMeta(
   const mapped = idx.tripToBlock?.[tripId];
   if (mapped) return { blockId: mapped };
   for (const [blockId, list] of Object.entries(idx.blocks)) {
-    if (list.some((t) => t.trip_id === tripId)) return { blockId };
+    if (list.some((t) => t.trip_id === tripId || goTripsMatch(t.trip_id, tripId))) {
+      return { blockId };
+    }
+  }
+  const suffix = goTripSuffix(tripId);
+  for (const [tid, blockId] of Object.entries(idx.tripToBlock ?? {})) {
+    if (goTripSuffix(tid) === suffix) return { blockId };
   }
   return { blockId: null };
 }
@@ -72,7 +88,11 @@ export async function loadBlockTrips(
 
   const mapped = list.map((t) => ({
     ...t,
-    active: t.trip_id === activeTripId || t.trip_id === tripId,
+    active:
+      t.trip_id === activeTripId ||
+      t.trip_id === tripId ||
+      goTripsMatch(t.trip_id, activeTripId) ||
+      goTripsMatch(t.trip_id, tripId),
   }));
 
   await preloadTripHeadsignIndex(feedId);

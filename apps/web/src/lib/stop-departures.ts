@@ -1,5 +1,6 @@
 import {
   computeDelaySec,
+  dedupeDepartures,
   filterUpcomingDepartures,
   gtfsTimeToSec,
   type DepartureInput,
@@ -152,32 +153,29 @@ function rtPredictionToDeparture(
   };
 }
 
-function dedupeNearLive(rows: DepartureInput[]): DepartureInput[] {
+function enrichGoPlatforms(
+  rows: DepartureInput[],
+  platformByRouteSec: Map<string, string>,
+): DepartureInput[] {
   const now = torontoNowSec();
-  const liveKeys: Array<{ feedId: string; route: string; sec: number }> = [];
-
-  for (const row of rows) {
-    if (!row.realtime) continue;
+  return rows.map((row) => {
+    if (row.feedId !== "go" || row.platform) return row;
     const sec = normalizeServiceSec(
       row.predictedSec ?? gtfsTimeToSec(row.departureTime),
       now,
     );
-    liveKeys.push({
-      feedId: row.feedId,
-      route: row.routeShort || row.routeId,
-      sec,
-    });
-  }
-
-  return rows.filter((row) => {
-    if (row.realtime) return true;
-    const sec = normalizeServiceSec(gtfsTimeToSec(row.departureTime), now);
-    return !liveKeys.some(
-      (live) =>
-        live.feedId === row.feedId &&
-        live.route === (row.routeShort || row.routeId) &&
-        Math.abs(live.sec - sec) <= 240,
-    );
+    let bestPlat: string | undefined;
+    let bestDelta = Infinity;
+    for (const [key, platform] of platformByRouteSec) {
+      const [route, secRaw] = key.split(":");
+      if (route !== row.routeShort && route !== routeTail(row.routeId)) continue;
+      const delta = Math.abs(Number(secRaw) - sec);
+      if (delta <= 120 && delta < bestDelta) {
+        bestDelta = delta;
+        bestPlat = platform;
+      }
+    }
+    return bestPlat ? { ...row, platform: bestPlat } : row;
   });
 }
 
@@ -228,6 +226,7 @@ export async function buildDemoStopDepartures(
   }
 
   const goKey = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
+  const goPlatformByRouteSec = new Map<string, string>();
   if (goKey && rtStopIdsByFeed.has("go")) {
     const goCodes = new Set<string>();
     for (const id of rtStopIdsByFeed.get("go") ?? []) {
@@ -239,6 +238,9 @@ export async function buildDemoStopDepartures(
     for (const { rows: liveRows } of restRows) {
       for (const live of liveRows) {
         if (usedRtTrips.has(`go:${live.tripId}`) || usedRtTrips.has(live.tripId)) continue;
+        if (live.platform) {
+          goPlatformByRouteSec.set(`${live.routeShort}:${live.predictedSec}`, live.platform);
+        }
         const pred: RtStopPrediction = {
           feedId: "go",
           tripId: live.tripId,
@@ -320,7 +322,7 @@ export async function buildDemoStopDepartures(
     }
   }
 
-  const deduped = dedupeNearLive(inputs);
+  const deduped = dedupeDepartures(enrichGoPlatforms(inputs, goPlatformByRouteSec));
 
   const scheduleHeadsigns = new Map<string, string>();
   for (const row of schedule) {

@@ -125,8 +125,8 @@ export function RunViewClient({
         shape={shape}
       />
 
-      {blockTrips && blockTrips.length > 1 && (
-        <Section title="Trips in block">
+      {blockTrips && blockTrips.length > 0 && (
+        <Section title={trip?.block_id ? `Block ${trip.block_id}` : "Trips in block"}>
           <ul className="divide-y divide-go-bg">
             {blockTrips.map((t) => (
               <li

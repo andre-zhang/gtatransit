@@ -365,6 +365,7 @@ async function pollFeed(feedId: string) {
         stopTripMap.set(stopTripKey(feedId, u.tripId, u.stopId), {
           delaySec: u.delaySec,
           predictedSec: u.departureTime ?? u.arrivalTime,
+          platform: u.platform,
           updatedAt: now,
         });
         const tk = tripKey(feedId, u.tripId);
@@ -607,6 +608,7 @@ export function mergeRtIntoDeparture(
   const hasExact =
     stopRt != null || tripRt != null || vehicle != null || delaySec != null;
 
+  let fuzzyPlatform: string | undefined;
   if (!hasExact && opts?.usedRtTrips && (opts.routeId || opts.routeShort)) {
     const fuzzy = findFuzzyRtMatch(
       feedId,
@@ -625,6 +627,10 @@ export function mergeRtIntoDeparture(
       delaySec =
         fuzzy.delaySec ?? stopRt?.delaySec ?? tripRt?.delaySec ?? vehicle?.delaySec;
       predictedSec = fuzzy.predictedSec;
+      if (fuzzy.platform) {
+        fuzzyPlatform =
+          feedId === "go" ? formatGoPlatform(fuzzy.platform) : fuzzy.platform;
+      }
       if (predictedSec != null) {
         const drift = predictedSec - schedSec;
         if (delaySec == null || Math.abs(drift) > Math.abs(delaySec)) {
@@ -642,15 +648,14 @@ export function mergeRtIntoDeparture(
   }
 
   const vehicleId = tripRt?.vehicleId ?? vehicle?.vehicleId;
-  let fuzzyPlatform: string | undefined;
-  if (liveTripId != null) {
+  if (liveTripId != null && !fuzzyPlatform) {
     for (const sid of stopIds) {
       const pred = predictionsByStop
         .get(`${feedId}:${sid}`)
         ?.find(
           (p) =>
             p.tripId === liveTripId ||
-            (feedId === "go" && goTripsMatch(liveTripId, p.tripId)),
+            (feedId === "go" && liveTripId && goTripsMatch(liveTripId, p.tripId)),
         );
       if (pred?.platform) {
         fuzzyPlatform =

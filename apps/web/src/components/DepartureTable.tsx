@@ -237,7 +237,7 @@ export function DepartureTable({
                             onClick={(e) => e.stopPropagation()}
                             className="text-xs font-semibold text-go-slate hover:underline"
                           >
-                            Vehicle
+                            {r.feedId === "go" ? "Block" : "Vehicle"}
                           </Link>
                         )}
                         <Link
@@ -364,7 +364,7 @@ export function DepartureTable({
                           onClick={(e) => e.stopPropagation()}
                           className="text-xs font-semibold text-go-slate hover:text-go-navy hover:underline"
                         >
-                          Vehicle
+                          {r.feedId === "go" ? "Block" : "Vehicle"}
                         </Link>
                       )}
                       <Link

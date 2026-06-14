@@ -268,12 +268,12 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     tripRt?.delaySec ??
     vehicle.delaySec;
 
-  const blockTripKey = liveTripId ?? scheduleTripId;
-  const blockTrips = blockTripKey
-    ? await loadBlockTrips(feedId, blockTripKey, liveTripId ?? blockTripKey)
+  const blockLookupId = scheduleTripId ?? liveTripId;
+  const blockTrips = blockLookupId
+    ? await loadBlockTrips(feedId, blockLookupId, liveTripId ?? blockLookupId)
     : [];
-  const tripMeta = blockTripKey
-    ? await loadFeedTripMeta(feedId, blockTripKey)
+  const tripMeta = blockLookupId
+    ? await loadFeedTripMeta(feedId, blockLookupId)
     : undefined;
 
   return {

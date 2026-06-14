@@ -53,12 +53,24 @@ export function formatGoPlatform(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   const s = raw.trim();
   if (!s) return undefined;
+
+  const labeled = s.match(/(?:track|bay|plat(?:form)?)\s*[#:]?\s*(\d{1,2})/i);
+  if (labeled?.[1]) return labeled[1];
+
   if (s.length <= 3 && !/^\d{4,}$/.test(s)) return s;
+
   const n = parseInt(s, 10);
   if (!Number.isNaN(n) && n > 0 && n < 100) return String(n);
+
+  if (/^0?23(\d{2})$/.test(s)) {
+    const plat = parseInt(s.slice(-2), 10);
+    if (plat > 0 && plat < 100) return String(plat);
+  }
+
   if (/^0\d{3,4}$/.test(s)) {
     const tail = parseInt(s.slice(-2), 10);
     if (tail > 0 && tail < 100) return String(tail);
   }
-  return s.length <= 6 ? s : undefined;
+
+  return s.length <= 8 ? s : undefined;
 }
