@@ -55,6 +55,22 @@ function parseEpoch(value: unknown): number | undefined {
   return undefined;
 }
 
+/** Metrolinx JSON may use GTFS clock times (16:50:00) instead of unix epochs. */
+function parseServiceOrEpoch(value: unknown): number | undefined {
+  const epoch = parseEpoch(value);
+  if (epoch != null) return epoch;
+  if (typeof value === "string") {
+    const t = value.trim();
+    const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (m) {
+      return (
+        Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3] ?? 0)
+      );
+    }
+  }
+  return undefined;
+}
+
 export function metrolinxJsonOk(payload: unknown): boolean {
   const code = (payload as { Metadata?: { ErrorCode?: string } })?.Metadata?.ErrorCode;
   if (!code) return true;
@@ -144,8 +160,8 @@ export function parseMetrolinxJsonTripUpdates(
           num(field(arrival, "delay", "Delay")) ??
           num(field(departure, "delay", "Delay")) ??
           num(field(tu, "delay", "Delay")),
-        arrivalTime: parseEpoch(field(arrival, "time", "Time")),
-        departureTime: parseEpoch(field(departure, "time", "Time")),
+        arrivalTime: parseServiceOrEpoch(field(arrival, "time", "Time")),
+        departureTime: parseServiceOrEpoch(field(departure, "time", "Time")),
         platform:
           str(field(stu, "platform", "Platform", "track", "Track")) ??
           str(field(stu, "assigned_stop_id", "Assigned_stop_id")),

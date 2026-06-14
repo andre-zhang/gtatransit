@@ -343,6 +343,9 @@ async function pollGo(key: string) {
     goRtLastOk = now;
     goRtLastError = errors.length ? errors.join("; ") : null;
     goRtStats = { ...goRtStats, tripUpdates, vehicles };
+    if (tripUpdates === 0) {
+      await pollGoRest(key, now);
+    }
   } else {
     const pollErrors = errors.length ? errors.join("; ") : null;
     if (pollErrors) goRtLastError = pollErrors;

@@ -22,11 +22,12 @@ import {
   tripHeadsigns,
 } from "@/lib/demo-trip-headsign";
 import { getStopSchedule } from "@/lib/demo-schedules";
-import { routesMatch } from "@/lib/route-match";
+import { routesMatch, routeTail } from "@/lib/route-match";
 import {
   getActiveVehicleForRoute,
   getRtPredictionsForStop,
   mergeRtIntoDeparture,
+  normalizeMetrolinxKey,
   refreshRtCache,
   type RtStopPrediction,
 } from "@/lib/rt-cache";
@@ -35,8 +36,20 @@ import {
   formatGoPlatform,
   resolveGoRtStopIds,
 } from "@/lib/go-stop-aliases";
+import { fetchGoNextService } from "@/lib/go-metrolinx-rest";
 import { cleanHeadsign } from "@/lib/headsign";
 import { resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
+
+/** Trim large union-style schedules before RT merge (board shows ~80 rows). */
+function filterScheduleToBoardWindow(schedule: ScheduleRow[]): ScheduleRow[] {
+  const now = torontoNowSec();
+  const pastGrace = 120;
+  const horizon = 5 * 3600;
+  return schedule.filter((r) => {
+    const sec = normalizeServiceSec(gtfsTimeToSec(r.departureTime), now);
+    return sec >= now - pastGrace && sec <= now + horizon;
+  });
+}
 
 function routeMetaFromCore(feedId: string, routeId: string | undefined) {
   if (!routeId) return null;
@@ -61,7 +74,9 @@ function rtPredictionToDeparture(
   schedule: ScheduleRow[],
 ): DepartureInput | null {
   const routeId = row.routeId;
-  const coreMeta = routeMetaFromCore(row.feedId, routeId);
+  const coreMeta =
+    routeMetaFromCore(row.feedId, routeId) ??
+    (routeId ? routeMetaFromCore(row.feedId, routeTail(routeId)) : null);
   const routeShort = coreMeta?.routeShort ?? routeId ?? "?";
   let predictedSec = row.predictedSec;
   if (predictedSec != null && isUnixTimestamp(predictedSec)) {
@@ -159,7 +174,7 @@ export async function buildDemoStopDepartures(
   const usedRtTrips = new Set<string>();
 
   await refreshRtCache();
-  const schedule = await getStopSchedule(groupId);
+  const schedule = filterScheduleToBoardWindow(await getStopSchedule(groupId));
   const rtStopIdsByFeed = new Map<string, string[]>();
 
   for (const m of stop.members) {
@@ -194,6 +209,34 @@ export async function buildDemoStopDepartures(
       if (!row) continue;
       usedRtTrips.add(`${row.feedId}:${row.tripId}`);
       inputs.push(row);
+    }
+  }
+
+  const goKey = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
+  if (goKey && rtStopIdsByFeed.has("go")) {
+    const goCodes = new Set<string>();
+    for (const id of rtStopIdsByFeed.get("go") ?? []) {
+      for (const code of expandGoStopId(id)) goCodes.add(code);
+    }
+    const restRows = await Promise.all(
+      [...goCodes].map((stopCode) => fetchGoNextService(stopCode, goKey)),
+    );
+    for (const { rows: liveRows } of restRows) {
+      for (const live of liveRows) {
+        if (usedRtTrips.has(`go:${live.tripId}`) || usedRtTrips.has(live.tripId)) continue;
+        const pred: RtStopPrediction = {
+          feedId: "go",
+          tripId: live.tripId,
+          stopId: live.stopId,
+          routeId: live.routeShort,
+          predictedSec: live.predictedSec,
+          platform: live.platform,
+        };
+        const row = rtPredictionToDeparture(pred, schedule);
+        if (!row) continue;
+        usedRtTrips.add(`go:${row.tripId}`);
+        inputs.push(row);
+      }
     }
   }
 
@@ -249,7 +292,7 @@ export async function buildDemoStopDepartures(
       vehicleId: rt.vehicleId,
     });
 
-    if (!rt.realtime && (r.feedId === "ttc" || r.feedId === "miway")) {
+    if (!rt.realtime && (r.feedId === "ttc" || r.feedId === "miway" || r.feedId === "go")) {
       const routeKey = `${r.feedId}:${r.routeShort || r.routeId}`;
       if (!routeVehicleMarked.has(routeKey)) {
         const active = getActiveVehicleForRoute(r.feedId, r.routeId, r.routeShort);

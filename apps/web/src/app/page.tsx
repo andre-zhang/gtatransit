@@ -31,7 +31,7 @@ export default async function HomePage() {
     : null;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex h-[100dvh] flex-col overflow-hidden">
       <Nav rtUpdated={updatedLabel} demo={demo} />
       <MapView filterTree={tree} rtUpdated={updatedLabel} demoMode={demo} />
     </div>

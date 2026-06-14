@@ -136,9 +136,137 @@ export function DepartureTable({
     setExpanded((prev) => (prev === key ? null : key));
   };
 
+  const renderRowMeta = (r: DepartureRow, i: number) => {
+    const prevDay = i > 0 ? rows[i - 1]!.dayOffset ?? 0 : 0;
+    const dayOffset = r.dayOffset ?? 0;
+    const showDayBreak = dayOffset > prevDay;
+    const dayLabel =
+      dayOffset === 1 ? "Tomorrow" : dayOffset > 1 ? `+${dayOffset} days` : null;
+    const displayTime = r.predicted ?? r.time;
+    const late = r.latenessMin != null && r.latenessMin > 0;
+    const early = r.latenessMin != null && r.latenessMin < 0;
+    const rowKey = `${r.tripId}-${i}`;
+    const isOpen = expanded === rowKey;
+    const tripParams = new URLSearchParams();
+    if (r.stopId) tripParams.set("fromStop", r.stopId);
+    if (r.scheduleTripId && r.scheduleTripId !== r.tripId) {
+      tripParams.set("scheduleTrip", r.scheduleTripId);
+    }
+    const tripQs = tripParams.toString() ? `?${tripParams}` : "";
+    const tripHref = `/trip/${r.feedId}/${encodeURIComponent(r.tripId)}${tripQs}`;
+    return {
+      prevDay,
+      dayOffset,
+      showDayBreak,
+      dayLabel,
+      displayTime,
+      late,
+      early,
+      rowKey,
+      isOpen,
+      tripHref,
+    };
+  };
+
   return (
-    <div className="overflow-x-auto">
-      <table className="departure-board-table w-full min-w-[28rem] text-left sm:min-w-[36rem]">
+    <>
+      <div className="md:hidden">
+        <ul className="divide-y divide-go-bg">
+          {rows.map((r, i) => {
+            const m = renderRowMeta(r, i);
+            return (
+              <li key={m.rowKey}>
+                {m.showDayBreak && m.dayLabel && (
+                  <div className="departure-board-daybreak px-4 py-2 text-xs font-semibold uppercase tracking-wide text-go-slate">
+                    {m.dayLabel}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className={`departure-board-card w-full px-4 py-3 text-left ${m.isOpen ? "departure-board-row--open" : ""}`}
+                  onClick={() => toggle(m.rowKey)}
+                  aria-expanded={m.isOpen}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-16 shrink-0 text-right">
+                      <span
+                        className={`departure-board-time tabular-nums leading-none ${
+                          r.realtime
+                            ? "departure-board-time--live"
+                            : "departure-board-time--sched"
+                        }`}
+                      >
+                        {m.displayTime}
+                      </span>
+                      {r.predicted && r.predicted !== r.time && (
+                        <span className="departure-board-timeWas mt-0.5 block tabular-nums line-through">
+                          {r.time}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {showAgency && <AgencyMark feedId={r.feedId} />}
+                        <RoutePill shortName={r.routeShort} color={r.routeColor} size="lg" />
+                        {showPlatform && r.feedId === "go" && r.platform && (
+                          <span className="text-xs tabular-nums text-go-slate">
+                            Plat {r.platform}
+                          </span>
+                        )}
+                      </div>
+                      <p
+                        className={`departure-board-dest mt-1 truncate ${
+                          r.realtime ? "departure-board-dest--live" : "departure-board-dest--sched"
+                        }`}
+                      >
+                        {cleanHeadsign(r.destination)}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {m.late ? (
+                          <span className="go-badge go-badge--late">+{r.latenessMin} min</span>
+                        ) : m.early ? (
+                          <span className="go-badge go-badge--early">{r.latenessMin} min</span>
+                        ) : r.realtime && r.latenessMin === 0 ? (
+                          <span className="go-badge go-badge--ontime">On time</span>
+                        ) : !r.realtime ? (
+                          <span className="go-badge go-badge--sched">Scheduled</span>
+                        ) : null}
+                        {r.vehicleId && (
+                          <Link
+                            href={`/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs font-semibold text-go-slate hover:underline"
+                          >
+                            Vehicle
+                          </Link>
+                        )}
+                        <Link
+                          href={m.tripHref}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs font-semibold text-go-green hover:underline"
+                        >
+                          Open
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+                {m.isOpen && (
+                  <TripStopsPanel
+                    feedId={r.feedId}
+                    tripId={r.tripId}
+                    scheduleTripId={r.scheduleTripId}
+                    fromStop={r.stopId}
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
+      <table className="departure-board-table w-full min-w-[36rem] text-left">
         <thead>
           <tr className="departure-board-head">
             <th className="px-5 py-3 text-right">Time</th>
@@ -151,48 +279,32 @@ export function DepartureTable({
         </thead>
         <tbody className="departure-board-body">
           {rows.map((r, i) => {
-            const prevDay = i > 0 ? rows[i - 1]!.dayOffset ?? 0 : 0;
-            const dayOffset = r.dayOffset ?? 0;
-            const showDayBreak = dayOffset > prevDay;
-            const dayLabel =
-              dayOffset === 1 ? "Tomorrow" : dayOffset > 1 ? `+${dayOffset} days` : null;
-            const displayTime = r.predicted ?? r.time;
-            const late = r.latenessMin != null && r.latenessMin > 0;
-            const early = r.latenessMin != null && r.latenessMin < 0;
-            const rowKey = `${r.tripId}-${i}`;
-            const isOpen = expanded === rowKey;
-            const tripParams = new URLSearchParams();
-            if (r.stopId) tripParams.set("fromStop", r.stopId);
-            if (r.scheduleTripId && r.scheduleTripId !== r.tripId) {
-              tripParams.set("scheduleTrip", r.scheduleTripId);
-            }
-            const tripQs = tripParams.toString() ? `?${tripParams}` : "";
-            const tripHref = `/trip/${r.feedId}/${encodeURIComponent(r.tripId)}${tripQs}`;
+            const m = renderRowMeta(r, i);
 
             return (
-              <Fragment key={rowKey}>
-                {showDayBreak && dayLabel && (
+              <Fragment key={m.rowKey}>
+                {m.showDayBreak && m.dayLabel && (
                   <tr className="departure-board-daybreak">
                     <td
                       colSpan={showAgency ? (showPlatform ? 6 : 5) : showPlatform ? 5 : 4}
                       className="px-5 py-2 text-xs font-semibold uppercase tracking-wide text-go-slate"
                     >
-                      {dayLabel}
+                      {m.dayLabel}
                     </td>
                   </tr>
                 )}
                 <tr
-                  className={`departure-board-row cursor-pointer ${isOpen ? "departure-board-row--open" : ""}`}
-                  onClick={() => toggle(rowKey)}
+                  className={`departure-board-row cursor-pointer ${m.isOpen ? "departure-board-row--open" : ""}`}
+                  onClick={() => toggle(m.rowKey)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      toggle(rowKey);
+                      toggle(m.rowKey);
                     }
                   }}
                   tabIndex={0}
                   role="button"
-                  aria-expanded={isOpen}
+                  aria-expanded={m.isOpen}
                 >
                   <td className="px-5 py-3 text-right">
                     <span
@@ -200,10 +312,10 @@ export function DepartureTable({
                         r.realtime ? "departure-board-time--live" : "departure-board-time--sched"
                       }`}
                     >
-                      {displayTime}
-                      {dayOffset > 0 && (
+                      {m.displayTime}
+                      {m.dayOffset > 0 && (
                         <sup className="ml-0.5 text-[10px] font-semibold text-go-slate">
-                          +{dayOffset}
+                          +{m.dayOffset}
                         </sup>
                       )}
                     </span>
@@ -237,9 +349,9 @@ export function DepartureTable({
                   )}
                   <td className="px-5 py-3 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      {late ? (
+                      {m.late ? (
                         <span className="go-badge go-badge--late">+{r.latenessMin} min</span>
-                      ) : early ? (
+                      ) : m.early ? (
                         <span className="go-badge go-badge--early">{r.latenessMin} min</span>
                       ) : r.realtime && r.latenessMin === 0 ? (
                         <span className="go-badge go-badge--ontime">On time</span>
@@ -256,7 +368,7 @@ export function DepartureTable({
                         </Link>
                       )}
                       <Link
-                        href={tripHref}
+                        href={m.tripHref}
                         onClick={(e) => e.stopPropagation()}
                         className="text-xs font-semibold text-go-green hover:underline"
                       >
@@ -265,7 +377,7 @@ export function DepartureTable({
                     </div>
                   </td>
                 </tr>
-                {isOpen && (
+                {m.isOpen && (
                   <tr>
                     <td colSpan={(showPlatform ? 1 : 0) + (showAgency ? 1 : 0) + 4} className="p-0">
                       <TripStopsPanel
@@ -282,6 +394,7 @@ export function DepartureTable({
           })}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
