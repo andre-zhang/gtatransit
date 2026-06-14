@@ -65,6 +65,21 @@ function lineCode(row: Record<string, unknown>): string | undefined {
   return raw != null ? String(raw).trim() : undefined;
 }
 
+function platformFromRow(row: Record<string, unknown>): string | undefined {
+  const raw =
+    row.Platform ??
+    row.platform ??
+    row.Bay ??
+    row.bay ??
+    row.Track ??
+    row.track ??
+    row.PlatformDesignation ??
+    row.AssignedPlatform ??
+    row.DesignatedPlatform;
+  if (raw == null || raw === "") return undefined;
+  return formatGoPlatform(String(raw));
+}
+
 function parseNextServiceStop(
   stopCode: string,
   payload: unknown,
@@ -74,12 +89,29 @@ function parseNextServiceStop(
   const next = root.NextService as Record<string, unknown> | undefined;
   if (!next) return [];
 
-  const stopNode = (next.Stop ?? next) as Record<string, unknown>;
-  const rows = asArray(
-    (stopNode.Stop as Record<string, unknown> | undefined) ??
-      (stopNode.Departure as Record<string, unknown> | undefined) ??
-      stopNode,
-  );
+  const candidates = [
+    next.Stop,
+    next.Stops,
+    next.Departure,
+    next.Departures,
+    next,
+  ];
+  let rows: Record<string, unknown>[] = [];
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    if (Array.isArray(candidate)) {
+      rows = candidate.filter((x) => x && typeof x === "object") as Record<string, unknown>[];
+      if (rows.length) break;
+    }
+    const rec = candidate as Record<string, unknown>;
+    const nested = asArray(
+      rec.Stop ?? rec.Departure ?? rec.Departures ?? rec.Service ?? rec,
+    ).filter((x) => x && typeof x === "object") as Record<string, unknown>[];
+    if (nested.length) {
+      rows = nested;
+      break;
+    }
+  }
 
   const today = serviceDate();
   const out: GoNextDeparture[] = [];
@@ -103,14 +135,7 @@ function parseNextServiceStop(
     const tripSuffix = tripNum != null ? String(tripNum) : `${routeShort}-${predictedSec}`;
     const tripId = `${today}-${tripSuffix}`;
 
-    const platform = formatGoPlatform(
-      String(
-        (row as Record<string, unknown>).Platform ??
-          (row as Record<string, unknown>).Bay ??
-          (row as Record<string, unknown>).Track ??
-          "",
-      ) || undefined,
-    );
+    const platform = platformFromRow(row as Record<string, unknown>);
 
     out.push({
       stopId: stopCode,
