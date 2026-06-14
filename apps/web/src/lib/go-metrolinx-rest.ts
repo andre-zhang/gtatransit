@@ -214,8 +214,20 @@ export async function probeMetrolinxKey(apiKey: string): Promise<{
         gtfsDecodeError = "empty body";
       } else {
         const head = new Uint8Array(buf)[0]!;
-        if (head === 0x7b || head === 0x3c) {
-          gtfsDecodeError = "non-protobuf response";
+        if (head === 0x7b || head === 0x5b) {
+          try {
+            const json: unknown = JSON.parse(new TextDecoder().decode(buf));
+            const err = metrolinxError(json);
+            if (err) gtfsDecodeError = err;
+            else {
+              const { parseMetrolinxJsonTripUpdates } = await import("@gta/gtfs-rt");
+              gtfsEntities = parseMetrolinxJsonTripUpdates("go", json).length;
+            }
+          } catch (e) {
+            gtfsDecodeError = e instanceof Error ? e.message : String(e);
+          }
+        } else if (head === 0x3c) {
+          gtfsDecodeError = "html response";
         } else {
           try {
             const { decodeFeed } = await import("@gta/gtfs-rt");

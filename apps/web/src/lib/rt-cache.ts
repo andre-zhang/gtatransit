@@ -4,6 +4,9 @@ import {
   decodeFeed,
   fetchRt,
   metrolinxApiUrl,
+  metrolinxJsonError,
+  parseMetrolinxJsonTripUpdates,
+  parseMetrolinxJsonVehicles,
   parseTripUpdates,
   parseVehicles,
   type RtTripUpdate,
@@ -261,15 +264,35 @@ async function pollGo(key: string) {
         continue;
       }
       const head = new Uint8Array(buf)[0]!;
-      if (head === 0x7b || head === 0x3c) {
-        errors.push(`${kind}:non-protobuf`);
+      let vehicleRows: RtVehicle[] = [];
+      let updateRows: RtTripUpdate[] = [];
+      if (head === 0x7b || head === 0x5b) {
+        const json: unknown = JSON.parse(new TextDecoder().decode(buf));
+        const jsonErr = metrolinxJsonError(json);
+        if (jsonErr) {
+          errors.push(`${kind}:${jsonErr}`);
+          continue;
+        }
+        if (kind === "vehicles") {
+          vehicleRows = parseMetrolinxJsonVehicles("go", json);
+        } else {
+          updateRows = parseMetrolinxJsonTripUpdates("go", json);
+        }
+      } else if (head === 0x3c) {
+        errors.push(`${kind}:html`);
         continue;
+      } else {
+        const msg = decodeFeed(buf);
+        if (kind === "vehicles") {
+          vehicleRows = parseVehicles("go", msg);
+        } else {
+          updateRows = parseTripUpdates("go", msg);
+        }
       }
-      const msg = decodeFeed(buf);
       sawData = true;
 
       if (kind === "vehicles") {
-        for (const v of parseVehicles("go", msg)) {
+        for (const v of vehicleRows) {
           if (v.lat == null || v.lon == null) continue;
           vehicles++;
           const tk = v.tripId ? tripKey("go", v.tripId) : null;
@@ -288,7 +311,7 @@ async function pollGo(key: string) {
           });
         }
       } else {
-        for (const u of parseTripUpdates("go", msg)) {
+        for (const u of updateRows) {
           tripUpdates++;
           const platform = platformFromUpdate(u);
           const entry: StopRt = {

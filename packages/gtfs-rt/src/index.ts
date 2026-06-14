@@ -1,31 +1,7 @@
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
 
-export type RtVehicle = {
-  feedId: string;
-  vehicleId: string;
-  tripId?: string;
-  routeId?: string;
-  label?: string;
-  lat?: number;
-  lon?: number;
-  bearing?: number;
-  speed?: number;
-  currentStopSequence?: number;
-  delaySec?: number;
-  occupancyStatus?: number;
-};
-
-export type RtTripUpdate = {
-  feedId: string;
-  tripId: string;
-  routeId?: string;
-  stopId: string;
-  stopSequence?: number;
-  delaySec?: number;
-  arrivalTime?: number;
-  departureTime?: number;
-  platform?: string;
-};
+export type { RtTripUpdate, RtVehicle } from "./rt-types";
+import type { RtTripUpdate, RtVehicle } from "./rt-types";
 
 function extractPlatform(stu: Record<string, unknown>): string | undefined {
   const direct =
@@ -140,3 +116,10 @@ export async function fetchRt(url: string, headers?: Record<string, string>) {
   if (!res.ok) throw new Error(`RT fetch failed ${url}: ${res.status}`);
   return decodeFeed(await res.arrayBuffer());
 }
+
+export {
+  metrolinxJsonError,
+  metrolinxJsonOk,
+  parseMetrolinxJsonTripUpdates,
+  parseMetrolinxJsonVehicles,
+} from "./metrolinx-json";
