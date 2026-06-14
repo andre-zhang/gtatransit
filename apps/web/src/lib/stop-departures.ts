@@ -41,14 +41,28 @@ import { cleanHeadsign } from "@/lib/headsign";
 import { resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
 
 /** Trim large union-style schedules before RT merge (board shows ~80 rows). */
+function scheduleForMembers(
+  schedule: ScheduleRow[],
+  members: DemoStopMeta["members"],
+): ScheduleRow[] {
+  const keys = new Set(members.map((m) => `${m.feedId}:${m.stopId}`));
+  return schedule.filter((r) => keys.has(`${r.feedId}:${r.stopId}`));
+}
+
 function filterScheduleToBoardWindow(schedule: ScheduleRow[]): ScheduleRow[] {
   const now = torontoNowSec();
   const pastGrace = 120;
-  const horizon = 5 * 3600;
-  return schedule.filter((r) => {
-    const sec = normalizeServiceSec(gtfsTimeToSec(r.departureTime), now);
-    return sec >= now - pastGrace && sec <= now + horizon;
-  });
+  const horizon = 2 * 3600;
+  const upcoming = schedule
+    .map((r) => ({
+      row: r,
+      sec: normalizeServiceSec(gtfsTimeToSec(r.departureTime), now),
+    }))
+    .filter(({ sec }) => sec >= now - pastGrace && sec <= now + horizon)
+    .sort((a, b) => a.sec - b.sec)
+    .slice(0, 250)
+    .map(({ row }) => row);
+  return upcoming;
 }
 
 function routeMetaFromCore(feedId: string, routeId: string | undefined) {
@@ -174,7 +188,8 @@ export async function buildDemoStopDepartures(
   const usedRtTrips = new Set<string>();
 
   await refreshRtCache();
-  const schedule = filterScheduleToBoardWindow(await getStopSchedule(groupId));
+  const rawSchedule = await getStopSchedule(groupId);
+  const schedule = filterScheduleToBoardWindow(scheduleForMembers(rawSchedule, stop.members));
   const rtStopIdsByFeed = new Map<string, string[]>();
 
   for (const m of stop.members) {
