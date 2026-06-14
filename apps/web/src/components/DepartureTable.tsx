@@ -5,6 +5,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { cleanHeadsign } from "@/lib/headsign";
 import { formatDelayLabel } from "@/lib/delay-label";
 import { AgencyMark } from "./AgencyMark";
+import { LiveIcon } from "./LiveIcon";
 import { RoutePill } from "./RoutePill";
 
 export type DepartureRow = {
@@ -190,15 +191,20 @@ export function DepartureTable({
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-16 shrink-0 text-right">
-                      <span
-                        className={`departure-board-time tabular-nums leading-none ${
-                          r.realtime
-                            ? "departure-board-time--live"
-                            : "departure-board-time--sched"
-                        }`}
-                      >
-                        {m.displayTime}
-                      </span>
+                      <div className="flex items-center justify-end gap-1">
+                        {r.realtime && (
+                          <LiveIcon className="h-3.5 w-3.5 shrink-0 text-go-green" title="Live" />
+                        )}
+                        <span
+                          className={`departure-board-time tabular-nums leading-none ${
+                            r.realtime
+                              ? "departure-board-time--live"
+                              : "departure-board-time--sched"
+                          }`}
+                        >
+                          {m.displayTime}
+                        </span>
+                      </div>
                       {r.predicted && r.predicted !== r.time && (
                         <span className="departure-board-timeWas mt-0.5 block tabular-nums line-through">
                           {r.time}
@@ -310,18 +316,23 @@ export function DepartureTable({
                   aria-expanded={m.isOpen}
                 >
                   <td className="px-5 py-3 text-right">
-                    <span
-                      className={`departure-board-time tabular-nums leading-none ${
-                        r.realtime ? "departure-board-time--live" : "departure-board-time--sched"
-                      }`}
-                    >
-                      {m.displayTime}
-                      {m.dayOffset > 0 && (
-                        <sup className="ml-0.5 text-[10px] font-semibold text-go-slate">
-                          +{m.dayOffset}
-                        </sup>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {r.realtime && (
+                        <LiveIcon className="h-3.5 w-3.5 shrink-0 text-go-green" title="Live" />
                       )}
-                    </span>
+                      <span
+                        className={`departure-board-time tabular-nums leading-none ${
+                          r.realtime ? "departure-board-time--live" : "departure-board-time--sched"
+                        }`}
+                      >
+                        {m.displayTime}
+                        {m.dayOffset > 0 && (
+                          <sup className="ml-0.5 text-[10px] font-semibold text-go-slate">
+                            +{m.dayOffset}
+                          </sup>
+                        )}
+                      </span>
+                    </div>
                     {r.predicted && r.predicted !== r.time && (
                       <span className="departure-board-timeWas mt-0.5 block tabular-nums line-through">
                         {r.time}

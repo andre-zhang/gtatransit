@@ -154,6 +154,16 @@ function rtPredictionToDeparture(
   };
 }
 
+function recordGoPlatform(
+  platformByRouteSec: Map<string, string>,
+  routeShort: string,
+  predictedSec: number,
+  platform: string | undefined,
+) {
+  if (!platform) return;
+  platformByRouteSec.set(`${routeShort}:${predictedSec}`, platform);
+}
+
 function enrichGoPlatforms(
   rows: DepartureInput[],
   platformByRouteSec: Map<string, string>,
@@ -165,13 +175,18 @@ function enrichGoPlatforms(
       row.predictedSec ?? gtfsTimeToSec(row.departureTime),
       now,
     );
+    const routeKeys = new Set(
+      [row.routeShort, routeTail(row.routeId)].filter(Boolean) as string[],
+    );
     let bestPlat: string | undefined;
     let bestDelta = Infinity;
     for (const [key, platform] of platformByRouteSec) {
-      const [route, secRaw] = key.split(":");
-      if (route !== row.routeShort && route !== routeTail(row.routeId)) continue;
-      const delta = Math.abs(Number(secRaw) - sec);
-      if (delta <= 120 && delta < bestDelta) {
+      const colon = key.indexOf(":");
+      if (colon < 0) continue;
+      const route = key.slice(0, colon);
+      if (!routeKeys.has(route)) continue;
+      const delta = Math.abs(Number(key.slice(colon + 1)) - sec);
+      if (delta <= 5 * 60 && delta < bestDelta) {
         bestDelta = delta;
         bestPlat = platform;
       }
@@ -238,10 +253,13 @@ export async function buildDemoStopDepartures(
     );
     for (const { rows: liveRows } of restRows) {
       for (const live of liveRows) {
+        recordGoPlatform(
+          goPlatformByRouteSec,
+          live.routeShort,
+          live.predictedSec,
+          live.platform,
+        );
         if (usedRtTrips.has(`go:${live.tripId}`) || usedRtTrips.has(live.tripId)) continue;
-        if (live.platform) {
-          goPlatformByRouteSec.set(`${live.routeShort}:${live.predictedSec}`, live.platform);
-        }
         const pred: RtStopPrediction = {
           feedId: "go",
           tripId: live.tripId,

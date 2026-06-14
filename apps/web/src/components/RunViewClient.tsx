@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { formatDelayLabel } from "@/lib/delay-label";
-import { cleanHeadsign } from "@/lib/headsign";import { RunMap } from "./RunMap";
+import { cleanHeadsign } from "@/lib/headsign";
+import { LiveIcon } from "./LiveIcon";
+import { RunMap } from "./RunMap";
 import { Section } from "./Section";
 
 type UpcomingStop = {
@@ -148,7 +150,10 @@ export function RunViewClient({
                   {cleanHeadsign(t.headsign) || "—"}
                 </span>
                 {t.active && (
-                  <span className="go-badge go-badge--live shrink-0">Active</span>
+                  <span className="go-badge go-badge--live inline-flex shrink-0 items-center gap-1">
+                    <LiveIcon className="h-3 w-3" title="Active" />
+                    Active
+                  </span>
                 )}
                 <Link
                   href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}

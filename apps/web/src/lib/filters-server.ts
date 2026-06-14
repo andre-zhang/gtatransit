@@ -2,6 +2,7 @@ import { getSql } from "@/lib/db";
 import { MODE_LABELS } from "@/lib/colors";
 import { ensureDemoAssets, getDemoCore } from "@/lib/demo";
 import { useDemoFixtures } from "@/lib/demo-mode";
+import { getRtLastUpdatedIso, refreshRtCache } from "@/lib/rt-cache";
 import type { FilterTree } from "@/lib/types";
 
 export async function getFilterTree(): Promise<{
@@ -11,7 +12,11 @@ export async function getFilterTree(): Promise<{
   if (await useDemoFixtures()) {
     await ensureDemoAssets();
     const demo = getDemoCore();
-    return { tree: demo.filterTree as FilterTree, rtUpdated: demo.rtUpdated };
+    await refreshRtCache();
+    return {
+      tree: demo.filterTree as FilterTree,
+      rtUpdated: getRtLastUpdatedIso() ?? demo.rtUpdated,
+    };
   }
   const db = getSql();
   const feeds = await db<Array<{ id: string; name: string }>>`SELECT id, name FROM feeds ORDER BY name`;

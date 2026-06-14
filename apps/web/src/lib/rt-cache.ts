@@ -716,6 +716,12 @@ function snapshotTripUpdates(): RtTripUpdate[] {
   return out;
 }
 
+/** ISO timestamp of the most recent successful RT poll (for UI freshness). */
+export function getRtLastUpdatedIso(): string | null {
+  const ts = Math.max(goRtLastOk, lastRefresh);
+  return ts > 0 ? new Date(ts).toISOString() : null;
+}
+
 export function getGoRtStatus(): {
   configured: boolean;
   keyLength: number;

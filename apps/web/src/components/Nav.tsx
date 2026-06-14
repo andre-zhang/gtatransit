@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LiveIcon } from "./LiveIcon";
 
 export function Nav({
   rtUpdated,
@@ -22,7 +23,10 @@ export function Nav({
           </span>
         )}
         {rtUpdated && (
-          <span className="text-xs font-medium text-white/70 tabular-nums">{rtUpdated}</span>
+          <span className="flex items-center gap-1.5 text-xs font-medium text-white/80 tabular-nums">
+            <LiveIcon className="h-3.5 w-3.5 shrink-0" title="Live data" />
+            {rtUpdated}
+          </span>
         )}
       </div>
     </header>
