@@ -256,17 +256,10 @@ export async function buildDemoStopDepartures(
   }
 
   const ttcRtByStopId = new Map<string, string[]>();
-  const uniqueTtcStopIds = [
-    ...new Set(schedule.filter((r) => r.feedId === "ttc").map((r) => r.stopId)),
-  ];
-  await Promise.all(
-    uniqueTtcStopIds.map(async (stopId) => {
-      ttcRtByStopId.set(
-        stopId,
-        await resolveTtcRtStopIds([{ feedId: "ttc", stopId }]),
-      );
-    }),
-  );
+  for (const m of stop.members.filter((x) => x.feedId === "ttc")) {
+    if (ttcRtByStopId.has(m.stopId)) continue;
+    ttcRtByStopId.set(m.stopId, await resolveTtcRtStopIds([m]));
+  }
 
   const routeVehicleMarked = new Set<string>();
 
@@ -332,16 +325,26 @@ export async function buildDemoStopDepartures(
   const scheduleHeadsigns = new Map<string, string>();
   for (const row of schedule) {
     const hs = row.headsign?.trim();
-    if (hs) scheduleHeadsigns.set(`${row.feedId}:${row.tripId}`, hs);
+    if (!hs) continue;
+    scheduleHeadsigns.set(`${row.feedId}:${row.tripId}`, hs);
+  }
+
+  function headsignFromSchedule(row: DepartureInput): string | undefined {
+    return (
+      scheduleHeadsigns.get(`${row.feedId}:${row.tripId}`) ??
+      (row.scheduleTripId
+        ? scheduleHeadsigns.get(`${row.feedId}:${row.scheduleTripId}`)
+        : undefined)
+    );
   }
 
   const missingByFeed = new Map<string, Set<string>>();
   for (const row of deduped) {
-    const key = `${row.feedId}:${row.tripId}`;
-    if (scheduleHeadsigns.has(key)) continue;
+    if (headsignFromSchedule(row)) continue;
     if (row.realtime || needsHeadsignLookup(row.destination)) {
       if (!missingByFeed.has(row.feedId)) missingByFeed.set(row.feedId, new Set());
-      missingByFeed.get(row.feedId)!.add(row.tripId);
+      const lookupId = row.scheduleTripId ?? row.tripId;
+      missingByFeed.get(row.feedId)!.add(lookupId);
     }
   }
 
@@ -357,8 +360,10 @@ export async function buildDemoStopDepartures(
   );
 
   const withHeadsigns = deduped.map((row) => {
-    const key = `${row.feedId}:${row.tripId}`;
-    const hs = scheduleHeadsigns.get(key) ?? resolved.get(key);
+    const hs =
+      headsignFromSchedule(row) ??
+      resolved.get(`${row.feedId}:${row.scheduleTripId ?? row.tripId}`) ??
+      resolved.get(`${row.feedId}:${row.tripId}`);
     if (!hs) return row;
     if (!row.realtime && !needsHeadsignLookup(row.destination)) return row;
     return { ...row, destination: cleanHeadsign(hs) };

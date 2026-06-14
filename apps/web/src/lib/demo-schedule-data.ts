@@ -1,5 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { gtfsTimeToSec, normalizeServiceSec, torontoNowSec } from "./calendar";
 import { resolveDemoDir } from "./demo-dir";
 import { readDemoJsonFile } from "./demo-read";
 import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
@@ -313,4 +314,26 @@ export async function loadUnionSchedule(): Promise<ScheduleRow[]> {
   if (unionCache) return unionCache;
   unionCache = await readDemoJsonFile<ScheduleRow[]>("union-schedule.json");
   return unionCache;
+}
+
+/** Trim the union hub schedule to upcoming board rows (avoids scanning 5k+ rows per request). */
+export async function loadUnionScheduleForBoard(
+  members: Array<{ feedId: string; stopId: string }>,
+  maxRows = 250,
+): Promise<ScheduleRow[]> {
+  const union = await loadUnionSchedule();
+  const keys = new Set(members.map((m) => `${m.feedId}:${m.stopId}`));
+  const now = torontoNowSec();
+  const pastGrace = 120;
+  const horizon = 2 * 3600;
+  return union
+    .filter((r) => keys.has(`${r.feedId}:${r.stopId}`))
+    .map((row) => ({
+      row,
+      sec: normalizeServiceSec(gtfsTimeToSec(row.departureTime), now),
+    }))
+    .filter(({ sec }) => sec >= now - pastGrace && sec <= now + horizon)
+    .sort((a, b) => a.sec - b.sec)
+    .slice(0, maxRows)
+    .map(({ row }) => row);
 }

@@ -3,6 +3,7 @@ import {
   loadStopScheduleRows,
   loadTripStopsForTrip,
   loadUnionSchedule,
+  loadUnionScheduleForBoard,
 } from "./demo-schedule-data";
 import { resolveStopGroupId, TORONTO_UNION_ID } from "./demo-stop-groups";
 import { ensureDemoAssets } from "./demo-assets";
@@ -25,7 +26,8 @@ export async function getStopSchedule(groupId: string): Promise<ScheduleRow[]> {
   await ensureDemoAssets();
   const resolved = resolveStopGroupId(groupId);
   if (resolved === TORONTO_UNION_ID) {
-    return loadUnionSchedule();
+    const hub = getDemoCore().stops[TORONTO_UNION_ID];
+    return loadUnionScheduleForBoard(hub?.members ?? [{ feedId: "go", stopId: "UN" }]);
   }
 
   const stop = getDemoCore().stops[resolved] as DemoStopMeta | undefined;
