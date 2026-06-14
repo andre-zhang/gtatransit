@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { cleanHeadsign } from "@/lib/headsign";
+import { formatDelayLabel } from "@/lib/delay-label";
 import { AgencyMark } from "./AgencyMark";
 import { RoutePill } from "./RoutePill";
 
@@ -222,10 +223,12 @@ export function DepartureTable({
                         {cleanHeadsign(r.destination)}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        {m.late ? (
-                          <span className="go-badge go-badge--late">+{r.latenessMin} min</span>
-                        ) : m.early ? (
-                          <span className="go-badge go-badge--early">{r.latenessMin} min</span>
+                        {m.late || m.early ? (
+                          <span
+                            className={`go-badge ${m.late ? "go-badge--late" : "go-badge--early"}`}
+                          >
+                            {formatDelayLabel(r.latenessMin)}
+                          </span>
                         ) : r.realtime && r.latenessMin === 0 ? (
                           <span className="go-badge go-badge--ontime">On time</span>
                         ) : !r.realtime ? (
@@ -349,10 +352,12 @@ export function DepartureTable({
                   )}
                   <td className="px-5 py-3 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      {m.late ? (
-                        <span className="go-badge go-badge--late">+{r.latenessMin} min</span>
-                      ) : m.early ? (
-                        <span className="go-badge go-badge--early">{r.latenessMin} min</span>
+                      {m.late || m.early ? (
+                        <span
+                          className={`go-badge ${m.late ? "go-badge--late" : "go-badge--early"}`}
+                        >
+                          {formatDelayLabel(r.latenessMin)}
+                        </span>
                       ) : r.realtime && r.latenessMin === 0 ? (
                         <span className="go-badge go-badge--ontime">On time</span>
                       ) : !r.realtime ? (

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { cleanHeadsign } from "@/lib/headsign";
-import { RunMap } from "./RunMap";
+import { formatDelayLabel } from "@/lib/delay-label";
+import { cleanHeadsign } from "@/lib/headsign";import { RunMap } from "./RunMap";
 import { Section } from "./Section";
 
 type UpcomingStop = {
@@ -42,6 +42,7 @@ type RunData = {
     trip_id: string;
     headsign: string | null;
     first_departure: string;
+    last_departure?: string;
     active: boolean;
   }>;
   shape: GeoJSON.Feature | null;
@@ -57,8 +58,10 @@ export function RunViewClient({
   initial: RunData;
 }) {
   const [data, setData] = useState(initial);
+  const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/runs/${feedId}/${encodeURIComponent(vehicleId)}`, {
         cache: "no-store",
@@ -68,10 +71,13 @@ export function RunViewClient({
       }
     } catch {
       /* keep last good snapshot */
+    } finally {
+      setLoading(false);
     }
   }, [feedId, vehicleId]);
 
   useEffect(() => {
+    void refresh();
     const id = setInterval(() => void refresh(), 20_000);
     return () => clearInterval(id);
   }, [refresh]);
@@ -79,9 +85,13 @@ export function RunViewClient({
   const { vehicle, trip, route, currentStop, upcomingStops, shape, blockTrips } = data;
   const early = vehicle.delayMin != null && vehicle.delayMin < 0;
   const late = vehicle.delayMin != null && vehicle.delayMin > 0;
+  const delayLabel = formatDelayLabel(vehicle.delayMin);
 
   return (
     <>
+      {loading && !blockTrips?.length && !upcomingStops?.length && (
+        <div className="border-b border-go-bg px-5 py-2 text-xs text-go-slate">Loading…</div>
+      )}
       <div className="grid grid-cols-2 divide-x divide-go-bg border-b border-go-bg sm:grid-cols-4">
         <div className="p-5">
           <div className="go-section-title mb-1">Delay</div>
@@ -90,16 +100,12 @@ export function RunViewClient({
               late ? "text-go-late" : early ? "text-go-slate" : "text-go-ontime"
             }`}
           >
-            {late
-              ? `+${vehicle.delayMin} min`
-              : early
-                ? `${vehicle.delayMin} min`
-                : "On time"}
+            {delayLabel ?? "On time"}
           </div>
         </div>
         <div className="p-5">
           <div className="go-section-title mb-1">Vehicle</div>
-          <div className="text-lg font-bold text-go-navy">{vehicle.label}</div>
+          <div className="text-lg font-bold text-go-navy">#{vehicle.id}</div>
         </div>
         <div className="p-5">
           <div className="go-section-title mb-1">Current stop</div>
@@ -133,8 +139,10 @@ export function RunViewClient({
                 key={t.trip_id}
                 className={`flex items-center gap-4 px-5 py-3 ${t.active ? "bg-go-bg/40" : ""}`}
               >
-                <span className="w-16 shrink-0 text-right font-bold tabular-nums text-go-navy">
-                  {t.first_departure}
+                <span className="w-28 shrink-0 text-right text-sm font-bold tabular-nums text-go-navy">
+                  {t.last_departure
+                    ? `${t.first_departure} – ${t.last_departure}`
+                    : t.first_departure}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-go-navy">
                   {cleanHeadsign(t.headsign) || "—"}
@@ -171,11 +179,12 @@ export function RunViewClient({
                     Plat {s.platform}
                   </span>
                 )}
-                {s.delayMin != null && s.delayMin > 0 && (
-                  <span className="go-badge go-badge--late shrink-0">+{s.delayMin} min</span>
-                )}
-                {s.delayMin != null && s.delayMin < 0 && (
-                  <span className="go-badge go-badge--early shrink-0">{s.delayMin} min</span>
+                {s.delayMin != null && s.delayMin !== 0 && (
+                  <span
+                    className={`go-badge shrink-0 ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}
+                  >
+                    {formatDelayLabel(s.delayMin)}
+                  </span>
                 )}
               </li>
             ))}

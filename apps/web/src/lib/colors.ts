@@ -1,36 +1,15 @@
-const GO_LINE_COLORS: Record<string, string> = {
-  "01": "#e57200",
-  "02": "#00843d",
-  "03": "#ffd100",
-  "04": "#0080c0",
-  "05": "#0080c0",
-  "06": "#8b008b",
-  "07": "#c8102e",
-  "08": "#0080c0",
-  "09": "#8b4513",
-  "10": "#6f2da8",
-  "11": "#00843d",
-  "12": "#0080c0",
-  "13": "#00843d",
-  "14": "#c8102e",
-  "15": "#0080c0",
-  "16": "#00843d",
-  "17": "#0080c0",
-  "18": "#00843d",
-  "19": "#0080c0",
-  "20": "#00843d",
-  "21": "#0080c0",
-  "22": "#00843d",
-  "23": "#0080c0",
-  "24": "#00843d",
-  "25": "#0080c0",
-  "26": "#00843d",
-  "27": "#0080c0",
-  "28": "#00843d",
-  "29": "#0080c0",
-  "30": "#00843d",
-  "31": "#0080c0",
-  "32": "#00843d",
+import { lookupDemoRouteColor } from "./demo-route-colors";
+
+/** GO rail line colours (official Metrolinx palette). */
+const GO_RAIL_COLORS: Record<string, string> = {
+  LW: "#98002e",
+  LE: "#ff0d00",
+  KI: "#00853e",
+  GT: "#00853e",
+  RH: "#0099c7",
+  ST: "#794500",
+  BR: "#003767",
+  MI: "#f57f25",
 };
 
 export const AGENCY_COLORS: Record<string, string> = {
@@ -54,13 +33,19 @@ export const AGENCY_NAMES: Record<string, string> = {
 export function routeColor(
   feedId: string,
   routeShortName: string | null,
-  routeColor: string | null,
+  routeColorHex: string | null,
+  routeId?: string | null,
 ): string {
-  if (routeColor) return `#${routeColor.replace(/^#/, "")}`;
+  if (routeColorHex) return `#${routeColorHex.replace(/^#/, "")}`;
+
+  const fromDemo = lookupDemoRouteColor(feedId, routeShortName, routeId);
+  if (fromDemo) return fromDemo.startsWith("#") ? fromDemo : `#${fromDemo}`;
+
   if (feedId === "go" && routeShortName) {
-    const c = GO_LINE_COLORS[routeShortName.padStart(2, "0")];
-    if (c) return c;
+    const rail = GO_RAIL_COLORS[routeShortName.toUpperCase()];
+    if (rail) return rail;
   }
+
   return AGENCY_COLORS[feedId] ?? "#007934";
 }
 

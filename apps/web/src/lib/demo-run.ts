@@ -46,7 +46,7 @@ async function findRouteMeta(feedId: string, routeId: string | undefined) {
         return {
           short_name: r.shortName,
           long_name: r.longName,
-          color: routeColor(feedId, r.shortName, null),
+          color: routeColor(feedId, r.shortName, null, r.id),
         };
       }
     }

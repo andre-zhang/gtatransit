@@ -58,12 +58,12 @@ export function StopBoardClient({
 
   return (
     <div className="departure-board">
-      {(refreshing || error) && (
+      {(refreshing && rows.length === 0) || error ? (
         <div className="flex items-center justify-between border-b border-go-bg px-4 py-2 text-xs text-go-slate">
-          <span>{refreshing ? "Updating…" : " "}</span>
+          <span>{refreshing && rows.length === 0 ? "Loading…" : refreshing ? "Updating…" : " "}</span>
           {error && <span className="text-go-late">{error}</span>}
         </div>
-      )}
+      ) : null}
       <DepartureTable rows={rows} stopName={initialName} />
     </div>
   );

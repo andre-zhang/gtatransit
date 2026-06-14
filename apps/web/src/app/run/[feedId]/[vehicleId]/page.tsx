@@ -2,6 +2,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { RunViewClient } from "@/components/RunViewClient";
 import { cleanHeadsign } from "@/lib/headsign";
+import { getDemoRun } from "@/lib/demo-run";
+import { useDemoFixtures } from "@/lib/demo-mode";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 async function load(feedId: string, vehicleId: string) {
@@ -20,7 +22,13 @@ export default async function RunPage({
   params: Promise<{ feedId: string; vehicleId: string }>;
 }) {
   const { feedId, vehicleId } = await params;
-  const data = await load(feedId, vehicleId);
+  let data = null;
+
+  if (await useDemoFixtures()) {
+    data = await getDemoRun(feedId, vehicleId);
+  } else {
+    data = await load(feedId, vehicleId);
+  }
 
   if (!data) {
     return (

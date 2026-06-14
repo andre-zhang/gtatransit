@@ -75,7 +75,7 @@ function routeMetaFromCore(feedId: string, routeId: string | undefined) {
       if (r) {
         return {
           routeShort: r.shortName,
-          routeColor: routeColor(feedId, r.shortName, null),
+          routeColor: routeColor(feedId, r.shortName, null, r.id),
           destination: r.longName,
         };
       }
@@ -141,7 +141,8 @@ function rtPredictionToDeparture(
     routeId: routeId ?? "",
     routeShort,
     routeColor:
-      scheduledRow?.routeColor ?? routeColor(row.feedId, routeShort, null),
+      scheduledRow?.routeColor ??
+      routeColor(row.feedId, routeShort, null, routeId ?? undefined),
     destination: cleanHeadsign(scheduledRow?.headsign) || "In service",
     departureTime: secToTime(schedSec % 86400),
     stopId: row.stopId,

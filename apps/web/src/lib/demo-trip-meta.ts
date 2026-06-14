@@ -1,5 +1,7 @@
 import { preloadTripHeadsignIndex, tripHeadsigns } from "./demo-trip-headsign";
 import { readDemoJsonFile } from "./demo-read";
+import { loadTripStopsForTrip } from "./demo-schedule-data";
+import { formatBoardTime, gtfsTimeToSec, torontoNowSec } from "./calendar";
 import { goTripSuffix, goTripsMatch } from "./go-stop-aliases";
 
 type BlockTrip = {
@@ -51,6 +53,11 @@ function findBlockForTrip(
   return undefined;
 }
 
+function formatTripTime(raw: string): string {
+  const fmt = formatBoardTime(gtfsTimeToSec(raw), torontoNowSec());
+  return fmt.time;
+}
+
 export async function loadFeedTripMeta(
   feedId: string,
   tripId: string,
@@ -79,6 +86,7 @@ export async function loadBlockTrips(
     trip_id: string;
     headsign: string | null;
     first_departure: string;
+    last_departure?: string;
     active: boolean;
   }>
 > {
@@ -101,8 +109,19 @@ export async function loadBlockTrips(
     mapped.map((t) => t.trip_id),
   );
 
-  return mapped.map((t) => ({
-    ...t,
-    headsign: t.headsign ?? hits.get(t.trip_id) ?? null,
-  }));
+  const withTimes = await Promise.all(
+    mapped.map(async (t) => {
+      const stops = await loadTripStopsForTrip(feedId, t.trip_id);
+      const last = stops[stops.length - 1];
+      return {
+        trip_id: t.trip_id,
+        headsign: t.headsign ?? hits.get(t.trip_id) ?? null,
+        first_departure: t.first_departure,
+        last_departure: last ? formatTripTime(last.departureTime) : undefined,
+        active: t.active,
+      };
+    }),
+  );
+
+  return withTimes;
 }
