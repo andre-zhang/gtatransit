@@ -2,8 +2,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { RunViewClient } from "@/components/RunViewClient";
 import { cleanHeadsign } from "@/lib/headsign";
-import { getDemoRun } from "@/lib/demo-run";
-import { useDemoFixtures } from "@/lib/demo-mode";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 async function load(feedId: string, vehicleId: string) {
@@ -22,21 +20,13 @@ export default async function RunPage({
   params: Promise<{ feedId: string; vehicleId: string }>;
 }) {
   const { feedId, vehicleId } = await params;
-  let data = null;
-
-  if (await useDemoFixtures()) {
-    data = await getDemoRun(feedId, vehicleId);
-  } else {
-    data = await load(feedId, vehicleId);
-  }
+  const data = await load(feedId, vehicleId);
 
   if (!data) {
     return (
       <PageShell>
-        <PageHeader title="Vehicle unavailable" />
-        <div className="px-6 py-12 text-center text-go-slate">
-          Vehicle not found or no longer reporting location.
-        </div>
+        <PageHeader title="Vehicle" />
+        <RunViewClient feedId={feedId} vehicleId={vehicleId} initial={null} />
       </PageShell>
     );
   }

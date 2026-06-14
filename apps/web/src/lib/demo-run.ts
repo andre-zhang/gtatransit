@@ -234,6 +234,8 @@ function inferCurrentStopIndex(
 
 export async function getDemoRun(feedId: string, vehicleId: string) {
   await ensureDemoAssets();
+  const { refreshRtCache } = await import("./rt-cache");
+  await refreshRtCache();
 
   const vehicle = getRtVehicle(feedId, vehicleId);
   if (!vehicle || vehicle.lat == null || vehicle.lon == null) return null;

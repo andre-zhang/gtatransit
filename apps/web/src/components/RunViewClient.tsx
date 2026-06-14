@@ -57,10 +57,10 @@ export function RunViewClient({
 }: {
   feedId: string;
   vehicleId: string;
-  initial: RunData;
+  initial: RunData | null;
 }) {
-  const [data, setData] = useState(initial);
-  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<RunData | null>(initial);
+  const [loading, setLoading] = useState(initial == null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -84,6 +84,16 @@ export function RunViewClient({
     return () => clearInterval(id);
   }, [refresh]);
 
+  if (!data) {
+    return (
+      <div className="px-6 py-12 text-center text-sm text-go-slate">
+        {loading
+          ? "Loading vehicle…"
+          : "Vehicle not found or no longer reporting location."}
+      </div>
+    );
+  }
+
   const { vehicle, trip, route, currentStop, upcomingStops, shape, blockTrips } = data;
   const early = vehicle.delayMin != null && vehicle.delayMin < 0;
   const late = vehicle.delayMin != null && vehicle.delayMin > 0;
@@ -91,8 +101,8 @@ export function RunViewClient({
 
   return (
     <>
-      {loading && !blockTrips?.length && !upcomingStops?.length && (
-        <div className="border-b border-go-bg px-5 py-2 text-xs text-go-slate">Loading…</div>
+      {loading && (
+        <div className="border-b border-go-bg px-5 py-2 text-xs text-go-slate">Updating…</div>
       )}
       <div className="grid grid-cols-2 divide-x divide-go-bg border-b border-go-bg sm:grid-cols-4">
         <div className="p-5">
