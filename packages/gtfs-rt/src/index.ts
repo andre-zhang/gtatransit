@@ -113,6 +113,14 @@ export const GO_RT_API = {
   vehiclePositions: "api/V1/Gtfs/Feed/VehiclePosition",
 } as const;
 
+/** Metrolinx keys are passed as `?key=` on the URL (not subscription headers). */
+export function metrolinxApiUrl(path: string, apiKey: string): string {
+  const cleanPath = path.replace(/^\//, "");
+  const url = new URL(`${GO_RT_API.base}/${cleanPath}`);
+  url.searchParams.set("key", apiKey.trim());
+  return url.toString();
+}
+
 export const RT_FEEDS: Record<
   string,
   { vehicles?: string; tripUpdates?: string; headers?: Record<string, string> }

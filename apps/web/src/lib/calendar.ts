@@ -128,10 +128,13 @@ export function formatBoardTime(
 ): { time: string; dayOffset: number } {
   const norm = normalizeServiceSec(sec, now);
   const dayOffset = serviceDayOffset(norm, now);
-  const displaySec = norm >= 86400 ? norm : ((norm % 86400) + 86400) % 86400;
-  const time =
-    norm >= 86400 ? formatGtfsTime(norm) : secToTime(displaySec);
-  return { time, dayOffset };
+  const clockSec = ((norm % 86400) + 86400) % 86400;
+  return { time: secToTime(clockSec), dayOffset };
+}
+
+/** GTFS stop_times strings may use hours ≥ 24 (e.g. 28:30 → 04:30). */
+export function formatGtfsDepartureTime(t: string, now = torontoNowSec()): string {
+  return formatBoardTime(gtfsTimeToSec(t), now).time;
 }
 
 export function nowSec(): number {

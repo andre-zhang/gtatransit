@@ -235,16 +235,16 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     : undefined;
   const scheduleTrip = resolved?.row;
   const scheduleTripId = scheduleTrip?.tripId;
-  const useScheduleStops = Boolean(
-    scheduleTripId && (!resolved?.fuzzy || scheduleTripId === liveTripId),
-  );
-  const shape = findShape(feedId, routeId);
+  const useScheduleStops = Boolean(scheduleTripId);
+  const shape = findShape(feedId, routeId ?? scheduleTrip?.routeId);
   await preloadTripHeadsignIndex(feedId);
   const headsign =
     (scheduleTrip?.headsign?.trim() && !needsHeadsignLookup(scheduleTrip.headsign)
       ? scheduleTrip.headsign.trim()
       : null) ??
-    (liveTripId ? await tripHeadsign(feedId, liveTripId) : null);
+    (liveTripId ? await tripHeadsign(feedId, liveTripId) : null) ??
+    route?.long_name ??
+    null;
 
   const allUpcoming = liveTripId
     ? await buildUpcomingStops(

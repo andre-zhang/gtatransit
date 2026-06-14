@@ -1,4 +1,4 @@
-import { GO_RT_API } from "@gta/gtfs-rt";
+import { GO_RT_API, metrolinxApiUrl } from "@gta/gtfs-rt";
 import { serviceDate } from "./calendar";
 import { formatGoPlatform } from "./go-stop-aliases";
 
@@ -141,11 +141,13 @@ export async function fetchGoNextService(
     return { rows: cached.rows, error: null };
   }
 
-  const headers = { "Ocp-Apim-Subscription-Key": apiKey };
   try {
     const res = await fetch(
-      `${GO_RT_API.base}/api/V1/Stop/NextService/${encodeURIComponent(stopCode)}`,
-      { headers, next: { revalidate: 0 } },
+      metrolinxApiUrl(
+        `api/V1/Stop/NextService/${encodeURIComponent(stopCode)}`,
+        apiKey,
+      ),
+      { next: { revalidate: 0 } },
     );
     if (!res.ok) {
       return { rows: [], error: `NextService:${res.status}` };
@@ -171,16 +173,15 @@ export async function probeMetrolinxKey(apiKey: string): Promise<{
   gtfsRt: number | null;
   gtfsRtError: string | null;
 }> {
-  const headers = { "Ocp-Apim-Subscription-Key": apiKey };
   let stopApi: number | null = null;
   let stopApiError: string | null = null;
   let gtfsRt: number | null = null;
   let gtfsRtError: string | null = null;
 
   try {
-    const stopRes = await fetch(`${GO_RT_API.base}/api/V1/Stop/NextService/UN`, {
-      headers,
-    });
+    const stopRes = await fetch(
+      metrolinxApiUrl("api/V1/Stop/NextService/UN", apiKey),
+    );
     stopApi = stopRes.status;
     const stopData: unknown = await stopRes.json();
     stopApiError = metrolinxError(stopData);
@@ -189,9 +190,7 @@ export async function probeMetrolinxKey(apiKey: string): Promise<{
   }
 
   try {
-    const gtfsRes = await fetch(`${GO_RT_API.base}/${GO_RT_API.tripUpdates}`, {
-      headers,
-    });
+    const gtfsRes = await fetch(metrolinxApiUrl(GO_RT_API.tripUpdates, apiKey));
     gtfsRt = gtfsRes.status;
     if (!gtfsRes.ok) {
       gtfsRtError = String(gtfsRes.status);

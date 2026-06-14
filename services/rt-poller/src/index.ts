@@ -3,6 +3,7 @@ import { getSql } from "@gta/db";
 import {
   RT_FEEDS,
   fetchRt,
+  metrolinxApiUrl,
   parseTripUpdates,
   parseVehicles,
 } from "@gta/gtfs-rt";
@@ -101,15 +102,14 @@ async function pollGo() {
   }
   const sql = getSql();
   const now = new Date();
-  const headers = { "Ocp-Apim-Subscription-Key": key };
 
   for (const [kind, path] of [
     ["vehicles", "api/V1/Gtfs/Feed/VehiclePosition"],
     ["trips", "api/V1/Gtfs/Feed/TripUpdates"],
   ] as const) {
     try {
-      const url = `https://api.openmetrolinx.com/OpenDataAPI/${path}`;
-      const res = await fetch(url, { headers });
+      const url = metrolinxApiUrl(path, key);
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`${res.status}`);
       const { decodeFeed, parseVehicles, parseTripUpdates } = await import("@gta/gtfs-rt");
       const msg = decodeFeed(await res.arrayBuffer());

@@ -2,6 +2,7 @@ import {
   GO_RT_API,
   RT_FEEDS,
   fetchRt,
+  metrolinxApiUrl,
   parseTripUpdates,
   parseVehicles,
   type RtTripUpdate,
@@ -234,7 +235,6 @@ async function pollGoRest(key: string, now: number): Promise<number> {
 }
 
 async function pollGo(key: string) {
-  const headers = { "Ocp-Apim-Subscription-Key": key };
   const now = Date.now();
   let sawData = false;
   let tripUpdates = 0;
@@ -246,8 +246,8 @@ async function pollGo(key: string) {
     ["trips", GO_RT_API.tripUpdates],
   ] as const) {
     try {
-      const url = `${GO_RT_API.base}/${path}`;
-      const res = await fetch(url, { headers, next: { revalidate: 0 } });
+      const url = metrolinxApiUrl(path, key);
+      const res = await fetch(url, { next: { revalidate: 0 } });
       if (!res.ok) {
         errors.push(`${kind}:${res.status}`);
         continue;
@@ -260,7 +260,10 @@ async function pollGo(key: string) {
         for (const v of parseVehicles("go", msg)) {
           if (v.lat == null || v.lon == null) continue;
           vehicles++;
-          vehicleMap.set(`go:${v.vehicleId}`, { ...v, updatedAt: now });
+          const tk = v.tripId ? tripKey("go", v.tripId) : null;
+          const routeId = v.routeId ?? (tk ? tripMap.get(tk)?.routeId : undefined);
+          const enriched = routeId && !v.routeId ? { ...v, routeId } : v;
+          vehicleMap.set(`go:${v.vehicleId}`, { ...enriched, updatedAt: now });
           if (!v.tripId) continue;
           const k = tripKey("go", v.tripId);
           const prev = tripMap.get(k) ?? { updatedAt: now };
@@ -347,7 +350,10 @@ async function pollFeed(feedId: string) {
       const msg = await fetchRt(cfg.vehicles, cfg.headers);
       for (const v of parseVehicles(feedId, msg)) {
         if (v.lat == null || v.lon == null) continue;
-        vehicleMap.set(`${feedId}:${v.vehicleId}`, { ...v, updatedAt: now });
+        const tk = v.tripId ? tripKey(feedId, v.tripId) : null;
+        const routeId = v.routeId ?? (tk ? tripMap.get(tk)?.routeId : undefined);
+        const enriched = routeId && !v.routeId ? { ...v, routeId } : v;
+        vehicleMap.set(`${feedId}:${v.vehicleId}`, { ...enriched, updatedAt: now });
         if (!v.tripId) continue;
         const k = tripKey(feedId, v.tripId);
         const prev = tripMap.get(k) ?? { updatedAt: now };
@@ -702,7 +708,13 @@ export function getRtVehicles(): RtVehicle[] {
   const cutoff = Date.now() - 5 * 60_000;
   return [...vehicleMap.values()]
     .filter((v) => v.updatedAt >= cutoff && v.lat != null && v.lon != null)
-    .map(({ updatedAt: _, ...v }) => v);
+    .map(({ updatedAt: _, ...v }) => {
+      if (!v.routeId && v.tripId) {
+        const tripRt = tripMap.get(tripKey(v.feedId, v.tripId));
+        if (tripRt?.routeId) return { ...v, routeId: tripRt.routeId };
+      }
+      return v;
+    });
 }
 
 /** Active vehicle serving a route (for stops without stop-level trip updates). */

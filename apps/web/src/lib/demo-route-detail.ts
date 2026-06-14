@@ -1,4 +1,5 @@
 import type { LineString } from "geojson";
+import { formatGtfsDepartureTime } from "./calendar";
 import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
 import { loadRouteScheduleRows, loadUnionSchedule } from "./demo-schedule-data";
@@ -20,12 +21,7 @@ type RouteMeta = {
 };
 
 function formatDeparture(time: string): string {
-  const parts = time.split(":");
-  if (parts.length < 2) return time;
-  const h = Number(parts[0]);
-  const m = parts[1];
-  if (Number.isNaN(h)) return time.slice(0, 5);
-  return `${String(h % 24).padStart(2, "0")}:${m}`;
+  return formatGtfsDepartureTime(time);
 }
 
 function findRouteMeta(feedId: string, routeId: string): RouteMeta | null {
