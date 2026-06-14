@@ -1,10 +1,13 @@
 import {
-  formatBoardTime,
+  alignPredictionToSchedule,
+  displayTripClockTime,
   gtfsTimeToSec,
-  normalizeServiceSec,
+  isUnixTimestamp,
+  makeMonotonicGtfsSecs,
+  shiftTripToPrediction,
   torontoNowSec,
-} from "./calendar";
-import { computeDelaySec, delayMinFromSec } from "./departures";
+  unixToTorontoSec,
+} from "./calendar";import { computeDelaySec, delayMinFromSec } from "./departures";
 import { loadDemoAssets } from "./demo-assets";
 import { getTripStops } from "./demo-schedules";
 import { expandGoStopId, goStopIdsMatch } from "./go-stop-aliases";
@@ -104,9 +107,15 @@ export async function buildDemoTripStops(opts: {
       fromCandidates != null ? findStopIndex(schedStops, fromCandidates, feedId) : 0;
     const slice = startIdx >= 0 ? schedStops.slice(startIdx) : schedStops;
     const baseSeq = startIdx >= 0 ? schedStops[startIdx]!.sequence : 0;
+    const rawSecs = slice.map((s) => gtfsTimeToSec(s.departureTime));
+    let monoSecs = makeMonotonicGtfsSecs(rawSecs);
+    const firstRt = await rtForFixtureStop(feedId, liveTripId, slice[0]!.stopId);
+    if (firstRt?.predictedSec != null) {
+      monoSecs = shiftTripToPrediction(monoSecs, firstRt.predictedSec);
+    }
     return Promise.all(
-      slice.map(async (s) => {
-        const schedSec = gtfsTimeToSec(s.departureTime);
+      slice.map(async (s, idx) => {
+        const schedSec = monoSecs[idx]!;
         const rt = await rtForFixtureStop(feedId, liveTripId, s.stopId);
         const delaySec = computeDelaySec(schedSec, {
           predictedSec: rt?.predictedSec,
@@ -115,21 +124,18 @@ export async function buildDemoTripStops(opts: {
         });
         let predictedSec: number | undefined;
         if (rt?.predictedSec != null) {
-          predictedSec = normalizeServiceSec(rt.predictedSec, now);
+          predictedSec = alignPredictionToSchedule(rt.predictedSec, schedSec);
         } else if (delaySec != null) {
-          predictedSec = normalizeServiceSec(schedSec + delaySec, now);
+          predictedSec = schedSec + delaySec;
         }
-        const schedFmt = formatBoardTime(schedSec, now);
-        const predFmt =
-          predictedSec != null ? formatBoardTime(predictedSec, now) : null;
         return {
           stopId: s.stopId,
           name: s.name,
           sequence: s.sequence,
-          scheduled: schedFmt.time,
-          predicted: predFmt?.time,
+          scheduled: displayTripClockTime(schedSec),
+          predicted:
+            predictedSec != null ? displayTripClockTime(predictedSec) : undefined,
           delayMin: delayMinFromSec(delaySec),
-          platform: rt?.platform,
           passed:
             fromCandidates != null &&
             startIdx >= 0 &&
@@ -162,15 +168,18 @@ export async function buildDemoTripStops(opts: {
         feedId === "ttc"
           ? ((await liveStopDisplayName(u.stopId)) ?? stopName(feedId, u.stopId))
           : stopName(feedId, u.stopId);
-      const schedSec = u.predictedSec ?? now;
-      const fmt = formatBoardTime(schedSec, now);
+      const schedSec =
+        u.predictedSec != null
+          ? isUnixTimestamp(u.predictedSec)
+            ? unixToTorontoSec(u.predictedSec)
+            : u.predictedSec
+          : now;
       return {
         stopId: u.stopId,
         name,
         sequence: baseSeq + i,
-        scheduled: fmt.time,
-        predicted: fmt.time,
-        platform: u.platform,
+        scheduled: displayTripClockTime(schedSec),
+        predicted: displayTripClockTime(schedSec),
         delayMin: u.delaySec != null ? Math.round(u.delaySec / 60) : undefined,
       };
     }),

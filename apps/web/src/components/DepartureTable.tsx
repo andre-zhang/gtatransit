@@ -102,9 +102,6 @@ function TripStopsPanel({
             {s.predicted ?? s.scheduled}
           </span>
           <span className="min-w-0 flex-1 truncate text-go-navy">{s.name}</span>
-          {s.platform && (
-            <span className="shrink-0 tabular-nums text-go-slate">Plat {s.platform}</span>
-          )}
         </li>
       ))}
     </ul>
@@ -119,10 +116,6 @@ export function DepartureTable({
   stopName?: string;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const showPlatform =
-    stopName?.includes("GO") ||
-    stopName?.includes("Union") ||
-    rows.some((r) => r.feedId === "go");
   const showAgency = new Set(rows.map((r) => r.feedId)).size > 1;
 
   if (!rows.length) {
@@ -215,11 +208,6 @@ export function DepartureTable({
                       <div className="flex flex-wrap items-center gap-2">
                         {showAgency && <AgencyMark feedId={r.feedId} />}
                         <RoutePill shortName={r.routeShort} color={r.routeColor} size="lg" />
-                        {showPlatform && r.feedId === "go" && r.platform && (
-                          <span className="text-xs tabular-nums text-go-slate">
-                            Plat {r.platform}
-                          </span>
-                        )}
                       </div>
                       <p
                         className={`departure-board-dest mt-1 truncate ${
@@ -282,7 +270,6 @@ export function DepartureTable({
             {showAgency && <th className="px-2 py-3">Agency</th>}
             <th className="px-3 py-3">Route</th>
             <th className="px-3 py-3">Headsign</th>
-            {showPlatform && <th className="px-3 py-3 text-center">Plat</th>}
             <th className="px-5 py-3 text-right">Status</th>
           </tr>
         </thead>
@@ -295,7 +282,7 @@ export function DepartureTable({
                 {m.showDayBreak && m.dayLabel && (
                   <tr className="departure-board-daybreak">
                     <td
-                      colSpan={showAgency ? (showPlatform ? 6 : 5) : showPlatform ? 5 : 4}
+                      colSpan={showAgency ? 5 : 4}
                       className="px-5 py-2 text-xs font-semibold uppercase tracking-wide text-go-slate"
                     >
                       {m.dayLabel}
@@ -356,11 +343,6 @@ export function DepartureTable({
                       {cleanHeadsign(r.destination)}
                     </span>
                   </td>
-                  {showPlatform && (
-                    <td className="departure-board-plat px-3 py-3 text-center tabular-nums">
-                      {r.feedId === "go" ? (r.platform ?? "—") : ""}
-                    </td>
-                  )}
                   <td className="px-5 py-3 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       {m.late || m.early ? (
@@ -395,7 +377,7 @@ export function DepartureTable({
                 </tr>
                 {m.isOpen && (
                   <tr>
-                    <td colSpan={(showPlatform ? 1 : 0) + (showAgency ? 1 : 0) + 4} className="p-0">
+                    <td colSpan={(showAgency ? 1 : 0) + 4} className="p-0">
                       <TripStopsPanel
                         feedId={r.feedId}
                         tripId={r.tripId}

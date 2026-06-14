@@ -8,10 +8,15 @@ import { computeDelaySec, delayMinFromSec } from "./departures";
 import { getDemoRoutesGeoJson } from "./demo-routes";
 import { routeColor } from "./colors";
 import {
-  formatBoardTime,
+  alignPredictionToSchedule,
+  displayTripClockTime,
   gtfsTimeToSec,
+  isUnixTimestamp,
+  makeMonotonicGtfsSecs,
   normalizeServiceSec,
+  shiftTripToPrediction,
   torontoNowSec,
+  unixToTorontoSec,
 } from "./calendar";
 import type { ScheduleRow } from "./demo-schedule-types";
 import { needsHeadsignLookup, preloadTripHeadsignIndex, tripHeadsign } from "./demo-trip-headsign";
@@ -144,29 +149,34 @@ async function buildUpcomingStops(
         ? schedStops.findIndex((s) => s.sequence >= fromSequence)
         : 0;
     const slice = startIdx >= 0 ? schedStops.slice(startIdx) : schedStops;
+    const rawSecs = slice.map((s) => gtfsTimeToSec(s.departureTime));
+    let monoSecs = makeMonotonicGtfsSecs(rawSecs);
+    const firstRt = await rtForScheduleStop(feedId, slice[0]!.stopId, rtByLiveId);
+    if (firstRt?.predictedSec != null) {
+      monoSecs = shiftTripToPrediction(monoSecs, firstRt.predictedSec);
+    }
     const mapped = await Promise.all(
-      slice.map(async (s) => {
-        const schedSec = gtfsTimeToSec(s.departureTime);
+      slice.map(async (s, idx) => {
+        const schedSec = monoSecs[idx]!;
         const rt = await rtForScheduleStop(feedId, s.stopId, rtByLiveId);
         const delaySec = computeDelaySec(schedSec, {
           predictedSec: rt?.predictedSec,
           agencyDelaySec: rt?.delaySec,
           now,
         });
-        let predictedSec = rt?.predictedSec;
-        if (predictedSec == null && delaySec != null) {
+        let predictedSec: number | undefined;
+        if (rt?.predictedSec != null) {
+          predictedSec = alignPredictionToSchedule(rt.predictedSec, schedSec);
+        } else if (delaySec != null) {
           predictedSec = schedSec + delaySec;
         }
-        const schedFmt = formatBoardTime(schedSec, now);
-        const predFmt =
-          predictedSec != null ? formatBoardTime(predictedSec, now) : null;
         return {
           stop_id: s.stopId,
           name: s.name,
           sequence: s.sequence,
-          scheduled: schedFmt.time,
-          predicted: predFmt?.time,
-          platform: rt?.platform,
+          scheduled: displayTripClockTime(schedSec),
+          predicted:
+            predictedSec != null ? displayTripClockTime(predictedSec) : undefined,
           delayMin: delayMinFromSec(delaySec),
         };
       }),
@@ -180,14 +190,17 @@ async function buildUpcomingStops(
         feedId === "ttc"
           ? ((await liveStopDisplayName(u.stopId)) ?? stopName(feedId, u.stopId))
           : stopName(feedId, u.stopId);
-      const schedSec = u.predictedSec ?? now;
-      const fmt = formatBoardTime(schedSec, now);
+      const schedSec =
+        u.predictedSec != null
+          ? isUnixTimestamp(u.predictedSec)
+            ? unixToTorontoSec(u.predictedSec)
+            : u.predictedSec
+          : now;
       return {
         stop_id: u.stopId,
         name,
-        scheduled: fmt.time,
-        predicted: fmt.time,
-        platform: u.platform,
+        scheduled: displayTripClockTime(schedSec),
+        predicted: displayTripClockTime(schedSec),
         delayMin: u.delaySec != null ? Math.round(u.delaySec / 60) : undefined,
       };
     }),

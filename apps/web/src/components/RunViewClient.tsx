@@ -179,11 +179,6 @@ export function RunViewClient({
                   {s.predicted ?? s.scheduled}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-go-navy">{s.name}</span>
-                {feedId === "go" && s.platform && (
-                  <span className="shrink-0 text-sm tabular-nums text-go-slate">
-                    Plat {s.platform}
-                  </span>
-                )}
                 {s.delayMin != null && s.delayMin !== 0 && (
                   <span
                     className={`go-badge shrink-0 ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}

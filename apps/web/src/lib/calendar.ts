@@ -141,6 +141,48 @@ export function nowSec(): number {
   return torontoNowSec();
 }
 
+export function displayTripClockTime(sec: number): string {
+  return secToTime(((sec % 86400) + 86400) % 86400);
+}
+
+/** Preserve GTFS trip ordering across midnight (e.g. 23:50 → 24:10 → 01:00). */
+export function makeMonotonicGtfsSecs(secs: number[]): number[] {
+  if (!secs.length) return [];
+  const out = [secs[0]!];
+  for (let i = 1; i < secs.length; i++) {
+    let s = secs[i]!;
+    while (s + 600 < out[i - 1]!) s += 86400;
+    out.push(s);
+  }
+  return out;
+}
+
+/** Align a live prediction onto the same service-day axis as its scheduled stop. */
+export function alignPredictionToSchedule(
+  predictedSec: number,
+  schedSec: number,
+): number {
+  let p = predictedSec;
+  if (isUnixTimestamp(p)) p = unixToTorontoSec(p);
+  while (p + 600 < schedSec) p += 86400;
+  while (p > schedSec + 30 * 3600) p -= 86400;
+  return p;
+}
+
+/** Shift an entire trip timeline when the first stop's live time differs from schedule encoding. */
+export function shiftTripToPrediction(
+  monoSecs: number[],
+  predictedSec: number,
+): number[] {
+  if (!monoSecs.length) return monoSecs;
+  const alignedPred = alignPredictionToSchedule(predictedSec, monoSecs[0]!);
+  const shift = alignedPred - monoSecs[0]!;
+  if (shift !== 0 && Math.abs(shift) <= 12 * 3600) {
+    return monoSecs.map((s) => s + shift);
+  }
+  return monoSecs;
+}
+
 export function torontoNowSec(d = new Date()): number {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: TZ,

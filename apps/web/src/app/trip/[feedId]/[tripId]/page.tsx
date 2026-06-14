@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { cleanHeadsign } from "@/lib/headsign";
+import { formatDelayLabel } from "@/lib/delay-label";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 type Stop = {
@@ -94,14 +95,12 @@ export default async function TripPage({
               {s.predicted ?? s.scheduled}
             </span>
             <span className="min-w-0 flex-1 truncate text-go-navy">{s.name}</span>
-            {feedId === "go" && s.platform && (
-              <span className="shrink-0 text-sm tabular-nums text-go-slate">Plat {s.platform}</span>
-            )}
-            {s.delayMin != null && s.delayMin > 0 && (
-              <span className="go-badge go-badge--late shrink-0">+{s.delayMin} min</span>
-            )}
-            {s.delayMin != null && s.delayMin < 0 && (
-              <span className="go-badge go-badge--early shrink-0">{s.delayMin} min</span>
+            {s.delayMin != null && s.delayMin !== 0 && (
+              <span
+                className={`go-badge shrink-0 ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}
+              >
+                {formatDelayLabel(s.delayMin)}
+              </span>
             )}
           </li>
         ))}

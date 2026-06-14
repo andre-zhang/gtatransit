@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import {
+  alignPredictionToSchedule,
+  displayTripClockTime,
   gtfsTimeToSec,
-  normalizeServiceSec,
-  secToTime,
+  makeMonotonicGtfsSecs,
+  shiftTripToPrediction,
   torontoNowSec,
 } from "@/lib/calendar";
 import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
@@ -85,14 +87,21 @@ export async function GET(
   const now = torontoNowSec();
   const headsign = tripMeta[0]?.headsign ?? null;
 
+  const rawSecs = slice.map((s) => gtfsTimeToSec(s.departure_time));
+  let monoSecs = makeMonotonicGtfsSecs(rawSecs);
+  const firstRt = slice[0] ? getStopTripRt(feedId, tripId, slice[0].stop_id) : undefined;
+  if (firstRt?.predictedSec != null) {
+    monoSecs = shiftTripToPrediction(monoSecs, firstRt.predictedSec);
+  }
+
   return NextResponse.json({
     tripId,
     feedId,
     fromStop,
     headsign,
     vehicleId: tripRt?.vehicleId,
-    stops: slice.map((s) => {
-      const schedSec = gtfsTimeToSec(s.departure_time);
+    stops: slice.map((s, idx) => {
+      const schedSec = monoSecs[idx]!;
       const rt = getStopTripRt(feedId, tripId, s.stop_id);
       const delaySec = computeDelaySec(schedSec, {
         predictedSec: rt?.predictedSec,
@@ -101,19 +110,18 @@ export async function GET(
       });
       let predictedSec: number | undefined;
       if (rt?.predictedSec != null) {
-        predictedSec = normalizeServiceSec(rt.predictedSec, now);
+        predictedSec = alignPredictionToSchedule(rt.predictedSec, schedSec);
       } else if (delaySec != null) {
-        predictedSec = normalizeServiceSec(schedSec + delaySec, now);
+        predictedSec = schedSec + delaySec;
       }
       return {
         stopId: s.stop_id,
         name: s.name,
         sequence: s.stop_sequence,
-        scheduled: secToTime(schedSec % 86400),
+        scheduled: displayTripClockTime(schedSec),
         predicted:
-          predictedSec != null ? secToTime(predictedSec % 86400) : undefined,
+          predictedSec != null ? displayTripClockTime(predictedSec) : undefined,
         delayMin: delayMinFromSec(delaySec),
-        platform: feedId === "go" ? rt?.platform : undefined,
       };
     }),
   });
