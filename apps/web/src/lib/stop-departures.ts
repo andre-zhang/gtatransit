@@ -35,10 +35,8 @@ import {
   formatGoPlatform,
   resolveGoRtStopIds,
 } from "@/lib/go-stop-aliases";
-import { fetchGoNextService } from "@/lib/go-metrolinx-rest";
-import { normalizeMetrolinxKey } from "@/lib/rt-cache";
 import { cleanHeadsign } from "@/lib/headsign";
-import { isTtcRtStopAtGroup, resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
+import { resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
 
 function routeMetaFromCore(feedId: string, routeId: string | undefined) {
   if (!routeId) return null;
@@ -183,9 +181,13 @@ export async function buildDemoStopDepartures(
 
   const inputs: DepartureInput[] = [];
 
+  const allowedTtcRtStopIds = new Set(
+    await resolveTtcRtStopIds(stop.members.filter((m) => m.feedId === "ttc")),
+  );
+
   for (const [feedId, rtStopIds] of rtStopIdsByFeed) {
     for (const extra of getRtPredictionsForStop(feedId, rtStopIds, new Set())) {
-      if (feedId === "ttc" && !(await isTtcRtStopAtGroup(extra.stopId, stop.members))) {
+      if (feedId === "ttc" && !allowedTtcRtStopIds.has(extra.stopId)) {
         continue;
       }
       const row = rtPredictionToDeparture(extra, schedule);
@@ -195,48 +197,25 @@ export async function buildDemoStopDepartures(
     }
   }
 
-  const goKey = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
-  if (goKey && rtStopIdsByFeed.has("go")) {
-    const goCodes = new Set<string>();
-    for (const id of rtStopIdsByFeed.get("go") ?? []) {
-      for (const code of expandGoStopId(id)) goCodes.add(code);
-    }
-    for (const stopCode of goCodes) {
-      const { rows: liveRows } = await fetchGoNextService(stopCode, goKey);
-      for (const live of liveRows) {
-        const tripKey = `${live.tripId}`;
-        if (usedRtTrips.has(`go:${tripKey}`) || usedRtTrips.has(tripKey)) continue;
-        const pred: RtStopPrediction = {
-          feedId: "go",
-          tripId: live.tripId,
-          stopId: live.stopId,
-          routeId: live.routeShort,
-          predictedSec: live.predictedSec,
-          platform: live.platform,
-        };
-        const row = rtPredictionToDeparture(pred, schedule);
-        if (!row) continue;
-        usedRtTrips.add(`go:${row.tripId}`);
-        inputs.push(row);
-      }
-    }
-  }
+  const ttcRtByStopId = new Map<string, string[]>();
+  const uniqueTtcStopIds = [
+    ...new Set(schedule.filter((r) => r.feedId === "ttc").map((r) => r.stopId)),
+  ];
+  await Promise.all(
+    uniqueTtcStopIds.map(async (stopId) => {
+      ttcRtByStopId.set(
+        stopId,
+        await resolveTtcRtStopIds([{ feedId: "ttc", stopId }]),
+      );
+    }),
+  );
 
-  const ttcRtByMember = new Map<string, string[]>();
   const routeVehicleMarked = new Set<string>();
-  async function ttcRtIdsForStop(stopId: string): Promise<string[]> {
-    let ids = ttcRtByMember.get(stopId);
-    if (!ids) {
-      ids = await resolveTtcRtStopIds([{ feedId: "ttc", stopId }]);
-      ttcRtByMember.set(stopId, ids);
-    }
-    return ids;
-  }
 
   for (const r of schedule) {
     const rtIds =
       r.feedId === "ttc"
-        ? await ttcRtIdsForStop(r.stopId)
+        ? (ttcRtByStopId.get(r.stopId) ?? [r.stopId])
         : r.feedId === "go"
           ? resolveGoRtStopIds(r.stopId, stop.members)
           : [r.stopId];

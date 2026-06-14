@@ -188,8 +188,14 @@ async function pollGoRest(key: string, now: number): Promise<number> {
   let tripUpdates = 0;
   const errors: string[] = [];
 
-  for (const stopCode of GO_REST_HUBS) {
-    const { rows, error } = await fetchGoNextService(stopCode, key);
+  const hubResults = await Promise.all(
+    GO_REST_HUBS.map(async (stopCode) => ({
+      stopCode,
+      ...(await fetchGoNextService(stopCode, key)),
+    })),
+  );
+
+  for (const { stopCode, rows, error } of hubResults) {
     if (error) {
       errors.push(`${stopCode}:${error}`);
       continue;

@@ -17,6 +17,7 @@ const REGISTRY_TTL_MS = 24 * 60 * 60_000;
 let registry: Record<string, TtcSurfaceStop> | null = null;
 let codeToIds = new Map<string, string[]>();
 let loadedAt = 0;
+const memberRtIdsCache = new Map<string, string[]>();
 
 function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000;
@@ -34,6 +35,7 @@ async function ensureRegistry() {
   if (registry && Date.now() - loadedAt < REGISTRY_TTL_MS) return;
   registry = await readDemoJsonFile<Record<string, TtcSurfaceStop>>("ttc-surface-stops.json");
   codeToIds = new Map();
+  memberRtIdsCache.clear();
   for (const [stopId, meta] of Object.entries(registry)) {
     if (!meta.stopCode) continue;
     const list = codeToIds.get(meta.stopCode) ?? [];
@@ -55,6 +57,10 @@ function memberCoords(feedId: string, stopId: string): { lat: number; lon: numbe
 /** Resolve live RT stop_ids for a single map pin (not all nearby stops). */
 function resolveIdsForMember(m: StopMember): string[] {
   if (!registry) return [];
+  const cacheKey = `${m.feedId}:${m.stopId}`;
+  const cached = memberRtIdsCache.get(cacheKey);
+  if (cached) return cached;
+
   const ids = new Set<string>();
 
   for (const sid of codeToIds.get(m.stopId) ?? []) ids.add(sid);
@@ -73,7 +79,9 @@ function resolveIdsForMember(m: StopMember): string[] {
     if (closest && closestDist <= COORD_MATCH_M) ids.add(closest);
   }
 
-  return [...ids];
+  const resolved = [...ids];
+  memberRtIdsCache.set(cacheKey, resolved);
+  return resolved;
 }
 
 export async function resolveTtcRtStopIds(members: StopMember[]): Promise<string[]> {
