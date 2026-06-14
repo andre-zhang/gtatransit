@@ -1,6 +1,7 @@
 import {
   GO_RT_API,
   RT_FEEDS,
+  decodeFeed,
   fetchRt,
   metrolinxApiUrl,
   parseTripUpdates,
@@ -230,7 +231,9 @@ async function pollGoRest(key: string, now: number): Promise<number> {
     return tripUpdates;
   }
 
-  if (errors.length) goRtLastError = errors.join("; ");
+  if (errors.length) {
+    goRtLastError = [goRtLastError, errors.join("; ")].filter(Boolean).join("; ");
+  }
   return 0;
 }
 
@@ -252,8 +255,17 @@ async function pollGo(key: string) {
         errors.push(`${kind}:${res.status}`);
         continue;
       }
-      const { decodeFeed } = await import("@gta/gtfs-rt");
-      const msg = decodeFeed(await res.arrayBuffer());
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength === 0) {
+        errors.push(`${kind}:empty`);
+        continue;
+      }
+      const head = new Uint8Array(buf)[0]!;
+      if (head === 0x7b || head === 0x3c) {
+        errors.push(`${kind}:non-protobuf`);
+        continue;
+      }
+      const msg = decodeFeed(buf);
       sawData = true;
 
       if (kind === "vehicles") {
@@ -308,10 +320,9 @@ async function pollGo(key: string) {
     goRtLastOk = now;
     goRtLastError = errors.length ? errors.join("; ") : null;
     goRtStats = { ...goRtStats, tripUpdates, vehicles };
-  } else if (errors.length) {
-    goRtLastError = errors.join("; ");
-    await pollGoRest(key, now);
   } else {
+    const pollErrors = errors.length ? errors.join("; ") : null;
+    if (pollErrors) goRtLastError = pollErrors;
     await pollGoRest(key, now);
   }
 }

@@ -149,12 +149,22 @@ export async function fetchGoNextService(
       ),
       { next: { revalidate: 0 } },
     );
+    if (res.status === 204) {
+      nextServiceCache.set(stopCode, { at: Date.now(), rows: [] });
+      return { rows: [], error: null };
+    }
     if (!res.ok) {
       return { rows: [], error: `NextService:${res.status}` };
     }
     const data: unknown = await res.json();
     const err = metrolinxError(data);
-    if (err) return { rows: [], error: err };
+    if (err) {
+      if (err.startsWith("204:")) {
+        nextServiceCache.set(stopCode, { at: Date.now(), rows: [] });
+        return { rows: [], error: null };
+      }
+      return { rows: [], error: err };
+    }
     const rows = parseNextServiceStop(stopCode, data);
     nextServiceCache.set(stopCode, { at: Date.now(), rows });
     return { rows, error: null };
@@ -172,11 +182,15 @@ export async function probeMetrolinxKey(apiKey: string): Promise<{
   stopApiError: string | null;
   gtfsRt: number | null;
   gtfsRtError: string | null;
+  gtfsEntities: number | null;
+  gtfsDecodeError: string | null;
 }> {
   let stopApi: number | null = null;
   let stopApiError: string | null = null;
   let gtfsRt: number | null = null;
   let gtfsRtError: string | null = null;
+  let gtfsEntities: number | null = null;
+  let gtfsDecodeError: string | null = null;
 
   try {
     const stopRes = await fetch(
@@ -195,13 +209,29 @@ export async function probeMetrolinxKey(apiKey: string): Promise<{
     if (!gtfsRes.ok) {
       gtfsRtError = String(gtfsRes.status);
     } else {
-      gtfsRtError = null;
+      const buf = await gtfsRes.arrayBuffer();
+      if (buf.byteLength === 0) {
+        gtfsDecodeError = "empty body";
+      } else {
+        const head = new Uint8Array(buf)[0]!;
+        if (head === 0x7b || head === 0x3c) {
+          gtfsDecodeError = "non-protobuf response";
+        } else {
+          try {
+            const { decodeFeed } = await import("@gta/gtfs-rt");
+            const msg = decodeFeed(buf);
+            gtfsEntities = msg.entity?.length ?? 0;
+          } catch (e) {
+            gtfsDecodeError = e instanceof Error ? e.message : String(e);
+          }
+        }
+      }
     }
   } catch (e) {
     gtfsRtError = e instanceof Error ? e.message : String(e);
   }
 
-  return { stopApi, stopApiError, gtfsRt, gtfsRtError };
+  return { stopApi, stopApiError, gtfsRt, gtfsRtError, gtfsEntities, gtfsDecodeError };
 }
 
 export { metrolinxOk, metrolinxError };
