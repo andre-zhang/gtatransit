@@ -77,7 +77,7 @@ function platformFromRow(row: Record<string, unknown>): string | undefined {
     row.AssignedPlatform ??
     row.DesignatedPlatform;
   if (raw == null || raw === "") return undefined;
-  return formatGoPlatform(String(raw));
+  return formatGoPlatform(typeof raw === "number" ? String(raw) : String(raw));
 }
 
 function parseNextServiceStop(

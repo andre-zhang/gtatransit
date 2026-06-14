@@ -169,6 +169,19 @@ function enrichGoPlatforms(
   platformByRouteSec: Map<string, string>,
 ): DepartureInput[] {
   const now = torontoNowSec();
+  const latestByRoute = new Map<string, { sec: number; platform: string }>();
+  for (const [key, platform] of platformByRouteSec) {
+    const colon = key.indexOf(":");
+    if (colon < 0) continue;
+    const route = key.slice(0, colon);
+    const sec = Number(key.slice(colon + 1));
+    if (Number.isNaN(sec)) continue;
+    const prev = latestByRoute.get(route);
+    if (!prev || Math.abs(sec - now) < Math.abs(prev.sec - now)) {
+      latestByRoute.set(route, { sec, platform });
+    }
+  }
+
   return rows.map((row) => {
     if (row.feedId !== "go" || row.platform) return row;
     const sec = normalizeServiceSec(
@@ -186,12 +199,20 @@ function enrichGoPlatforms(
       const route = key.slice(0, colon);
       if (!routeKeys.has(route)) continue;
       const delta = Math.abs(Number(key.slice(colon + 1)) - sec);
-      if (delta <= 5 * 60 && delta < bestDelta) {
+      if (delta <= 15 * 60 && delta < bestDelta) {
         bestDelta = delta;
         bestPlat = platform;
       }
     }
-    return bestPlat ? { ...row, platform: bestPlat } : row;
+    if (bestPlat) return { ...row, platform: bestPlat };
+
+    for (const route of routeKeys) {
+      const latest = latestByRoute.get(route);
+      if (latest && Math.abs(latest.sec - sec) <= 15 * 60) {
+        return { ...row, platform: latest.platform };
+      }
+    }
+    return row;
   });
 }
 
