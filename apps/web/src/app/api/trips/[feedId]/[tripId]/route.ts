@@ -9,10 +9,12 @@ import {
   torontoNowSec,
 } from "@/lib/calendar";
 import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
+import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { buildDemoTripStops } from "@/lib/demo-trip-stops";
 import { pickScheduleTripId, resolveDemoTrip } from "@/lib/demo-trip-resolve";
 import { preloadTripHeadsignIndex, tripHeadsign } from "@/lib/demo-trip-headsign";
+import { stopGroupIdFor } from "@/lib/stop-group-href";
 import { getStopTripRt, getTripRt, refreshRtCache } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
@@ -42,6 +44,9 @@ export async function GET(
     const tripRt = getTripRt(feedId, liveTripId);
     const headsign = await tripHeadsign(feedId, liveTripId);
 
+    const scheduleRow = resolved.scheduleRow;
+    const routeId = scheduleRow?.routeId ?? tripRt?.routeId;
+
     const stops = await buildDemoTripStops({
       feedId,
       liveTripId,
@@ -56,13 +61,22 @@ export async function GET(
       headsign,
       scheduleTripId,
       vehicleId: tripRt?.vehicleId,
+      route: routeId
+        ? {
+            routeId,
+            shortName: scheduleRow?.routeShort ?? routeId,
+            color: scheduleRow?.routeColor ?? "#da291c",
+          }
+        : null,
       stops,
     });
   }
 
   const db = getSql();
-  const tripMeta = await db<Array<{ headsign: string | null }>>`
-    SELECT headsign FROM trips WHERE feed_id = ${feedId} AND trip_id = ${tripId} LIMIT 1
+  const tripMeta = await db<
+    Array<{ headsign: string | null; route_id: string | null }>
+  >`
+    SELECT headsign, route_id FROM trips WHERE feed_id = ${feedId} AND trip_id = ${tripId} LIMIT 1
   `;
   const rows = await db<
     Array<{
@@ -86,6 +100,24 @@ export async function GET(
   const tripRt = getTripRt(feedId, tripId);
   const now = torontoNowSec();
   const headsign = tripMeta[0]?.headsign ?? null;
+  const routeRow = tripMeta[0]?.route_id
+    ? await db<
+        Array<{ route_id: string; short_name: string | null; color: string | null }>
+      >`
+        SELECT route_id, short_name, color FROM routes
+        WHERE feed_id = ${feedId} AND route_id = ${tripMeta[0]!.route_id}
+        LIMIT 1
+      `
+    : [];
+  const routeInfo = routeRow[0];
+
+  const groupIds = new Map<string, string>();
+  await Promise.all(
+    slice.map(async (s) => {
+      const gid = await stopGroupIdFor(feedId, s.stop_id);
+      if (gid) groupIds.set(s.stop_id, gid);
+    }),
+  );
 
   const rawSecs = slice.map((s) => gtfsTimeToSec(s.departure_time));
   let monoSecs = makeMonotonicGtfsSecs(rawSecs);
@@ -100,6 +132,13 @@ export async function GET(
     fromStop,
     headsign,
     vehicleId: tripRt?.vehicleId,
+    route: routeInfo
+      ? {
+          routeId: routeInfo.route_id,
+          shortName: routeInfo.short_name ?? routeInfo.route_id,
+          color: routeColor(feedId, routeInfo.short_name, routeInfo.color),
+        }
+      : null,
     stops: slice.map((s, idx) => {
       const schedSec = monoSecs[idx]!;
       const rt = getStopTripRt(feedId, tripId, s.stop_id);
@@ -122,6 +161,7 @@ export async function GET(
         predicted:
           predictedSec != null ? displayTripClockTime(predictedSec) : undefined,
         delayMin: delayMinFromSec(delaySec),
+        groupId: groupIds.get(s.stop_id),
       };
     }),
   });

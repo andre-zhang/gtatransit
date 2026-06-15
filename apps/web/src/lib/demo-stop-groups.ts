@@ -255,6 +255,18 @@ export function resolveStopGroupId(groupId: string): string {
   return legacyAlias.get(groupId) ?? groupId;
 }
 
+export function resolveStopGroupForMember(
+  feedId: string,
+  stopId: string,
+): string | null {
+  ensureCache();
+  return (
+    legacyAlias.get(`${feedId}:${stopId}`) ??
+    legacyAlias.get(`${feedId}-${stopId}`) ??
+    null
+  );
+}
+
 function ensureCache() {
   if (cachedStops) return;
 

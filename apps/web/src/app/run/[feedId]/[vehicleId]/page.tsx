@@ -1,7 +1,9 @@
+import { MetaBar } from "@/components/MetaBar";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { RunViewClient } from "@/components/RunViewClient";
 import { cleanHeadsign } from "@/lib/headsign";
+import { getPageMeta } from "@/lib/page-meta";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 async function load(feedId: string, vehicleId: string) {
@@ -20,11 +22,12 @@ export default async function RunPage({
   params: Promise<{ feedId: string; vehicleId: string }>;
 }) {
   const { feedId, vehicleId } = await params;
+  const { demo, rtUpdated } = await getPageMeta();
   const data = await load(feedId, vehicleId);
 
   if (!data) {
     return (
-      <PageShell>
+      <PageShell rtUpdated={rtUpdated} demo={demo}>
         <PageHeader title="Vehicle" />
         <RunViewClient feedId={feedId} vehicleId={vehicleId} initial={null} />
       </PageShell>
@@ -32,7 +35,7 @@ export default async function RunPage({
   }
 
   const { vehicle, trip, route } = data as {
-    vehicle: { label: string; delayMin: number | null };
+    vehicle: { id: string; label: string; delayMin: number | null };
     trip: { trip_id: string; headsign: string | null; route_id?: string } | null;
     route: {
       short_name: string | null;
@@ -44,20 +47,38 @@ export default async function RunPage({
   const headsign = cleanHeadsign(
     trip?.headsign ?? route?.long_name ?? route?.short_name,
   ) || "Vehicle";
-  const routeLabel = route?.short_name ?? trip?.route_id ?? "?";
+  const routeId = trip?.route_id ?? route?.short_name;
+  const routeLabel = route?.short_name ?? routeId ?? "?";
+  const routeHref = routeId
+    ? `/route/${feedId}/${encodeURIComponent(routeId)}`
+    : undefined;
+  const tripHref = trip?.trip_id
+    ? `/trip/${feedId}/${encodeURIComponent(trip.trip_id)}`
+    : undefined;
+  const currentStop = (data as { currentStop?: { groupId?: string } | null }).currentStop;
+  const stopHref = currentStop?.groupId ? `/stop/${currentStop.groupId}` : undefined;
 
   return (
-    <PageShell>
+    <PageShell rtUpdated={rtUpdated} demo={demo}>
       <PageHeader
         title={headsign}
+        subtitle={`Vehicle #${vehicle.id}`}
         routeBadge={
-          route || trip
+          routeLabel
             ? {
                 shortName: routeLabel,
                 color: route?.color ?? "#007934",
+                href: routeHref,
               }
             : undefined
         }
+      />
+      <MetaBar
+        items={[
+          ...(stopHref ? [{ label: "Stop board", href: stopHref }] : []),
+          ...(tripHref ? [{ label: "Trip", href: tripHref }] : []),
+          ...(routeHref ? [{ label: "Route", href: routeHref }] : []),
+        ]}
       />
       <RunViewClient feedId={feedId} vehicleId={vehicleId} initial={data} />
     </PageShell>

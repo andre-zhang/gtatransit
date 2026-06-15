@@ -10,11 +10,13 @@ export function RunMap({
   lon,
   bearing,
   shape,
+  routeColor = "#007934",
 }: {
   lat: number | null;
   lon: number | null;
   bearing?: number | null;
   shape: GeoJSON.Feature | null;
+  routeColor?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -35,7 +37,7 @@ export function RunMap({
           id: "route-line",
           type: "line",
           source: "route",
-          paint: { "line-color": "#007934", "line-width": 4 },
+          paint: { "line-color": routeColor, "line-width": 4 },
         });
       }
       map.addSource("vehicle", {
@@ -61,7 +63,7 @@ export function RunMap({
     });
 
     return () => map.remove();
-  }, [lat, lon, bearing, shape]);
+  }, [lat, lon, bearing, shape, routeColor]);
 
   if (lat == null || lon == null) return null;
   return <div ref={ref} className="h-52 w-full border-b border-go-bg" />;

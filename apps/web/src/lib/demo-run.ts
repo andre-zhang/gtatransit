@@ -1,6 +1,6 @@
 import { ensureDemoAssets } from "./demo";
 import { loadDemoAssets } from "./demo-assets";
-import { getGroupedDemoStops, resolveStopGroupId } from "./demo-stop-groups";
+import { getGroupedDemoStops, resolveStopGroupForMember, resolveStopGroupId } from "./demo-stop-groups";
 import { getTripStops } from "./demo-schedules";
 import { lookupRouteFromSchedules } from "./demo-trip-lookup";
 import { resolveDemoTrip } from "./demo-trip-resolve";
@@ -127,6 +127,7 @@ type UpcomingStop = {
   predicted?: string;
   platform?: string;
   delayMin?: number;
+  groupId?: string;
 };
 
 async function buildUpcomingStops(
@@ -180,6 +181,7 @@ async function buildUpcomingStops(
           predicted:
             predictedSec != null ? displayTripClockTime(predictedSec) : undefined,
           delayMin: delayMinFromSec(delaySec),
+          groupId: resolveStopGroupForMember(feedId, s.stopId) ?? undefined,
         };
       }),
     );
@@ -204,6 +206,7 @@ async function buildUpcomingStops(
         scheduled: displayTripClockTime(schedSec),
         predicted: displayTripClockTime(schedSec),
         delayMin: u.delaySec != null ? Math.round(u.delaySec / 60) : undefined,
+        groupId: resolveStopGroupForMember(feedId, u.stopId) ?? undefined,
       };
     }),
   );
@@ -339,7 +342,11 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
           }
         : null,
     currentStop: currentStop
-      ? { stop_id: currentStop.stop_id, name: currentStop.name }
+      ? {
+          stop_id: currentStop.stop_id,
+          name: currentStop.name,
+          groupId: currentStop.groupId,
+        }
       : null,
     upcomingStops: nextStops,
     blockTrips,

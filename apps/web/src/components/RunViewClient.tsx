@@ -6,6 +6,7 @@ import { formatDelayLabel } from "@/lib/delay-label";
 import { isGoRailLine } from "@/lib/go-rail";
 import { cleanHeadsign } from "@/lib/headsign";
 import { LiveIcon } from "./LiveIcon";
+import { PageEmpty } from "./PageEmpty";
 import { RunMap } from "./RunMap";
 import { Section } from "./Section";
 import { StopTimeline } from "./StopTimeline";
@@ -17,6 +18,7 @@ type UpcomingStop = {
   predicted?: string;
   platform?: string;
   delayMin?: number;
+  groupId?: string;
 };
 
 type GoTrainDetail = {
@@ -47,7 +49,7 @@ type RunData = {
     long_name: string | null;
     color: string;
   } | null;
-  currentStop: { stop_id: string; name: string } | null;
+  currentStop: { stop_id: string; name: string; groupId?: string } | null;
   upcomingStops: UpcomingStop[];
   blockStart?: string | null;
   blockEnd?: string | null;
@@ -113,11 +115,14 @@ export function RunViewClient({
 
   if (!data) {
     return (
-      <div className="px-6 py-12 text-center text-sm text-go-slate">
-        {loading
-          ? "Loading vehicle…"
-          : "Vehicle not found or no longer reporting location."}
-      </div>
+      <PageEmpty
+        title={loading ? "Loading vehicle…" : "Vehicle not found"}
+        hint={
+          loading
+            ? undefined
+            : "This vehicle is no longer reporting location."
+        }
+      />
     );
   }
 
@@ -161,7 +166,16 @@ export function RunViewClient({
         </div>
         <div className="p-5">
           <div className="go-section-title mb-1">Current stop</div>
-          <div className="text-lg font-bold text-go-navy">{currentStop?.name ?? "—"}</div>
+          {currentStop?.groupId ? (
+            <Link
+              href={`/stop/${currentStop.groupId}`}
+              className="text-lg font-bold text-go-navy hover:text-go-green"
+            >
+              {currentStop.name}
+            </Link>
+          ) : (
+            <div className="text-lg font-bold text-go-navy">{currentStop?.name ?? "—"}</div>
+          )}
         </div>
         <div className="p-5">
           <div className="go-section-title mb-1">{isGoTrain ? "Consist" : "Status"}</div>
@@ -198,6 +212,7 @@ export function RunViewClient({
         lon={vehicle.lon}
         bearing={vehicle.bearing}
         shape={shape}
+        routeColor={route?.color}
       />
 
       {upcomingStops?.length > 0 ? (
@@ -205,18 +220,11 @@ export function RunViewClient({
           <StopTimeline stops={upcomingStops} />
         </Section>
       ) : (
-        <div className="border-b border-go-bg px-5 py-6 text-center text-sm text-go-slate">
-          No upcoming stop times available for this vehicle.
-        </div>
+        <PageEmpty title="No upcoming stops" />
       )}
 
       {blockTrips && blockTrips.length > 0 && (
         <Section title={blockSectionTitle(trip)} subtitle={blockRange ?? undefined}>
-          {blockRange && (
-            <div className="border-b border-go-bg bg-go-bg/25 px-5 py-2.5 text-sm font-semibold tabular-nums text-go-navy">
-              {blockRange}
-            </div>
-          )}
           <ul className="divide-y divide-go-bg">
             {blockTrips.map((t) => (
               <li
@@ -237,9 +245,9 @@ export function RunViewClient({
                 )}
                 <Link
                   href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
-                  className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-go-green hover:underline sm:text-xs"
+                  className="go-link shrink-0"
                 >
-                  Open
+                  Trip
                 </Link>
               </li>
             ))}

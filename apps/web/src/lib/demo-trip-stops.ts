@@ -7,7 +7,8 @@ import {
   shiftTripToPrediction,
   torontoNowSec,
   unixToTorontoSec,
-} from "./calendar";import { computeDelaySec, delayMinFromSec } from "./departures";
+} from "./calendar";
+import { computeDelaySec, delayMinFromSec } from "./departures";
 import { loadDemoAssets } from "./demo-assets";
 import { getTripStops } from "./demo-schedules";
 import { expandGoStopId, goStopIdsMatch } from "./go-stop-aliases";
@@ -16,6 +17,7 @@ import {
   liveStopDisplayName,
   resolveTtcRtStopIds,
 } from "./ttc-stop-registry";
+import { resolveStopGroupForMember } from "./demo-stop-groups";
 import { getStopTripRt, getTripStopUpdates } from "./rt-cache";
 
 export type TripStopOut = {
@@ -27,6 +29,7 @@ export type TripStopOut = {
   delayMin?: number;
   platform?: string;
   passed?: boolean;
+  groupId?: string;
 };
 
 function stopName(feedId: string, stopId: string): string {
@@ -136,6 +139,7 @@ export async function buildDemoTripStops(opts: {
           predicted:
             predictedSec != null ? displayTripClockTime(predictedSec) : undefined,
           delayMin: delayMinFromSec(delaySec),
+          groupId: resolveStopGroupForMember(feedId, s.stopId) ?? undefined,
           passed:
             fromCandidates != null &&
             startIdx >= 0 &&
@@ -181,6 +185,7 @@ export async function buildDemoTripStops(opts: {
         scheduled: displayTripClockTime(schedSec),
         predicted: displayTripClockTime(schedSec),
         delayMin: u.delaySec != null ? Math.round(u.delaySec / 60) : undefined,
+        groupId: resolveStopGroupForMember(feedId, u.stopId) ?? undefined,
       };
     }),
   );

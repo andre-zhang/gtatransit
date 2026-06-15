@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 function contrastText(hex: string): string {
   const h = hex.replace(/^#/, "");
   if (h.length < 6) return "#fff";
@@ -12,11 +14,13 @@ export function RoutePill({
   color,
   textColor,
   size = "md",
+  href,
 }: {
   shortName: string;
   color: string;
   textColor?: string;
   size?: "md" | "lg";
+  href?: string;
 }) {
   const bg = color.startsWith("#") ? color : `#${color}`;
   const sizes =
@@ -24,9 +28,11 @@ export function RoutePill({
       ? "min-w-[2.75rem] px-2.5 py-1 text-base"
       : "min-w-[2.25rem] px-2 py-0.5 text-sm";
 
-  return (
+  const pill = (
     <span
-      className={`inline-flex items-center justify-center rounded-sm font-bold ${sizes}`}
+      className={`inline-flex items-center justify-center rounded-sm font-bold ${sizes} ${
+        href ? "transition hover:brightness-95" : ""
+      }`}
       style={{
         backgroundColor: bg,
         color: textColor ?? contrastText(bg),
@@ -35,4 +41,14 @@ export function RoutePill({
       {shortName}
     </span>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="shrink-0" title={`Route ${shortName}`}>
+        {pill}
+      </Link>
+    );
+  }
+
+  return pill;
 }

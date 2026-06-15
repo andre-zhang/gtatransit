@@ -10,7 +10,7 @@ export function PageHeader({
   backHref?: string;
   title: string;
   subtitle?: string;
-  routeBadge?: { shortName: string; color: string };
+  routeBadge?: { shortName: string; color: string; href?: string };
 }) {
   return (
     <header className="border-b-4 border-go-green-dark bg-go-green px-5 pb-5 pt-4 text-white">
@@ -27,13 +27,18 @@ export function PageHeader({
             strokeLinejoin="round"
           />
         </svg>
-        Back
+        Map
       </Link>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {routeBadge && (
-          <RoutePill shortName={routeBadge.shortName} color={routeBadge.color} size="lg" />
+          <RoutePill
+            shortName={routeBadge.shortName}
+            color={routeBadge.color}
+            size="lg"
+            href={routeBadge.href}
+          />
         )}
-        <h1 className="text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
+        <h1 className="min-w-0 flex-1 text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
       </div>
       {subtitle && <p className="mt-1 text-sm text-white/90">{subtitle}</p>}
     </header>

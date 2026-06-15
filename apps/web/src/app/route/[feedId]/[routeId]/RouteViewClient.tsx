@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatDelayLabel } from "@/lib/delay-label";
+import { PageEmpty } from "@/components/PageEmpty";
 import { Section } from "@/components/Section";
 
 type Trip = { trip_id: string; headsign: string | null; first_departure: string };
@@ -40,7 +42,7 @@ export function RouteViewClient({
             onClick={() =>
               router.push(`/route/${feedId}/${encodeURIComponent(routeId)}?direction=${d}`)
             }
-            className={`flex-1 rounded-lg px-2 py-2.5 text-sm font-bold transition ${
+            className={`flex-1 rounded-sm px-2 py-2.5 text-sm font-bold transition ${
               direction === d
                 ? "bg-go-surface text-go-green shadow-sm"
                 : "text-go-slate hover:text-go-navy"
@@ -60,24 +62,30 @@ export function RouteViewClient({
               const late = delayMin != null && delayMin > 0;
               const early = delayMin != null && delayMin < 0;
               return (
-                <li key={v.vehicle_id}>
+                <li
+                  key={v.vehicle_id}
+                  className="flex items-center gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3"
+                >
+                  <span className="w-16 shrink-0 font-bold text-go-navy sm:w-20">
+                    {v.label ?? v.vehicle_id}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
+                    {v.headsign ?? "Headsign unavailable"}
+                  </span>
+                  {late || early ? (
+                    <span
+                      className={`go-badge shrink-0 ${late ? "go-badge--late" : "go-badge--early"}`}
+                    >
+                      {formatDelayLabel(delayMin)}
+                    </span>
+                  ) : (
+                    <span className="go-badge go-badge--ontime shrink-0">On time</span>
+                  )}
                   <Link
                     href={`/run/${feedId}/${encodeURIComponent(v.vehicle_id)}`}
-                    className="flex items-center justify-between gap-4 px-5 py-3.5 transition hover:bg-go-bg/60"
+                    className="go-link shrink-0"
                   >
-                    <span className="font-bold text-go-green">
-                      {v.label ?? v.vehicle_id}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-go-slate">
-                      {v.headsign ?? "Headsign unavailable"}
-                    </span>
-                    {late ? (
-                      <span className="go-badge go-badge--late">+{delayMin} min</span>
-                    ) : early ? (
-                      <span className="go-badge go-badge--early">{delayMin} min</span>
-                    ) : (
-                      <span className="go-badge go-badge--live">Live</span>
-                    )}
+                    Vehicle
                   </Link>
                 </li>
               );
@@ -85,32 +93,34 @@ export function RouteViewClient({
           </ul>
         </Section>
       ) : (
-        <div className="border-b border-go-bg px-5 py-4 text-sm text-go-slate">
-          No vehicles reporting on this direction right now.
-        </div>
+        <PageEmpty title="No live vehicles" hint="Nothing is reporting on this direction right now." />
       )}
 
       <Section title="Schedule">
         {trips.length > 0 ? (
           <ul className="max-h-[28rem] divide-y divide-go-bg overflow-y-auto">
             {trips.map((t) => (
-              <li key={t.trip_id}>
+              <li
+                key={t.trip_id}
+                className="flex items-center gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3"
+              >
+                <span className="w-16 shrink-0 text-right text-lg font-bold tabular-nums text-go-navy sm:w-20">
+                  {t.first_departure}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
+                  {t.headsign ?? "Headsign unavailable"}
+                </span>
                 <Link
                   href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
-                  className="flex items-center justify-between gap-4 px-5 py-3 transition hover:bg-go-bg/60"
+                  className="go-link shrink-0"
                 >
-                  <span className="truncate text-go-navy">{t.headsign ?? "Headsign unavailable"}</span>
-                  <span className="shrink-0 text-lg font-bold tabular-nums text-go-navy">
-                    {t.first_departure}
-                  </span>
+                  Trip
                 </Link>
               </li>
             ))}
           </ul>
         ) : (
-          <div className="px-5 py-8 text-center text-sm text-go-slate">
-            No scheduled trips for this direction today.
-          </div>
+          <PageEmpty title="No scheduled trips" hint="Nothing is scheduled for this direction today." />
         )}
       </Section>
     </>

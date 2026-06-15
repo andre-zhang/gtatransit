@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatDelayLabel } from "@/lib/delay-label";
 
 type Stop = {
@@ -6,6 +7,7 @@ type Stop = {
   scheduled: string;
   predicted?: string;
   delayMin?: number;
+  groupId?: string;
 };
 
 export function StopTimeline({ stops }: { stops: Stop[] }) {
@@ -16,6 +18,18 @@ export function StopTimeline({ stops }: { stops: Stop[] }) {
       {stops.map((s, i) => {
         const isLast = i === stops.length - 1;
         const time = s.predicted ?? s.scheduled;
+        const nameEl = s.groupId ? (
+          <Link
+            href={`/stop/${s.groupId}`}
+            className="min-w-0 flex-1 truncate text-sm text-go-navy hover:text-go-green sm:text-base"
+          >
+            {s.name}
+          </Link>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-sm text-go-navy sm:text-base">
+            {s.name}
+          </span>
+        );
         return (
           <li key={`${s.stop_id}-${s.scheduled}-${i}`} className="relative flex gap-3 pb-3 last:pb-0">
             {!isLast && (
@@ -35,9 +49,7 @@ export function StopTimeline({ stops }: { stops: Stop[] }) {
                 <span className="w-12 shrink-0 text-right text-base font-bold tabular-nums text-go-navy sm:w-14 sm:text-lg">
                   {time}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-go-navy sm:text-base">
-                  {s.name}
-                </span>
+                {nameEl}
                 {s.delayMin != null && s.delayMin !== 0 && (
                   <span
                     className={`go-badge shrink-0 whitespace-nowrap ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}

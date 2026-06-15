@@ -190,7 +190,7 @@ export function LayerPanel(props: Props) {
                   key={d}
                   type="button"
                   onClick={() => onToggleVehicleDir(d)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                  className={`rounded-sm px-3 py-1.5 text-xs font-bold transition ${
                     vehicleDirs.has(d)
                       ? "bg-go-green text-white"
                       : "bg-go-bg text-go-slate hover:bg-go-bg/80"
@@ -220,7 +220,7 @@ export function LayerPanel(props: Props) {
                   key={d}
                   type="button"
                   onClick={() => onToggleStopDir(d)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                  className={`rounded-sm px-3 py-1.5 text-xs font-bold transition ${
                     stopDirs.has(d)
                       ? "bg-go-green text-white"
                       : "bg-go-bg text-go-slate hover:bg-go-bg/80"

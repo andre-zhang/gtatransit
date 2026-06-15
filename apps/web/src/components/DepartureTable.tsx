@@ -6,6 +6,7 @@ import { cleanHeadsign } from "@/lib/headsign";
 import { formatDelayLabel } from "@/lib/delay-label";
 import { AgencyMark } from "./AgencyMark";
 import { LiveIcon } from "./LiveIcon";
+import { PageEmpty } from "./PageEmpty";
 import { RoutePill } from "./RoutePill";
 
 export type DepartureRow = {
@@ -34,6 +35,7 @@ type TripStop = {
   predicted?: string;
   platform?: string;
   delayMin?: number;
+  groupId?: string;
 };
 
 function TripStopsPanel({
@@ -101,7 +103,16 @@ function TripStopsPanel({
           <span className="w-14 shrink-0 text-right font-bold tabular-nums text-go-navy">
             {s.predicted ?? s.scheduled}
           </span>
-          <span className="min-w-0 flex-1 truncate text-go-navy">{s.name}</span>
+          {s.groupId ? (
+            <Link
+              href={`/stop/${s.groupId}`}
+              className="min-w-0 flex-1 truncate text-go-navy hover:text-go-green"
+            >
+              {s.name}
+            </Link>
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-go-navy">{s.name}</span>
+          )}
         </li>
       ))}
     </ul>
@@ -120,10 +131,10 @@ export function DepartureTable({
 
   if (!rows.length) {
     return (
-      <div className="departure-board-empty">
-        <p className="departure-board-emptyTitle">No upcoming departures</p>
-        <p className="departure-board-emptyHint">Check back later or try another stop.</p>
-      </div>
+      <PageEmpty
+        title="No upcoming departures"
+        hint="Check back later or try another stop."
+      />
     );
   }
 
@@ -198,14 +209,20 @@ export function DepartureTable({
                       </span>
                     </div>
                     {showAgency && <AgencyMark feedId={r.feedId} />}
-                    <RoutePill shortName={r.routeShort} color={r.routeColor} />
-                    <p
+                    <RoutePill
+                      shortName={r.routeShort}
+                      color={r.routeColor}
+                      href={`/route/${r.feedId}/${encodeURIComponent(r.routeId)}`}
+                    />
+                    <Link
+                      href={m.tripHref}
+                      onClick={(e) => e.stopPropagation()}
                       className={`departure-board-dest min-w-0 flex-1 truncate text-sm ${
                         r.realtime ? "departure-board-dest--live" : "departure-board-dest--sched"
                       }`}
                     >
                       {cleanHeadsign(r.destination)}
-                    </p>
+                    </Link>
                     <div className="flex shrink-0 items-center gap-1.5">
                       {m.late || m.early ? (
                         <span
@@ -216,13 +233,13 @@ export function DepartureTable({
                       ) : r.realtime && r.latenessMin === 0 ? (
                         <span className="go-badge go-badge--ontime whitespace-nowrap">On time</span>
                       ) : !r.realtime ? (
-                        <span className="go-badge go-badge--sched whitespace-nowrap">Sched</span>
+                        <span className="go-badge go-badge--sched whitespace-nowrap">Scheduled</span>
                       ) : null}
                       {r.vehicleId && (
                         <Link
                           href={`/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="whitespace-nowrap text-[11px] font-semibold text-go-slate hover:underline"
+                          className="go-link go-link--muted"
                         >
                           Vehicle
                         </Link>
@@ -230,9 +247,9 @@ export function DepartureTable({
                       <Link
                         href={m.tripHref}
                         onClick={(e) => e.stopPropagation()}
-                        className="whitespace-nowrap text-[11px] font-semibold text-go-green hover:underline"
+                        className="go-link"
                       >
-                        Open
+                        Trip
                       </Link>
                     </div>
                   </div>
@@ -326,16 +343,23 @@ export function DepartureTable({
                     </td>
                   )}
                   <td className="px-3 py-3">
-                    <RoutePill shortName={r.routeShort} color={r.routeColor} size="lg" />
+                    <RoutePill
+                      shortName={r.routeShort}
+                      color={r.routeColor}
+                      size="lg"
+                      href={`/route/${r.feedId}/${encodeURIComponent(r.routeId)}`}
+                    />
                   </td>
                   <td className="max-w-[14rem] truncate px-3 py-3">
-                    <span
+                    <Link
+                      href={m.tripHref}
+                      onClick={(e) => e.stopPropagation()}
                       className={`departure-board-dest truncate ${
                         r.realtime ? "departure-board-dest--live" : "departure-board-dest--sched"
                       }`}
                     >
                       {cleanHeadsign(r.destination)}
-                    </span>
+                    </Link>
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -354,7 +378,7 @@ export function DepartureTable({
                         <Link
                           href={`/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-xs font-semibold text-go-slate hover:text-go-navy hover:underline"
+                          className="go-link go-link--muted"
                         >
                           Vehicle
                         </Link>
@@ -362,9 +386,9 @@ export function DepartureTable({
                       <Link
                         href={m.tripHref}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-xs font-semibold text-go-green hover:underline"
+                        className="go-link"
                       >
-                        Open
+                        Trip
                       </Link>
                     </div>
                   </td>

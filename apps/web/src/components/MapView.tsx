@@ -410,7 +410,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         )}
         <button
           type="button"
-          className="pointer-events-auto ml-auto flex min-h-11 items-center gap-2 rounded-full border border-[#d9d9d9] bg-go-surface px-4 py-2 text-sm font-bold text-go-navy shadow-[var(--shadow-panel)]"
+          className="pointer-events-auto ml-auto flex min-h-11 items-center gap-2 rounded-sm border border-[#d9d9d9] bg-go-surface px-4 py-2 text-sm font-bold text-go-navy shadow-[var(--shadow-panel)]"
           onClick={() => setLayersOpen((v) => !v)}
           aria-expanded={layersOpen}
         >

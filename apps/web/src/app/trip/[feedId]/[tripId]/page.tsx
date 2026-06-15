@@ -1,8 +1,12 @@
-import Link from "next/link";
+import { MetaBar } from "@/components/MetaBar";
+import { PageEmpty } from "@/components/PageEmpty";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
+import { Section } from "@/components/Section";
+import { StopTimeline } from "@/components/StopTimeline";
 import { cleanHeadsign } from "@/lib/headsign";
-import { formatDelayLabel } from "@/lib/delay-label";
+import { getPageMeta } from "@/lib/page-meta";
+import { stopBoardHref } from "@/lib/stop-group-href";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 type Stop = {
@@ -13,6 +17,18 @@ type Stop = {
   predicted?: string;
   delayMin?: number;
   platform?: string;
+  groupId?: string;
+};
+
+type TripPayload = {
+  stops: Stop[];
+  vehicleId?: string;
+  headsign?: string | null;
+  route?: {
+    routeId: string;
+    shortName: string;
+    color: string;
+  } | null;
 };
 
 async function load(
@@ -32,7 +48,7 @@ async function load(
     { cache: "no-store" },
   );
   if (!res.ok) return null;
-  return res.json() as Promise<{ stops: Stop[]; vehicleId?: string; headsign?: string | null }>;
+  return res.json() as Promise<TripPayload>;
 }
 
 export default async function TripPage({
@@ -44,6 +60,7 @@ export default async function TripPage({
 }) {
   const { feedId, tripId } = await params;
   const sp = await searchParams;
+  const { demo, rtUpdated } = await getPageMeta();
   const data = await load(feedId, tripId, {
     fromStop: sp.fromStop,
     scheduleTrip: sp.scheduleTrip,
@@ -51,60 +68,83 @@ export default async function TripPage({
 
   if (!data) {
     return (
-      <PageShell>
+      <PageShell rtUpdated={rtUpdated} demo={demo}>
         <PageHeader title="Trip unavailable" />
-        <div className="px-6 py-12 text-center text-go-slate">
-          Could not load this trip. It may have ended or is not in today&apos;s schedule.
-        </div>
+        <PageEmpty
+          title="Could not load this trip"
+          hint="It may have ended or is not in today's schedule."
+        />
       </PageShell>
     );
   }
 
+  const title = cleanHeadsign(data.headsign) || "Trip";
+  const routeHref = data.route
+    ? `/route/${feedId}/${encodeURIComponent(data.route.routeId)}`
+    : undefined;
+  const stopHref =
+    sp.fromStop != null ? await stopBoardHref(feedId, sp.fromStop) : null;
+  const metaItems = [
+    ...(stopHref ? [{ label: "Stop board", href: stopHref }] : []),
+    ...(data.vehicleId
+      ? [
+          {
+            label: `Vehicle ${data.vehicleId}`,
+            href: `/run/${feedId}/${encodeURIComponent(data.vehicleId)}`,
+          },
+        ]
+      : []),
+    ...(routeHref ? [{ label: "Route", href: routeHref }] : []),
+  ];
+
   if (!data.stops.length) {
     return (
-      <PageShell>
-        <PageHeader title={cleanHeadsign(data.headsign) || "Trip"} />
-        <div className="departure-board-empty">
-          <p className="departure-board-emptyTitle">No upcoming stops</p>
-        </div>
+      <PageShell rtUpdated={rtUpdated} demo={demo}>
+        <PageHeader
+          title={title}
+          routeBadge={
+            data.route
+              ? {
+                  shortName: data.route.shortName,
+                  color: data.route.color,
+                  href: routeHref,
+                }
+              : undefined
+          }
+        />
+        <MetaBar items={metaItems} />
+        <PageEmpty title="No upcoming stops" />
       </PageShell>
     );
   }
 
   return (
-    <PageShell>
-      <PageHeader title={cleanHeadsign(data.headsign) || "Trip"} />
-      {data.vehicleId && (
-        <div className="border-b border-go-bg px-5 py-3 text-sm text-go-slate">
-          Vehicle{" "}
-          <Link
-            href={`/run/${feedId}/${encodeURIComponent(data.vehicleId)}`}
-            className="font-bold text-go-green"
-          >
-            {data.vehicleId}
-          </Link>
-        </div>
-      )}
-      <ul className="divide-y divide-go-bg">
-        {data.stops.map((s, i) => (
-          <li
-            key={`${s.stopId}-${s.sequence}`}
-            className={`flex items-center gap-4 px-5 py-3 ${i === 0 ? "bg-go-green/5" : ""}`}
-          >
-            <span className="w-16 shrink-0 text-right text-lg font-bold tabular-nums text-go-navy">
-              {s.predicted ?? s.scheduled}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-go-navy">{s.name}</span>
-            {s.delayMin != null && s.delayMin !== 0 && (
-              <span
-                className={`go-badge shrink-0 ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}
-              >
-                {formatDelayLabel(s.delayMin)}
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
+    <PageShell rtUpdated={rtUpdated} demo={demo}>
+      <PageHeader
+        title={title}
+        routeBadge={
+          data.route
+            ? {
+                shortName: data.route.shortName,
+                color: data.route.color,
+                href: routeHref,
+              }
+            : undefined
+        }
+      />
+      <MetaBar items={metaItems} />
+      <Section title="Stops">
+        <StopTimeline
+          stops={data.stops.map((s) => ({
+            stop_id: s.stopId,
+            name: s.name,
+            scheduled: s.scheduled,
+            predicted: s.predicted,
+            delayMin: s.delayMin,
+            groupId: s.groupId,
+          }))}
+        />
+      </Section>
     </PageShell>
   );
 }
