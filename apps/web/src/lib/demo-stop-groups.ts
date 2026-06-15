@@ -1,7 +1,6 @@
 import type { FeatureCollection } from "geojson";
 import { loadDemoAssets } from "./demo-assets";
 import type { DemoStopMeta } from "./demo";
-import type { ScheduleRow } from "./demo-schedule-types";
 
 type StopMeta = {
   locationType: number;
@@ -20,10 +19,12 @@ type StopPoint = {
   lon: number;
   locationType: number;
   parentStation: string | null;
-  isTerminal: boolean;
+  groupable: boolean;
+  anchor: string | null;
 };
 
-const TERMINAL_RADIUS_M = 25;
+/** Max distance to merge separate groupable stops (cross-agency OK). */
+const STATION_CLUSTER_M = 50;
 
 export const TORONTO_UNION_ID = "toronto-union";
 
@@ -44,25 +45,74 @@ function metaFor(feedId: string, stopId: string): StopMeta | undefined {
   return feed?.[stopId];
 }
 
-function isGoRailStation(name: string): boolean {
-  const n = name.trim().toLowerCase();
-  return /\bgo\s*$/i.test(n) || n.includes(" go ");
+function normalizeAnchor(name: string): string {
+  return name.replace(/\s+/g, " ").trim();
 }
 
-function isTerminalLike(
+function isGoRailStationName(name: string): boolean {
+  const n = name.trim();
+  return /\bGO\s*$/i.test(n) || /\bGO\/UP\b/i.test(n) || /\bUP Express\b/i.test(n);
+}
+
+function stationAnchorFromName(name: string): string | null {
+  const n = name.trim();
+  const suffix = n.match(/\s-\s([^-]+?\sStation(?:\s.*)?)$/i);
+  if (suffix) return normalizeAnchor(suffix[1]!);
+
+  const direct = n.match(/^(.+?\sStation)(?:\s-\s.*)?$/i);
+  if (direct && !/\bat\b/i.test(direct[1]!)) return normalizeAnchor(direct[1]!);
+
+  return null;
+}
+
+function terminalAnchorFromName(name: string): string | null {
+  const n = name.trim();
+  if (/\bavenue\b/i.test(n) || /\bave\b/i.test(n)) return null;
+
+  const terminal = n.match(/(.+?\b(?:Bus )?Terminal)\b/i);
+  if (terminal) return normalizeAnchor(terminal[1]!);
+
+  const exchange = n.match(/(.+?\bExchange)\b/i);
+  if (exchange) return normalizeAnchor(exchange[1]!);
+
+  return null;
+}
+
+function classifyStop(
   feedId: string,
   meta: StopMeta | undefined,
   name: string,
-  _stopId: string,
-): boolean {
-  const n = name.trim().toLowerCase();
-  if (feedId === "go" && isGoRailStation(name)) return true;
-  if (/\b(bus )?terminal\b/.test(n) && !/\bavenue\b/.test(n) && !/\bave\b/.test(n)) {
-    return true;
+): { groupable: boolean; anchor: string | null } {
+  const n = name.trim();
+
+  if (feedId === "up" || /\bUP Express\b/i.test(n) || /\bGO\/UP\b/i.test(n)) {
+    const station = stationAnchorFromName(n) ?? terminalAnchorFromName(n) ?? n;
+    return { groupable: true, anchor: normalizeAnchor(station) };
   }
-  if (/\b(union|go) station\b/.test(n) || n.includes("toronto union")) return true;
-  if (meta?.locationType === 1 && !meta?.parentStation) return true;
-  return false;
+
+  if (feedId === "go" && isGoRailStationName(n)) {
+    return { groupable: true, anchor: normalizeAnchor(n) };
+  }
+
+  if (meta?.locationType === 1 && !meta.parentStation) {
+    return { groupable: true, anchor: normalizeAnchor(n) };
+  }
+
+  const subwayOrLrt = stationAnchorFromName(n);
+  if (subwayOrLrt) {
+    return { groupable: true, anchor: subwayOrLrt };
+  }
+
+  const terminal = terminalAnchorFromName(n);
+  if (terminal) {
+    return { groupable: true, anchor: terminal };
+  }
+
+  if (/\bexchange\b/i.test(n)) {
+    return { groupable: true, anchor: normalizeAnchor(n) };
+  }
+
+  return { groupable: false, anchor: null };
 }
 
 class UnionFind {
@@ -98,6 +148,7 @@ function buildStopPoints(): StopPoint[] {
     const coords = coordByGroup.get(groupId);
     if (!coords) continue;
     const meta = metaFor(member.feedId, member.stopId);
+    const { groupable, anchor } = classifyStop(member.feedId, meta, stop.name);
     points.push({
       groupId,
       feedId: member.feedId,
@@ -107,7 +158,8 @@ function buildStopPoints(): StopPoint[] {
       lon: meta?.lon ?? coords[0],
       locationType: meta?.locationType ?? 0,
       parentStation: meta?.parentStation ?? null,
-      isTerminal: isTerminalLike(member.feedId, meta, stop.name, member.stopId),
+      groupable,
+      anchor,
     });
   }
   return points;
@@ -117,6 +169,7 @@ function buildStopPoints(): StopPoint[] {
 function unionScheduleMembers(): Array<{ feedId: string; stopId: string }> {
   const members = new Map<string, { feedId: string; stopId: string }>();
   members.set("go:UN", { feedId: "go", stopId: "UN" });
+  members.set("up:UN", { feedId: "up", stopId: "UN" });
   for (const row of loadDemoAssets().unionSchedule) {
     members.set(`${row.feedId}:${row.stopId}`, { feedId: row.feedId, stopId: row.stopId });
   }
@@ -127,39 +180,47 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
   const uf = new UnionFind();
   for (const p of points) uf.find(p.groupId);
 
-  const terminals = points.filter((p) => p.isTerminal);
-  for (let i = 0; i < terminals.length; i++) {
-    for (let j = i + 1; j < terminals.length; j++) {
-      const a = terminals[i]!;
-      const b = terminals[j]!;
+  const byAnchor = new Map<string, StopPoint[]>();
+  for (const p of points) {
+    if (!p.groupable || !p.anchor) continue;
+    const key = `${p.feedId}:${p.anchor.toLowerCase()}`;
+    if (!byAnchor.has(key)) byAnchor.set(key, []);
+    byAnchor.get(key)!.push(p);
+  }
+  for (const cluster of byAnchor.values()) {
+    for (let i = 1; i < cluster.length; i++) {
+      uf.union(cluster[0]!.groupId, cluster[i]!.groupId);
+    }
+  }
+
+  for (const p of points) {
+    if (!p.parentStation) continue;
+    const parentKey = `${p.feedId}:${p.parentStation}`;
+    const parent = points.find((q) => q.feedId === p.feedId && q.stopId === p.parentStation);
+    if (parent) uf.union(p.groupId, parent.groupId);
+    void parentKey;
+  }
+
+  const groupable = points.filter((p) => p.groupable);
+  for (let i = 0; i < groupable.length; i++) {
+    for (let j = i + 1; j < groupable.length; j++) {
+      const a = groupable[i]!;
+      const b = groupable[j]!;
+      if (uf.find(a.groupId) === uf.find(b.groupId)) continue;
+
       const dist = haversineM(a.lat, a.lon, b.lat, b.lon);
+      if (dist > STATION_CLUSTER_M) continue;
 
       if (
-        a.isTerminal &&
-        b.isTerminal &&
         a.parentStation &&
         b.parentStation &&
         a.feedId === b.feedId &&
-        a.parentStation === b.parentStation &&
-        dist <= TERMINAL_RADIUS_M
-      ) {
-        uf.union(a.groupId, b.groupId);
-        continue;
-      }
-      if (
-        a.isTerminal &&
-        b.isTerminal &&
-        a.feedId === b.feedId &&
-        (a.parentStation === b.stopId || b.parentStation === a.stopId) &&
-        dist <= TERMINAL_RADIUS_M
+        a.parentStation === b.parentStation
       ) {
         uf.union(a.groupId, b.groupId);
         continue;
       }
 
-      const terminalCluster =
-        a.isTerminal && b.isTerminal && a.feedId === b.feedId;
-      if (!terminalCluster || dist > TERMINAL_RADIUS_M) continue;
       uf.union(a.groupId, b.groupId);
     }
   }
@@ -180,7 +241,8 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
     cluster.sort((x, y) => {
       const score = (p: StopPoint) =>
         (p.locationType === 1 ? 1000 : 0) +
-        (p.isTerminal ? 100 : 0) +
+        (p.groupable ? 100 : 0) +
+        (p.feedId === "go" || p.feedId === "up" ? 50 : 0) +
         (p.stopId.length <= 3 ? 10 : 0);
       return score(y) - score(x);
     });
@@ -195,7 +257,14 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
 }
 
 function terminalDisplayName(members: StopPoint[], fallback: string): string {
-  if (members.some((m) => m.stopId === "UN" || m.name.toLowerCase().includes("union station"))) {
+  if (
+    members.some(
+      (m) =>
+        m.stopId === "UN" ||
+        m.name.toLowerCase().includes("union station") ||
+        m.name.toLowerCase().includes("toronto union"),
+    )
+  ) {
     return "Toronto Union";
   }
   return fallback;
@@ -233,7 +302,9 @@ function buildGroupedStops(): {
     const deduped = [...new Map(members.map((m) => [`${m.feedId}:${m.stopId}`, m])).values()];
     const cluster = clusterPoints.get(target) ?? [];
     const displayName =
-      cluster.length > 1 ? terminalDisplayName(cluster, names.get(target) ?? target) : (names.get(target) ?? target);
+      cluster.length > 1
+        ? terminalDisplayName(cluster, names.get(target) ?? target)
+        : (names.get(target) ?? target);
     grouped[target] = { name: displayName, members: deduped };
   }
 
@@ -278,12 +349,14 @@ function ensureCache() {
       legacyAlias.set(`${m.feedId}-${m.stopId}`, gid);
       legacyAlias.set(`${m.feedId}:${m.stopId}`, gid);
       legacyAlias.set(`go-${m.stopId}`, gid);
+      legacyAlias.set(`up-${m.stopId}`, gid);
       legacyAlias.set(`ttc-${m.stopId}`, gid);
       legacyAlias.set(`miway-${m.stopId}`, gid);
     }
   }
   legacyAlias.set("demo-union", TORONTO_UNION_ID);
   legacyAlias.set("go-UN", TORONTO_UNION_ID);
+  legacyAlias.set("up-UN", TORONTO_UNION_ID);
 
   const unionMemberKeys = new Set(
     (cachedStops[TORONTO_UNION_ID]?.members ?? []).map(
@@ -338,4 +411,11 @@ export function getGroupedDemoStops(): Record<string, DemoStopMeta> {
 export function getGroupedDemoStopsGeoJson(): FeatureCollection {
   ensureCache();
   return cachedGeo!;
+}
+
+/** Bust cached grouping after demo fixture updates in dev. */
+export function resetStopGroupCache() {
+  cachedStops = null;
+  cachedGeo = null;
+  legacyAlias.clear();
 }

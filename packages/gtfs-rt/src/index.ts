@@ -89,6 +89,12 @@ export const GO_RT_API = {
   vehiclePositions: "api/V1/Gtfs/Feed/VehiclePosition",
 } as const;
 
+export const UP_RT_API = {
+  base: "https://api.openmetrolinx.com/OpenDataAPI",
+  tripUpdates: "api/V1/UP/Gtfs/Feed/TripUpdates",
+  vehiclePositions: "api/V1/UP/Gtfs/Feed/VehiclePosition",
+} as const;
+
 /** Metrolinx keys are passed as `?key=` on the URL (not subscription headers). */
 export function metrolinxApiUrl(path: string, apiKey: string): string {
   const cleanPath = path.replace(/^\//, "");

@@ -53,7 +53,7 @@ async function collectScheduleRows(
   const matches = (row: ScheduleRow) =>
     row.routeId === routeId || row.routeShort === routeId;
 
-  if (feedId === "go" || feedId === "ttc" || feedId === "miway") {
+  if (feedId === "go" || feedId === "up" || feedId === "ttc" || feedId === "miway") {
     return loadRouteScheduleRows(feedId, routeId);
   }
 

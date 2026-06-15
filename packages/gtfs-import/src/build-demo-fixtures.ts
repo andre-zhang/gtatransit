@@ -36,6 +36,7 @@ const outPath = join(outDir, "fixtures.json");
 const FEEDS: Array<{ id: string; name: string; zip: string }> = [
   { id: "ttc", name: "TTC", zip: "ttc.zip" },
   { id: "go", name: "GO Transit", zip: "go.zip" },
+  { id: "up", name: "UP Express", zip: "up.zip" },
   { id: "miway", name: "MiWay", zip: "miway.zip" },
   { id: "brampton", name: "Brampton Transit", zip: "brampton.zip" },
   { id: "drt", name: "Durham Region Transit", zip: "drt.zip" },
@@ -53,6 +54,7 @@ const MODE_LABELS: Record<number, string> = {
 const AGENCY_COLORS: Record<string, string> = {
   ttc: "#da291c",
   go: "#007934",
+  up: "#0075d2",
   yrt: "#0072ce",
   brampton: "#e87722",
   drt: "#003da5",
@@ -302,6 +304,8 @@ async function main() {
 
   let goSchedules: Record<string, unknown> = {};
   let goTripStops: Record<string, unknown> = {};
+  let upSchedules: Record<string, unknown> = {};
+  let upTripStops: Record<string, unknown> = {};
   let ttcSchedules: Record<string, unknown> = {};
   let ttcTripStops: Record<string, unknown> = {};
   let miwaySchedules: Record<string, unknown> = {};
@@ -361,6 +365,20 @@ async function main() {
     registerStops("go", goStops);
     await loadStopMeta("go", goFeed.dir);
     console.log(`GO: ${goStops.length} stops, ${Object.keys(goSchedules).length} with schedules`);
+  }
+
+  const upFeed = feedDirs.find((f) => f.feedId === "up");
+  if (upFeed) {
+    console.log("Building UP Express stops & schedules…");
+    const upStops = await loadGoStops(upFeed.dir);
+    const stopIds = new Set(upStops.map((s) => s.stopId));
+    const built = await buildFeedSchedules("up", upFeed.dir, stopIds);
+    upSchedules = built.schedulesByStop;
+    upTripStops = built.tripStops;
+    registerStops("up", upStops);
+    await loadStopMeta("up", upFeed.dir);
+    console.log(`UP: ${upStops.length} stops, ${Object.keys(upSchedules).length} with schedules`);
+    unionMembers.push({ feedId: "up", stopId: "UN" });
   }
 
   const miwayFeed = feedDirs.find((f) => f.feedId === "miway");
@@ -446,6 +464,10 @@ async function main() {
   writeFileSync(join(outDir, "stops.json"), JSON.stringify({ type: "FeatureCollection", features: stopFeatures }));
   writeShardedRecord(outDir, "go-schedules", goSchedules);
   writeShardedRecord(outDir, "go-trip-stops", goTripStops);
+  if (Object.keys(upSchedules).length) {
+    writeShardedRecord(outDir, "up-schedules", upSchedules);
+    writeShardedRecord(outDir, "up-trip-stops", upTripStops);
+  }
   if (Object.keys(ttcSchedules).length) {
     writeShardedRecord(outDir, "ttc-schedules", ttcSchedules);
     writeShardedRecord(outDir, "ttc-trip-stops", ttcTripStops);

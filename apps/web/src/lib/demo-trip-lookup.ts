@@ -5,7 +5,7 @@ import {
 } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
 
-const FEEDS_WITH_SCHEDULE_FILES = ["go", "ttc", "miway"] as const;
+const FEEDS_WITH_SCHEDULE_FILES = ["go", "up", "ttc", "miway"] as const;
 
 export async function lookupTripFromSchedules(
   feedId: string,

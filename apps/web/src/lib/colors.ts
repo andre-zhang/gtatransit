@@ -2,6 +2,7 @@ import { lookupDemoRouteColor } from "./demo-route-colors";
 
 /** GO rail line colours (official Metrolinx palette). */
 const GO_RAIL_COLORS: Record<string, string> = {
+  UP: "#0075d2",
   LW: "#98002e",
   LE: "#ff0d00",
   KI: "#00853e",
@@ -15,6 +16,7 @@ const GO_RAIL_COLORS: Record<string, string> = {
 export const AGENCY_COLORS: Record<string, string> = {
   ttc: "#da291c",
   go: "#007934",
+  up: "#0075d2",
   yrt: "#0072ce",
   brampton: "#e87722",
   drt: "#003da5",
@@ -24,6 +26,7 @@ export const AGENCY_COLORS: Record<string, string> = {
 export const AGENCY_NAMES: Record<string, string> = {
   ttc: "TTC",
   go: "GO",
+  up: "UP",
   yrt: "YRT",
   brampton: "Brampton",
   drt: "DRT",

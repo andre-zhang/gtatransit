@@ -1,5 +1,6 @@
 import {
   GO_RT_API,
+  UP_RT_API,
   RT_FEEDS,
   decodeFeed,
   fetchRt,
@@ -240,7 +241,11 @@ async function pollGoRest(key: string, now: number): Promise<number> {
   return 0;
 }
 
-async function pollGo(key: string) {
+async function pollMetrolinxFeed(
+  feedId: "go" | "up",
+  api: { tripUpdates: string; vehiclePositions: string },
+  key: string,
+) {
   const now = Date.now();
   let sawData = false;
   let tripUpdates = 0;
@@ -248,19 +253,19 @@ async function pollGo(key: string) {
   const errors: string[] = [];
 
   for (const [kind, path] of [
-    ["vehicles", GO_RT_API.vehiclePositions],
-    ["trips", GO_RT_API.tripUpdates],
+    ["vehicles", api.vehiclePositions],
+    ["trips", api.tripUpdates],
   ] as const) {
     try {
       const url = metrolinxApiUrl(path, key);
       const res = await fetch(url, { next: { revalidate: 0 } });
       if (!res.ok) {
-        errors.push(`${kind}:${res.status}`);
+        errors.push(`${feedId}:${kind}:${res.status}`);
         continue;
       }
       const buf = await res.arrayBuffer();
       if (buf.byteLength === 0) {
-        errors.push(`${kind}:empty`);
+        errors.push(`${feedId}:${kind}:empty`);
         continue;
       }
       const head = new Uint8Array(buf)[0]!;
@@ -270,23 +275,23 @@ async function pollGo(key: string) {
         const json: unknown = JSON.parse(new TextDecoder().decode(buf));
         const jsonErr = metrolinxJsonError(json);
         if (jsonErr) {
-          errors.push(`${kind}:${jsonErr}`);
+          errors.push(`${feedId}:${kind}:${jsonErr}`);
           continue;
         }
         if (kind === "vehicles") {
-          vehicleRows = parseMetrolinxJsonVehicles("go", json);
+          vehicleRows = parseMetrolinxJsonVehicles(feedId, json);
         } else {
-          updateRows = parseMetrolinxJsonTripUpdates("go", json);
+          updateRows = parseMetrolinxJsonTripUpdates(feedId, json);
         }
       } else if (head === 0x3c) {
-        errors.push(`${kind}:html`);
+        errors.push(`${feedId}:${kind}:html`);
         continue;
       } else {
         const msg = decodeFeed(buf);
         if (kind === "vehicles") {
-          vehicleRows = parseVehicles("go", msg);
+          vehicleRows = parseVehicles(feedId, msg);
         } else {
-          updateRows = parseTripUpdates("go", msg);
+          updateRows = parseTripUpdates(feedId, msg);
         }
       }
       sawData = true;
@@ -295,12 +300,12 @@ async function pollGo(key: string) {
         for (const v of vehicleRows) {
           if (v.lat == null || v.lon == null) continue;
           vehicles++;
-          const tk = v.tripId ? tripKey("go", v.tripId) : null;
+          const tk = v.tripId ? tripKey(feedId, v.tripId) : null;
           const routeId = v.routeId ?? (tk ? tripMap.get(tk)?.routeId : undefined);
           const enriched = routeId && !v.routeId ? { ...v, routeId } : v;
-          vehicleMap.set(`go:${v.vehicleId}`, { ...enriched, updatedAt: now });
+          vehicleMap.set(`${feedId}:${v.vehicleId}`, { ...enriched, updatedAt: now });
           if (!v.tripId) continue;
-          const k = tripKey("go", v.tripId);
+          const k = tripKey(feedId, v.tripId);
           const prev = tripMap.get(k) ?? { updatedAt: now };
           tripMap.set(k, {
             ...prev,
@@ -320,8 +325,8 @@ async function pollGo(key: string) {
             platform,
             updatedAt: now,
           };
-          stopTripMap.set(stopTripKey("go", u.tripId, u.stopId), entry);
-          const tk = tripKey("go", u.tripId);
+          stopTripMap.set(stopTripKey(feedId, u.tripId, u.stopId), entry);
+          const tk = tripKey(feedId, u.tripId);
           const prev = tripMap.get(tk) ?? { updatedAt: now };
           tripMap.set(tk, {
             ...prev,
@@ -334,7 +339,7 @@ async function pollGo(key: string) {
         }
       }
     } catch (e) {
-      errors.push(`${kind}:${e instanceof Error ? e.message : String(e)}`);
+      errors.push(`${feedId}:${kind}:${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -342,13 +347,24 @@ async function pollGo(key: string) {
     goRtSource = "gtfs-rt";
     goRtLastOk = now;
     goRtLastError = errors.length ? errors.join("; ") : null;
-    goRtStats = { ...goRtStats, tripUpdates, vehicles };
-    if (tripUpdates === 0) {
-      await pollGoRest(key, now);
-    }
-  } else {
-    const pollErrors = errors.length ? errors.join("; ") : null;
-    if (pollErrors) goRtLastError = pollErrors;
+    goRtStats = {
+      ...goRtStats,
+      tripUpdates: goRtStats.tripUpdates + tripUpdates,
+      vehicles: goRtStats.vehicles + vehicles,
+    };
+  } else if (errors.length) {
+    goRtLastError = [goRtLastError, errors.join("; ")].filter(Boolean).join("; ");
+  }
+
+  return { sawData, tripUpdates, vehicles };
+}
+
+async function pollGo(key: string) {
+  const now = Date.now();
+  const result = await pollMetrolinxFeed("go", GO_RT_API, key);
+  if (result.sawData && result.tripUpdates === 0) {
+    await pollGoRest(key, now);
+  } else if (!result.sawData) {
     await pollGoRest(key, now);
   }
 }
@@ -416,6 +432,7 @@ export async function refreshRtCache(force = false) {
   if (!force && Date.now() - lastRefresh < TTL_MS && tripMap.size > 0) {
     if (goKey && Date.now() - goRtLastOk > TTL_MS) {
       await pollGo(goKey);
+      await pollMetrolinxFeed("up", UP_RT_API, goKey);
       rebuildStopPredictionsIndex();
       goRtStats = {
         ...goRtStats,
@@ -430,7 +447,10 @@ export async function refreshRtCache(force = false) {
   refreshing = (async () => {
     clearRtMaps();
     await Promise.all(Object.keys(RT_FEEDS).map((feedId) => pollFeed(feedId)));
-    if (goKey) await pollGo(goKey);
+    if (goKey) {
+      await pollGo(goKey);
+      await pollMetrolinxFeed("up", UP_RT_API, goKey);
+    }
 
     if (isDatabaseConfigured() && !(await useDemoFixtures())) {
       try {

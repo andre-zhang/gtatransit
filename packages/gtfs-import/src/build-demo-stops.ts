@@ -20,6 +20,7 @@ const GO_LINE: Record<string, string> = {
 const AGENCY_COLORS: Record<string, string> = {
   ttc: "#da291c",
   go: "#007934",
+  up: "#0075d2",
   miway: "#00a651",
 };
 

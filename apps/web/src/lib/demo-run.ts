@@ -299,7 +299,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
 
   let trainDetail = null;
   const routeShort = route?.short_name ?? scheduleTrip?.routeShort ?? null;
-  if (feedId === "go" && isGoRailLine(routeShort) && liveTripId) {
+  if ((feedId === "go" || feedId === "up") && isGoRailLine(routeShort) && liveTripId) {
     const { normalizeMetrolinxKey } = await import("./rt-cache");
     const apiKey = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
     if (apiKey) {

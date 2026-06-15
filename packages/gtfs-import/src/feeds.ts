@@ -18,6 +18,11 @@ export const FEEDS: FeedConfig[] = [
     url: "https://assets.metrolinx.com/raw/upload/v1683228856/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
   },
   {
+    id: "up",
+    name: "UP Express",
+    url: "https://assets.metrolinx.com/raw/upload/v1682367798/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
+  },
+  {
     id: "miway",
     name: "MiWay",
     url: "https://www.miapp.ca/GTFS/google_transit.zip",
