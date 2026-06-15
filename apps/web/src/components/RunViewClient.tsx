@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDelayLabel } from "@/lib/delay-label";
 import { isGoRailLine } from "@/lib/go-rail";
 import { cleanHeadsign } from "@/lib/headsign";
@@ -90,15 +90,20 @@ export function RunViewClient({
 }) {
   const [data, setData] = useState<RunData | null>(initial);
   const [loading, setLoading] = useState(initial == null);
+  const hadDataRef = useRef(initial != null);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    if (!hadDataRef.current) setLoading(true);
     try {
       const res = await fetch(`/api/runs/${feedId}/${encodeURIComponent(vehicleId)}`, {
         cache: "no-store",
       });
       if (res.ok) {
-        setData(await res.json());
+        const next = (await res.json()) as RunData;
+        setData(next);
+        hadDataRef.current = true;
+      } else if (!hadDataRef.current) {
+        setData(null);
       }
     } catch {
       /* keep last good snapshot */

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDelayLabel } from "@/lib/delay-label";
+import { TimePair } from "./TimePair";
 
 type Stop = {
   stop_id: string;
@@ -8,16 +9,16 @@ type Stop = {
   predicted?: string;
   delayMin?: number;
   groupId?: string;
+  passed?: boolean;
 };
 
 export function StopTimeline({ stops }: { stops: Stop[] }) {
   if (!stops.length) return null;
 
   return (
-    <ul className="px-3 py-2 sm:px-5 sm:py-3">
+    <ul className="py-1">
       {stops.map((s, i) => {
         const isLast = i === stops.length - 1;
-        const time = s.predicted ?? s.scheduled;
         const nameEl = s.groupId ? (
           <Link
             href={`/stop/${s.groupId}`}
@@ -31,34 +32,42 @@ export function StopTimeline({ stops }: { stops: Stop[] }) {
           </span>
         );
         return (
-          <li key={`${s.stop_id}-${s.scheduled}-${i}`} className="relative flex gap-3 pb-3 last:pb-0">
+          <li
+            key={`${s.stop_id}-${s.scheduled}-${i}`}
+            className={`relative flex items-start gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3 ${s.passed ? "opacity-70" : ""}`}
+          >
             {!isLast && (
               <span
-                className="absolute left-[5px] top-3 bottom-0 w-px bg-go-bg"
+                className="absolute left-[1.375rem] top-5 bottom-0 w-px bg-go-bg sm:left-[1.625rem]"
                 aria-hidden
               />
             )}
             <span
-              className={`relative z-[1] mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border-2 ${
-                i === 0 ? "border-go-green bg-go-green" : "border-go-slate bg-white"
+              className={`relative z-[1] mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 sm:mt-2 sm:h-3.5 sm:w-3.5 ${
+                i === 0 && !s.passed
+                  ? "border-go-green bg-go-green"
+                  : s.passed
+                    ? "border-go-slate bg-go-bg"
+                    : "border-go-slate bg-white"
               }`}
               aria-hidden
             />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="w-12 shrink-0 text-right text-base font-bold tabular-nums text-go-navy sm:w-14 sm:text-lg">
-                  {time}
-                </span>
-                {nameEl}
-                {s.delayMin != null && s.delayMin !== 0 && (
-                  <span
-                    className={`go-badge shrink-0 whitespace-nowrap ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}
-                  >
-                    {formatDelayLabel(s.delayMin)}
-                  </span>
-                )}
-              </div>
-            </div>
+            <span className="w-[5.5rem] shrink-0 sm:w-32">
+              <TimePair
+                scheduled={s.scheduled}
+                predicted={s.predicted}
+                size="md"
+                showStruckWhenEqual={Boolean(s.predicted && s.passed)}
+              />
+            </span>
+            {nameEl}
+            {s.delayMin != null && s.delayMin !== 0 && (
+              <span
+                className={`go-badge ml-auto shrink-0 whitespace-nowrap ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}
+              >
+                {formatDelayLabel(s.delayMin)}
+              </span>
+            )}
           </li>
         );
       })}

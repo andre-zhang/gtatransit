@@ -12,7 +12,7 @@ import { pick, readCsv } from "./csv.js";
 import { routeIdFromRow } from "./route-id.js";
 import { buildFeedSchedules, loadGoStops } from "./build-demo-stops.js";
 import { writeShardedRecord } from "./write-sharded-json.js";
-import { decimateLine } from "./simplify-line.js";
+import { smoothRouteLine } from "./smooth-line.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "../../..");
@@ -111,7 +111,10 @@ async function loadUpRouteFeatures(dir: string) {
       if (coords.length < 2) continue;
       features.push({
         type: "Feature",
-        geometry: { type: "LineString", coordinates: decimateLine(coords, 120) },
+        geometry: {
+          type: "LineString",
+          coordinates: smoothRouteLine(coords, r.routeType),
+        },
         properties: {
           feedId: "up",
           routeId,

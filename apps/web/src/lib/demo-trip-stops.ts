@@ -4,6 +4,7 @@ import {
   gtfsTimeToSec,
   isUnixTimestamp,
   makeMonotonicGtfsSecs,
+  normalizeServiceSec,
   shiftTripToPrediction,
   torontoNowSec,
   unixToTorontoSec,
@@ -18,7 +19,7 @@ import {
   resolveTtcRtStopIds,
 } from "./ttc-stop-registry";
 import { resolveStopGroupForMember } from "./demo-stop-groups";
-import { getStopTripRt, getTripStopUpdates } from "./rt-cache";
+import { getStopTripRt, getTripRt, getTripStopUpdates } from "./rt-cache";
 
 export type TripStopOut = {
   stopId: string;
@@ -105,9 +106,22 @@ export async function buildDemoTripStops(opts: {
   const fromCandidates =
     fromStop != null ? await resolveFromStopCandidates(feedId, fromStop) : null;
 
+  const tripEnded =
+    schedStops.length > 0 &&
+    !getTripRt(feedId, liveTripId) &&
+    rtUpdates.length === 0 &&
+    (() => {
+      const last = schedStops[schedStops.length - 1]!;
+      const lastSec = gtfsTimeToSec(last.departureTime);
+      return normalizeServiceSec(lastSec, now) < now - 300;
+    })();
+
+  const useFromStop = fromCandidates != null && !tripEnded;
+
   if (schedStops.length) {
-    const startIdx =
-      fromCandidates != null ? findStopIndex(schedStops, fromCandidates, feedId) : 0;
+    const startIdx = useFromStop
+      ? findStopIndex(schedStops, fromCandidates!, feedId)
+      : 0;
     const slice = startIdx >= 0 ? schedStops.slice(startIdx) : schedStops;
     const baseSeq = startIdx >= 0 ? schedStops[startIdx]!.sequence : 0;
     const rawSecs = slice.map((s) => gtfsTimeToSec(s.departureTime));
@@ -131,6 +145,7 @@ export async function buildDemoTripStops(opts: {
         } else if (delaySec != null) {
           predictedSec = schedSec + delaySec;
         }
+        const schedNorm = normalizeServiceSec(schedSec, now);
         return {
           stopId: s.stopId,
           name: s.name,
@@ -140,10 +155,9 @@ export async function buildDemoTripStops(opts: {
             predictedSec != null ? displayTripClockTime(predictedSec) : undefined,
           delayMin: delayMinFromSec(delaySec),
           groupId: resolveStopGroupForMember(feedId, s.stopId) ?? undefined,
-          passed:
-            fromCandidates != null &&
-            startIdx >= 0 &&
-            s.sequence < baseSeq,
+          passed: tripEnded
+            ? schedNorm < now - 60
+            : useFromStop && startIdx >= 0 && s.sequence < baseSeq,
         };
       }),
     );

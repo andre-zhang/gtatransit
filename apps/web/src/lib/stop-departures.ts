@@ -25,18 +25,13 @@ import {
 import { getStopSchedule } from "@/lib/demo-schedules";
 import { routesMatch, routeTail } from "@/lib/route-match";
 import {
-  getActiveVehicleForRoute,
   getRtPredictionsForStop,
   mergeRtIntoDeparture,
   normalizeMetrolinxKey,
   refreshRtCache,
   type RtStopPrediction,
 } from "@/lib/rt-cache";
-import {
-  expandGoStopId,
-  formatGoPlatform,
-  resolveGoRtStopIds,
-} from "@/lib/go-stop-aliases";
+import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
 import { fetchGoNextService } from "@/lib/go-metrolinx-rest";
 import { cleanHeadsign } from "@/lib/headsign";
 import { resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
@@ -104,7 +99,19 @@ function rtPredictionToDeparture(
     predictedSec != null ? normalizeServiceSec(predictedSec, now) : null;
 
   let scheduledRow: ScheduleRow | undefined;
-  if (predNorm != null) {
+  for (const s of schedule) {
+    if (s.feedId !== row.feedId) continue;
+    if (s.tripId === row.tripId) {
+      scheduledRow = s;
+      break;
+    }
+    if (row.feedId === "go" && goTripsMatch(s.tripId, row.tripId)) {
+      scheduledRow = s;
+      break;
+    }
+  }
+
+  if (!scheduledRow && predNorm != null) {
     let bestDelta = Infinity;
     for (const s of schedule) {
       if (s.feedId !== row.feedId) continue;
@@ -255,6 +262,13 @@ export async function buildDemoStopDepartures(
       if (feedId === "ttc" && !allowedTtcRtStopIds.has(extra.stopId)) {
         continue;
       }
+      const alreadyScheduled = schedule.some(
+        (s) =>
+          s.feedId === extra.feedId &&
+          (s.tripId === extra.tripId ||
+            (extra.feedId === "go" && goTripsMatch(s.tripId, extra.tripId))),
+      );
+      if (alreadyScheduled) continue;
       const row = rtPredictionToDeparture(extra, schedule);
       if (!row) continue;
       usedRtTrips.add(`${row.feedId}:${row.tripId}`);
@@ -303,8 +317,6 @@ export async function buildDemoStopDepartures(
     ttcRtByStopId.set(m.stopId, await resolveTtcRtStopIds([m]));
   }
 
-  const routeVehicleMarked = new Set<string>();
-
   for (const r of schedule) {
     const rtIds =
       r.feedId === "ttc"
@@ -341,25 +353,6 @@ export async function buildDemoStopDepartures(
       realtime: rt.realtime,
       vehicleId: rt.vehicleId,
     });
-
-    if (!rt.realtime && (r.feedId === "ttc" || r.feedId === "miway" || r.feedId === "go")) {
-      const routeKey = `${r.feedId}:${r.routeShort || r.routeId}`;
-      if (!routeVehicleMarked.has(routeKey)) {
-        const active = getActiveVehicleForRoute(r.feedId, r.routeId, r.routeShort);
-        if (active?.tripId) {
-          routeVehicleMarked.add(routeKey);
-          const last = inputs[inputs.length - 1]!;
-          inputs[inputs.length - 1] = {
-            ...last,
-            realtime: true,
-            vehicleId: active.vehicleId,
-            tripId: active.tripId ?? last.tripId,
-            delaySec: active.delaySec ?? last.delaySec,
-          };
-          usedRtTrips.add(`${r.feedId}:${active.tripId}`);
-        }
-      }
-    }
   }
 
   const deduped = dedupeDepartures(enrichGoPlatforms(inputs, goPlatformByRouteSec));

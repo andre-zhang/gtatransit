@@ -629,34 +629,30 @@ export function mergeRtIntoDeparture(
     stopRt != null || tripRt != null || vehicle != null || delaySec != null;
 
   let fuzzyPlatform: string | undefined;
-  if (!hasExact && opts?.usedRtTrips && (opts.routeId || opts.routeShort)) {
-    const fuzzy = findFuzzyRtMatch(
-      feedId,
-      stopIds,
-      opts.routeId,
-      opts.routeShort,
-      schedSec,
-      opts.usedRtTrips,
-    );
-    if (fuzzy) {
-      liveTripId = fuzzy.tripId;
-      opts.usedRtTrips.add(`${feedId}:${fuzzy.tripId}`);
-      tripRt = getTripRt(feedId, fuzzy.tripId);
-      vehicle = getVehicleForTrip(feedId, fuzzy.tripId);
-      stopRt = getStopTripRtAny(feedId, fuzzy.tripId, stopIds) ?? stopRt;
-      delaySec =
-        fuzzy.delaySec ?? stopRt?.delaySec ?? tripRt?.delaySec ?? vehicle?.delaySec;
-      predictedSec = fuzzy.predictedSec;
-      if (fuzzy.platform) {
-        fuzzyPlatform =
-          feedId === "go" ? formatGoPlatform(fuzzy.platform) : fuzzy.platform;
-      }
-      if (predictedSec != null) {
-        const drift = predictedSec - schedSec;
-        if (delaySec == null || Math.abs(drift) > Math.abs(delaySec)) {
-          delaySec = drift;
+  // Only attach live data when the RT trip matches this scheduled trip — never
+  // fuzzy-match a different running trip onto future scheduled departures.
+  if (!hasExact && opts?.usedRtTrips) {
+    for (const sid of stopIds) {
+      const preds = predictionsByStop.get(`${feedId}:${sid}`) ?? [];
+      for (const p of preds) {
+        if (opts.usedRtTrips.has(`${feedId}:${p.tripId}`)) continue;
+        if (feedId === "go" && !goTripsMatch(tripId, p.tripId)) continue;
+        if (feedId !== "go" && p.tripId !== tripId) continue;
+        liveTripId = p.tripId;
+        opts.usedRtTrips.add(`${feedId}:${p.tripId}`);
+        tripRt = getTripRt(feedId, p.tripId);
+        vehicle = getVehicleForTrip(feedId, p.tripId);
+        stopRt = getStopTripRtAny(feedId, p.tripId, stopIds) ?? stopRt;
+        delaySec =
+          p.delaySec ?? stopRt?.delaySec ?? tripRt?.delaySec ?? vehicle?.delaySec;
+        predictedSec = p.predictedSec;
+        if (p.platform) {
+          fuzzyPlatform =
+            feedId === "go" ? formatGoPlatform(p.platform) : p.platform;
         }
+        break;
       }
+      if (liveTripId) break;
     }
   }
 
@@ -694,8 +690,8 @@ export function mergeRtIntoDeparture(
     liveTripId != null ||
     hasStopUpdate ||
     hasTripUpdate ||
-    hasVehicle ||
-    (delaySec != null && predictedSec != null);
+    (hasVehicle && (hasStopUpdate || hasTripUpdate || stopRt != null || tripRt != null)) ||
+    (delaySec != null && predictedSec != null && (stopRt != null || tripRt != null));
 
   const rawPlatform = stopRt?.platform ?? tripRt?.platform ?? fuzzyPlatform;
   const platform =

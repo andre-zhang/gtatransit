@@ -24,7 +24,7 @@ import {
   loadStopsUsedByRouteTypes,
   loadTtcSubwayStops,
 } from "./build-demo-stops.js";
-import { decimateLine } from "./simplify-line.js";
+import { smoothRouteLine } from "./smooth-line.js";
 import { writeShardedRecord } from "./write-sharded-json.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -188,10 +188,8 @@ async function loadFeed(feedId: string, name: string, zipName: string) {
     const pts = shapePoints.get(sid)!.sort((a, b) => a.seq - b.seq);
     if (pts.length < 2) continue;
     let coords = pts.map((p) => [p.lon, p.lat]);
-    if (rt === 3) {
-      coords = decimateLine(coords, 120);
-      busShapes++;
-    }
+    coords = smoothRouteLine(coords, rt);
+    if (rt === 3) busShapes++;
     if (!routeShape.has(routeId)) routeShape.set(routeId, new Map());
     routeShape.get(routeId)!.set(direction, coords);
     shapeFeatures++;

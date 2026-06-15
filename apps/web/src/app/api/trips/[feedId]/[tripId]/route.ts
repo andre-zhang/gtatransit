@@ -5,6 +5,7 @@ import {
   displayTripClockTime,
   gtfsTimeToSec,
   makeMonotonicGtfsSecs,
+  normalizeServiceSec,
   shiftTripToPrediction,
   torontoNowSec,
 } from "@/lib/calendar";
@@ -94,12 +95,19 @@ export async function GET(
     ORDER BY st.stop_sequence
   `;
 
-  const startIdx =
-    fromStop != null ? rows.findIndex((r) => r.stop_id === fromStop) : 0;
-  const slice = startIdx >= 0 ? rows.slice(startIdx) : rows;
   const tripRt = getTripRt(feedId, tripId);
   const now = torontoNowSec();
   const headsign = tripMeta[0]?.headsign ?? null;
+  const lastRow = rows[rows.length - 1];
+  const tripEnded =
+    !tripRt &&
+    lastRow != null &&
+    normalizeServiceSec(gtfsTimeToSec(lastRow.departure_time), now) < now - 300;
+  const startIdx =
+    fromStop != null && !tripEnded
+      ? rows.findIndex((r) => r.stop_id === fromStop)
+      : 0;
+  const slice = startIdx >= 0 ? rows.slice(startIdx) : rows;
   const routeRow = tripMeta[0]?.route_id
     ? await db<
         Array<{ route_id: string; short_name: string | null; color: string | null }>
@@ -162,6 +170,7 @@ export async function GET(
           predictedSec != null ? displayTripClockTime(predictedSec) : undefined,
         delayMin: delayMinFromSec(delaySec),
         groupId: groupIds.get(s.stop_id),
+        passed: tripEnded && normalizeServiceSec(schedSec, now) < now - 60,
       };
     }),
   });

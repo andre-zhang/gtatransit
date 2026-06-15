@@ -8,6 +8,7 @@ import { AgencyMark } from "./AgencyMark";
 import { LiveIcon } from "./LiveIcon";
 import { PageEmpty } from "./PageEmpty";
 import { RoutePill } from "./RoutePill";
+import { TimePair } from "./TimePair";
 
 export type DepartureRow = {
   time: string;
@@ -100,8 +101,8 @@ function TripStopsPanel({
     <ul className="departure-board-expand divide-y divide-go-bg bg-go-bg/30">
       {stops.map((s, i) => (
         <li key={`${s.stopId}-${i}`} className="flex items-center gap-3 px-5 py-2.5 text-sm">
-          <span className="w-14 shrink-0 text-right font-bold tabular-nums text-go-navy">
-            {s.predicted ?? s.scheduled}
+          <span className="w-14 shrink-0">
+            <TimePair scheduled={s.scheduled} predicted={s.predicted} size="sm" />
           </span>
           {s.groupId ? (
             <Link
@@ -149,6 +150,7 @@ export function DepartureTable({
     const dayLabel =
       dayOffset === 1 ? "Tomorrow" : dayOffset > 1 ? `+${dayOffset} days` : null;
     const displayTime = r.predicted ?? r.time;
+    const showStruck = r.realtime && r.predicted != null && r.predicted !== r.time;
     const late = r.latenessMin != null && r.latenessMin > 0;
     const early = r.latenessMin != null && r.latenessMin < 0;
     const rowKey = `${r.tripId}-${i}`;
@@ -171,6 +173,7 @@ export function DepartureTable({
       rowKey,
       isOpen,
       tripHref,
+      showStruck,
     };
   };
 
@@ -198,15 +201,12 @@ export function DepartureTable({
                       {r.realtime && (
                         <LiveIcon className="h-3 w-3 shrink-0 text-go-green" title="Live" />
                       )}
-                      <span
-                        className={`departure-board-time departure-board-time--mobile tabular-nums leading-none ${
-                          r.realtime
-                            ? "departure-board-time--live"
-                            : "departure-board-time--sched"
-                        }`}
-                      >
-                        {m.displayTime}
-                      </span>
+                      <TimePair
+                        scheduled={r.time}
+                        predicted={m.showStruck ? r.predicted : undefined}
+                        size="sm"
+                        align="right"
+                      />
                     </div>
                     {showAgency && <AgencyMark feedId={r.feedId} />}
                     <RoutePill
@@ -235,7 +235,7 @@ export function DepartureTable({
                       ) : !r.realtime ? (
                         <span className="go-badge go-badge--sched whitespace-nowrap">Scheduled</span>
                       ) : null}
-                      {r.vehicleId && (
+                      {r.realtime && r.vehicleId && (
                         <Link
                           href={`/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`}
                           onClick={(e) => e.stopPropagation()}
@@ -253,11 +253,6 @@ export function DepartureTable({
                       </Link>
                     </div>
                   </div>
-                  {r.predicted && r.predicted !== r.time && (
-                    <div className="mt-0.5 pl-[4rem] text-[10px] tabular-nums text-go-slate line-through">
-                      {r.time}
-                    </div>
-                  )}
                 </button>
                 {m.isOpen && (
                   <TripStopsPanel
@@ -318,24 +313,18 @@ export function DepartureTable({
                       {r.realtime && (
                         <LiveIcon className="h-3.5 w-3.5 shrink-0 text-go-green" title="Live" />
                       )}
-                      <span
-                        className={`departure-board-time tabular-nums leading-none ${
-                          r.realtime ? "departure-board-time--live" : "departure-board-time--sched"
-                        }`}
-                      >
-                        {m.displayTime}
-                        {m.dayOffset > 0 && (
-                          <sup className="ml-0.5 text-[10px] font-semibold text-go-slate">
-                            +{m.dayOffset}
-                          </sup>
-                        )}
-                      </span>
+                      <TimePair
+                        scheduled={r.time}
+                        predicted={m.showStruck ? r.predicted : undefined}
+                        size="md"
+                        align="right"
+                      />
+                      {m.dayOffset > 0 && (
+                        <sup className="ml-0.5 text-[10px] font-semibold text-go-slate">
+                          +{m.dayOffset}
+                        </sup>
+                      )}
                     </div>
-                    {r.predicted && r.predicted !== r.time && (
-                      <span className="departure-board-timeWas mt-0.5 block tabular-nums line-through">
-                        {r.time}
-                      </span>
-                    )}
                   </td>
                   {showAgency && (
                     <td className="px-2 py-3">
@@ -374,7 +363,7 @@ export function DepartureTable({
                       ) : !r.realtime ? (
                         <span className="go-badge go-badge--sched">Scheduled</span>
                       ) : null}
-                      {r.vehicleId && (
+                      {r.realtime && r.vehicleId && (
                         <Link
                           href={`/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`}
                           onClick={(e) => e.stopPropagation()}

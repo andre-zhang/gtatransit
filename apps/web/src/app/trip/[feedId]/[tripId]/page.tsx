@@ -18,6 +18,7 @@ type Stop = {
   delayMin?: number;
   platform?: string;
   groupId?: string;
+  passed?: boolean;
 };
 
 type TripPayload = {
@@ -142,6 +143,7 @@ export default async function TripPage({
             predicted: s.predicted,
             delayMin: s.delayMin,
             groupId: s.groupId,
+            passed: s.passed,
           }))}
         />
       </Section>

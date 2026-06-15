@@ -7,6 +7,7 @@ import { getSql, closeDb } from "@gta/db";
 import { FEEDS } from "./feeds.js";
 import { pick, readCsv } from "./csv.js";
 import { routeIdFromRow } from "./route-id.js";
+import { smoothRouteLine } from "./smooth-line.js";
 
 const dataDir = process.env.GTFS_DATA_DIR ?? "./data/gtfs";
 const BATCH = 5000;
@@ -91,10 +92,12 @@ async function importFeed(feedId: string, name: string, dir: string) {
   }
 
   const routesPath = join(dir, "routes.txt");
+  const routeTypeById = new Map<string, number>();
   if (existsSync(routesPath)) {
     for await (const row of readCsv(routesPath)) {
       const routeId = routeIdFromRow(row);
       if (!routeId) continue;
+      routeTypeById.set(routeId, Number(pick(row, "route_type") || 3));
       await sql`
         INSERT INTO routes (feed_id, route_id, agency_id, short_name, long_name, route_type, color, text_color)
         VALUES (
@@ -300,8 +303,10 @@ async function importFeed(feedId: string, name: string, dir: string) {
       if (!shapeId || !shapePoints.has(shapeId)) continue;
       if (!routeDirs.has(routeId)) routeDirs.set(routeId, new Map());
       const pts = shapePoints.get(shapeId)!.sort((a, b) => a.seq - b.seq);
-      const coords = pts.map((p) => [p.lon, p.lat]);
+      let coords = pts.map((p) => [p.lon, p.lat]);
       if (coords.length < 2) continue;
+      const rt = routeTypeById.get(routeId) ?? 3;
+      coords = smoothRouteLine(coords, rt);
       const geojson = JSON.stringify({
         type: "Feature",
         geometry: { type: "LineString", coordinates: coords },

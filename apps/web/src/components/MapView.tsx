@@ -2,9 +2,11 @@
 
 import type { FeatureCollection } from "geojson";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import maplibregl from "maplibre-gl";
 import { LayerPanel } from "./LayerPanel";
 import { MapZoomHint } from "./MapZoomHint";
+import { RoutePicker, type RoutePick } from "./RoutePicker";
 import { BASEMAP_STYLE, GTA_CENTER, GTA_DEFAULT_ZOOM } from "@/lib/basemap";
 import { readSavedMapView, saveMapView } from "@/lib/map-view-state";
 import { ensureVehicleArrowImage, VEHICLE_ARROW_IMAGE_ID } from "@/lib/map-icons";
@@ -21,6 +23,7 @@ const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 type Props = { filterTree: FilterTree; rtUpdated?: string | null; demoMode?: boolean };
 
 export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
+  const router = useRouter();
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const refreshRef = useRef<() => void>(() => {});
@@ -52,6 +55,11 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
   const [vehicleDirs, setVehicleDirs] = useState<Set<number>>(() => new Set([0, 1]));
   const [stopDirs, setStopDirs] = useState<Set<number>>(() => new Set([0, 1]));
   const [layersOpen, setLayersOpen] = useState(false);
+  const [routePicker, setRoutePicker] = useState<{
+    x: number;
+    y: number;
+    routes: RoutePick[];
+  } | null>(null);
 
   const buildQuery = useCallback(
     (map: maplibregl.Map) => {
@@ -96,7 +104,8 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
 
   const navigate = (href: string) => {
     persistMapView();
-    window.location.assign(href);
+    setRoutePicker(null);
+    router.push(href);
   };
 
   const refreshLayers = useCallback(async () => {
@@ -223,9 +232,9 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         source: "stops",
         minzoom: ZOOM_STOPS,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 1.5, 14, 2, 16, 2.75],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 4.5, 14, 6.5, 16, 9, 18, 12],
           "circle-color": "#ffffff",
-          "circle-stroke-width": 1,
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 12, 1, 16, 1.5],
           "circle-stroke-color": "#da291c",
         },
       });
@@ -235,7 +244,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         source: "stops",
         minzoom: ZOOM_STOPS,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 10, 14, 14, 16, 18],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 18, 14, 22, 16, 28],
           "circle-opacity": 0,
         },
       });
@@ -243,12 +252,21 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
       map.addSource("vehicles", { type: "geojson", data: EMPTY_FC });
       ensureVehicleArrowImage(map);
       map.addLayer({
+        id: "vehicles-hit",
+        type: "circle",
+        source: "vehicles",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 14, 14, 18, 16, 22],
+          "circle-opacity": 0,
+        },
+      });
+      map.addLayer({
         id: "vehicles-arrow",
         type: "symbol",
         source: "vehicles",
         layout: {
           "icon-image": VEHICLE_ARROW_IMAGE_ID,
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 10, 0.26, 14, 0.34, 16, 0.42],
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 10, 0.32, 14, 0.42, 16, 0.52],
           "icon-rotate": ["coalesce", ["get", "bearing"], 0],
           "icon-rotation-alignment": "map",
           "icon-allow-overlap": true,
@@ -257,11 +275,35 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
       });
 
       map.on("click", "routes-hit", (e) => {
-        const f = e.features?.[0];
-        if (!f?.properties) return;
-        navigate(
-          `/route/${f.properties.feedId}/${encodeURIComponent(String(f.properties.routeId))}`,
-        );
+        const features = map.queryRenderedFeatures(e.point, { layers: ["routes-hit"] });
+        const seen = new Set<string>();
+        const routes: RoutePick[] = [];
+        for (const f of features) {
+          const p = f.properties;
+          if (!p?.feedId || !p?.routeId) continue;
+          const key = `${p.feedId}:${p.routeId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          routes.push({
+            feedId: String(p.feedId),
+            routeId: String(p.routeId),
+            routeShort: String(p.routeShort ?? p.routeId),
+            color: String(p.color ?? "#007934"),
+          });
+        }
+        if (!routes.length) return;
+        if (routes.length === 1) {
+          navigate(
+            `/route/${routes[0]!.feedId}/${encodeURIComponent(routes[0]!.routeId)}`,
+          );
+          return;
+        }
+        setRoutePicker({ x: e.point.x, y: e.point.y, routes });
+      });
+
+      map.on("click", (e) => {
+        const hits = map.queryRenderedFeatures(e.point, { layers: ["routes-hit"] });
+        if (!hits.length) setRoutePicker(null);
       });
 
       map.on("mouseenter", "routes-hit", () => {
@@ -278,11 +320,19 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         map.getCanvas().style.cursor = "";
       });
 
-      map.on("mouseenter", "vehicles-arrow", () => {
+      map.on("mouseenter", "vehicles-hit", () => {
         map.getCanvas().style.cursor = "pointer";
       });
-      map.on("mouseleave", "vehicles-arrow", () => {
+      map.on("mouseleave", "vehicles-hit", () => {
         map.getCanvas().style.cursor = "";
+      });
+
+      map.on("click", "vehicles-hit", (e) => {
+        const f = e.features?.[0];
+        if (!f?.properties) return;
+        navigate(
+          `/run/${f.properties.feedId}/${encodeURIComponent(f.properties.vehicleId)}`,
+        );
       });
 
       map.on("click", "vehicles-arrow", (e) => {
@@ -310,6 +360,19 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
       map.remove();
       mapRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      const map = mapRef.current;
+      if (!map) return;
+      map.resize();
+      lastFetchKey.current = "";
+      refreshRef.current();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
   useEffect(() => {
@@ -426,6 +489,27 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         </button>
       </div>
       <MapZoomHint zoom={zoom} showRoutes={showRoutes} showStops={showStops} mobileLayersOpen={layersOpen} />
+      {routePicker && (
+        <div
+          className="pointer-events-none absolute inset-0 z-30"
+          aria-live="polite"
+        >
+          <div
+            className="pointer-events-auto"
+            style={{
+              position: "absolute",
+              left: routePicker.x,
+              top: routePicker.y,
+              transform: "translate(-50%, calc(-100% - 8px))",
+            }}
+          >
+            <RoutePicker
+              routes={routePicker.routes}
+              onClose={() => setRoutePicker(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
