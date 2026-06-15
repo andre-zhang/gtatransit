@@ -5,7 +5,7 @@ import { resolveDemoDir } from "./demo-dir";
 import { readDemoJsonFile } from "./demo-read";
 import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 import { isDemoFixtureTripId } from "./demo-trip-id";
-import { goScheduleLookupKeys } from "./go-stop-aliases";
+import { goScheduleLookupKeys, goTripSuffix } from "./go-stop-aliases";
 import { routesMatch } from "./route-match";
 
 const scheduleCache = new Map<string, Record<string, ScheduleRow[]>>();
@@ -300,6 +300,16 @@ export async function loadTripStopsForTrip(
   if (indexedFile) {
     const part = await readDemoJsonFile<Record<string, TripStopRow[]>>(indexedFile);
     return part[tripId] ?? [];
+  }
+
+  if (feedId === "go") {
+    const suffix = goTripSuffix(tripId);
+    for (const [key, file] of Object.entries(index)) {
+      if (goTripSuffix(key) !== suffix) continue;
+      const part = await readDemoJsonFile<Record<string, TripStopRow[]>>(file);
+      const rows = part[key];
+      if (rows?.length) return rows;
+    }
   }
 
   for (const file of files) {

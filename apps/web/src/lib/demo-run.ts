@@ -21,6 +21,8 @@ import {
 import type { ScheduleRow } from "./demo-schedule-types";
 import { needsHeadsignLookup, preloadTripHeadsignIndex, tripHeadsign } from "./demo-trip-headsign";
 import { resolveVehicleBlock } from "./demo-trip-meta";
+import { fetchGoTrainDetail } from "./go-metrolinx-rest";
+import { isGoRailLine } from "./go-rail";
 import { liveStopDisplayName, resolveTtcRtStopIds } from "./ttc-stop-registry";
 import {
   getRtVehicle,
@@ -292,6 +294,16 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
         blockEnd: null as string | null,
       };
 
+  let trainDetail = null;
+  const routeShort = route?.short_name ?? scheduleTrip?.routeShort ?? null;
+  if (feedId === "go" && isGoRailLine(routeShort) && liveTripId) {
+    const { normalizeMetrolinxKey } = await import("./rt-cache");
+    const apiKey = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
+    if (apiKey) {
+      trainDetail = await fetchGoTrainDetail(liveTripId, apiKey);
+    }
+  }
+
   return {
     vehicle: {
       id: vehicle.vehicleId,
@@ -333,6 +345,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     blockTrips,
     blockStart,
     blockEnd,
+    trainDetail,
     shape,
   };
 }

@@ -51,6 +51,7 @@ type RunData = {
   upcomingStops: UpcomingStop[];
   blockStart?: string | null;
   blockEnd?: string | null;
+  trainDetail?: GoTrainDetail | null;
   blockTrips?: Array<{
     trip_id: string;
     headsign: string | null;
@@ -66,10 +67,14 @@ function blockSectionTitle(trip: RunData["trip"]) {
   return "Trips in block";
 }
 
-function blockSectionSubtitle(blockStart?: string | null, blockEnd?: string | null) {
-  if (!blockStart) return undefined;
-  if (blockEnd && blockEnd !== blockStart) return `${blockStart} – ${blockEnd}`;
-  return blockStart;
+function blockTimeRange(start?: string | null, end?: string | null) {
+  if (!start) return null;
+  if (end && end !== start) return `${start} – ${end}`;
+  return start;
+}
+
+function blockTripTime(t: { first_departure: string; last_departure?: string }) {
+  return blockTimeRange(t.first_departure, t.last_departure) ?? t.first_departure;
 }
 
 export function RunViewClient({
@@ -83,9 +88,6 @@ export function RunViewClient({
 }) {
   const [data, setData] = useState<RunData | null>(initial);
   const [loading, setLoading] = useState(initial == null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [trainDetail, setTrainDetail] = useState<GoTrainDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -109,29 +111,6 @@ export function RunViewClient({
     return () => clearInterval(id);
   }, [refresh]);
 
-  useEffect(() => {
-    if (!detailsOpen || feedId !== "go" || !data?.trip?.trip_id) return;
-    let cancelled = false;
-    setDetailLoading(true);
-    void fetch(
-      `/api/go/train-detail?tripId=${encodeURIComponent(data.trip.trip_id)}`,
-      { cache: "no-store" },
-    )
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (!cancelled) setTrainDetail(json as GoTrainDetail | null);
-      })
-      .catch(() => {
-        if (!cancelled) setTrainDetail(null);
-      })
-      .finally(() => {
-        if (!cancelled) setDetailLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [detailsOpen, feedId, data?.trip?.trip_id]);
-
   if (!data) {
     return (
       <div className="px-6 py-12 text-center text-sm text-go-slate">
@@ -142,12 +121,23 @@ export function RunViewClient({
     );
   }
 
-  const { vehicle, trip, route, currentStop, upcomingStops, shape, blockTrips, blockStart, blockEnd } =
-    data;
+  const {
+    vehicle,
+    trip,
+    route,
+    currentStop,
+    upcomingStops,
+    shape,
+    blockTrips,
+    blockStart,
+    blockEnd,
+    trainDetail,
+  } = data;
   const early = vehicle.delayMin != null && vehicle.delayMin < 0;
   const late = vehicle.delayMin != null && vehicle.delayMin > 0;
   const delayLabel = formatDelayLabel(vehicle.delayMin);
-  const showGoTrainDetails = feedId === "go" && isGoRailLine(route?.short_name);
+  const isGoTrain = feedId === "go" && isGoRailLine(route?.short_name);
+  const blockRange = blockTimeRange(blockStart, blockEnd);
 
   return (
     <>
@@ -174,52 +164,34 @@ export function RunViewClient({
           <div className="text-lg font-bold text-go-navy">{currentStop?.name ?? "—"}</div>
         </div>
         <div className="p-5">
-          <div className="go-section-title mb-1">Status</div>
-          <div className="text-sm font-semibold text-go-navy">
-            {vehicle.occupancy ?? "—"}
-          </div>
-          {vehicle.speed != null && (
-            <div className="mt-0.5 text-xs text-go-slate">
-              {Math.round(vehicle.speed * 3.6)} km/h
-            </div>
+          <div className="go-section-title mb-1">{isGoTrain ? "Consist" : "Status"}</div>
+          {isGoTrain ? (
+            <>
+              <div className="text-lg font-bold text-go-navy">
+                {trainDetail?.carsLabel ?? "—"}
+              </div>
+              {trainDetail?.occupancyPercent != null ? (
+                <div className="mt-0.5 text-xs text-go-slate">
+                  {trainDetail.occupancyPercent}% full
+                </div>
+              ) : vehicle.occupancy ? (
+                <div className="mt-0.5 text-xs text-go-slate">{vehicle.occupancy}</div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div className="text-sm font-semibold text-go-navy">
+                {vehicle.occupancy ?? "—"}
+              </div>
+              {vehicle.speed != null && (
+                <div className="mt-0.5 text-xs text-go-slate">
+                  {Math.round(vehicle.speed * 3.6)} km/h
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
-
-      {showGoTrainDetails && (
-        <div className="border-b border-go-bg">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between px-5 py-3 text-left text-sm font-semibold text-go-navy hover:bg-go-bg/30"
-            onClick={() => setDetailsOpen((open) => !open)}
-            aria-expanded={detailsOpen}
-          >
-            <span>Train details</span>
-            <span className="text-go-slate">{detailsOpen ? "−" : "+"}</span>
-          </button>
-          {detailsOpen && (
-            <div className="border-t border-go-bg px-5 py-4 text-sm text-go-navy">
-              {detailLoading ? (
-                <p className="text-go-slate">Loading consist…</p>
-              ) : trainDetail?.carsLabel ? (
-                <div className="space-y-1">
-                  <p className="font-semibold">{trainDetail.carsLabel}</p>
-                  {trainDetail.display ? (
-                    <p className="text-go-slate">{trainDetail.display}</p>
-                  ) : null}
-                  {trainDetail.occupancyPercent != null ? (
-                    <p className="text-go-slate">
-                      {trainDetail.occupancyPercent}% full
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="text-go-slate">Consist information unavailable.</p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       <RunMap
         lat={vehicle.lat}
@@ -239,20 +211,20 @@ export function RunViewClient({
       )}
 
       {blockTrips && blockTrips.length > 0 && (
-        <Section
-          title={blockSectionTitle(trip)}
-          subtitle={blockSectionSubtitle(blockStart, blockEnd)}
-        >
+        <Section title={blockSectionTitle(trip)} subtitle={blockRange ?? undefined}>
+          {blockRange && (
+            <div className="border-b border-go-bg bg-go-bg/25 px-5 py-2.5 text-sm font-semibold tabular-nums text-go-navy">
+              {blockRange}
+            </div>
+          )}
           <ul className="divide-y divide-go-bg">
             {blockTrips.map((t) => (
               <li
                 key={t.trip_id}
                 className={`flex items-center gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3 ${t.active ? "bg-go-bg/40" : ""}`}
               >
-                <span className="w-[4.5rem] shrink-0 text-right text-xs font-bold tabular-nums text-go-navy sm:w-28 sm:text-sm">
-                  {t.last_departure
-                    ? `${t.first_departure}–${t.last_departure}`
-                    : t.first_departure}
+                <span className="w-[5.5rem] shrink-0 text-right text-xs font-bold tabular-nums text-go-navy sm:w-32 sm:text-sm">
+                  {blockTripTime(t)}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
                   {cleanHeadsign(t.headsign) || "—"}

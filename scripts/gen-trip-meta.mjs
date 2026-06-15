@@ -79,12 +79,15 @@ async function buildBlockIndex(feedId) {
   const stopTimes = await readCsv(join(gtfsDir, "stop_times.txt"));
 
   const firstDep = new Map();
+  const lastDep = new Map();
   for (const row of stopTimes) {
     const tid = pick(row, "trip_id");
     const dep = pick(row, "departure_time");
     if (!tid || !dep) continue;
     const prev = firstDep.get(tid);
     if (!prev || dep < prev) firstDep.set(tid, dep);
+    const prevLast = lastDep.get(tid);
+    if (!prevLast || dep > prevLast) lastDep.set(tid, dep);
   }
 
   const blocks = new Map();
@@ -106,6 +109,7 @@ async function buildBlockIndex(feedId) {
       trip_id: tripId,
       headsign: pick(row, "trip_headsign") || null,
       first_departure: firstDep.get(tripId) ?? "—",
+      last_departure: lastDep.get(tripId) ?? "—",
     });
   }
 
@@ -117,6 +121,7 @@ async function buildBlockIndex(feedId) {
     const compact = list.map((t) => ({
       trip_id: t.trip_id,
       first_departure: (t.first_departure ?? "—").slice(0, 5),
+      last_departure: (t.last_departure ?? t.first_departure ?? "—").slice(0, 5),
       ...(t.headsign ? { headsign: t.headsign } : {}),
     }));
     blockIndex[blockId] = compact;

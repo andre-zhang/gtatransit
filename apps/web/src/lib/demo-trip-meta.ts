@@ -8,6 +8,7 @@ type BlockTrip = {
   trip_id: string;
   headsign: string | null;
   first_departure: string;
+  last_departure?: string;
 };
 
 type BlockIndex = {
@@ -129,7 +130,9 @@ export async function loadBlockTrips(
         trip_id: t.trip_id,
         headsign: t.headsign ?? hits.get(t.trip_id) ?? null,
         first_departure: t.first_departure,
-        last_departure: last ? formatTripTime(last.departureTime) : undefined,
+        last_departure:
+          t.last_departure ??
+          (last ? formatTripTime(last.departureTime) : undefined),
         active: t.active,
       };
     }),
