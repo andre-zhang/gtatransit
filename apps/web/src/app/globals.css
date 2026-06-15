@@ -214,6 +214,16 @@ body {
   font-weight: 700;
 }
 
+.departure-board-time--mobile {
+  font-size: 1rem;
+}
+
+@media (min-width: 768px) {
+  .departure-board-time--mobile {
+    font-size: 1.25rem;
+  }
+}
+
 .departure-board-time--live {
   color: var(--color-go-navy);
 }

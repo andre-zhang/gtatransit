@@ -56,6 +56,7 @@ export async function GET(
     trip_id: string;
     headsign: string | null;
     first_departure: string;
+    last_departure?: string;
     active: boolean;
   }> = [];
 
@@ -72,15 +73,36 @@ export async function GET(
 
       if (trip.block_id) {
         const serviceFilter = activeServiceSql(feedId, date);
-        blockTrips = await db`
+        const rawBlockTrips = await db<
+          Array<{
+            trip_id: string;
+            headsign: string | null;
+            first_departure: string;
+            last_departure: string | null;
+            active: boolean;
+          }>
+        >`
           SELECT t.trip_id, t.headsign,
                  (SELECT MIN(st.departure_time) FROM stop_times st WHERE st.feed_id = t.feed_id AND st.trip_id = t.trip_id) AS first_departure,
+                 (SELECT MAX(st.departure_time) FROM stop_times st WHERE st.feed_id = t.feed_id AND st.trip_id = t.trip_id) AS last_departure,
                  (t.trip_id = ${v.trip_id}) AS active
           FROM trips t
           WHERE t.feed_id = ${feedId} AND t.block_id = ${trip.block_id}
             AND ${db.unsafe(serviceFilter)}
           ORDER BY first_departure
         `;
+        blockTrips = rawBlockTrips
+          .filter((row) => row.first_departure)
+          .map((row) => ({
+            trip_id: row.trip_id,
+            headsign: row.headsign,
+            first_departure: String(row.first_departure).slice(0, 5),
+            last_departure: row.last_departure
+              ? String(row.last_departure).slice(0, 5)
+              : undefined,
+            active: row.active,
+          }));
+        if (blockTrips.length <= 1) blockTrips = [];
       }
     }
   }

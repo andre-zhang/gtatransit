@@ -20,7 +20,7 @@ import {
 } from "./calendar";
 import type { ScheduleRow } from "./demo-schedule-types";
 import { needsHeadsignLookup, preloadTripHeadsignIndex, tripHeadsign } from "./demo-trip-headsign";
-import { loadBlockTrips, loadFeedTripMeta } from "./demo-trip-meta";
+import { resolveVehicleBlock } from "./demo-trip-meta";
 import { liveStopDisplayName, resolveTtcRtStopIds } from "./ttc-stop-registry";
 import {
   getRtVehicle,
@@ -283,13 +283,9 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     tripRt?.delaySec ??
     vehicle.delaySec;
 
-  const blockLookupId = scheduleTripId ?? liveTripId;
-  const blockTrips = blockLookupId
-    ? await loadBlockTrips(feedId, blockLookupId, liveTripId ?? blockLookupId)
-    : [];
-  const tripMeta = blockLookupId
-    ? await loadFeedTripMeta(feedId, blockLookupId)
-    : undefined;
+  const { blockId, blockTrips } = liveTripId || scheduleTripId
+    ? await resolveVehicleBlock(feedId, liveTripId, scheduleTripId)
+    : { blockId: null as string | null, blockTrips: [] };
 
   return {
     vehicle: {
@@ -309,7 +305,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
           schedule_trip_id: scheduleTripId ?? null,
           route_id: routeId ?? "",
           headsign,
-          block_id: tripMeta?.blockId ?? null,
+          block_id: blockId,
         }
       : null,
     route: route

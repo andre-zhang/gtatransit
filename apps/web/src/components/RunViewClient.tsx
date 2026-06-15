@@ -149,25 +149,25 @@ export function RunViewClient({
             {blockTrips.map((t) => (
               <li
                 key={t.trip_id}
-                className={`flex items-center gap-4 px-5 py-3 ${t.active ? "bg-go-bg/40" : ""}`}
+                className={`flex items-center gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3 ${t.active ? "bg-go-bg/40" : ""}`}
               >
-                <span className="w-28 shrink-0 text-right text-sm font-bold tabular-nums text-go-navy">
+                <span className="w-[4.5rem] shrink-0 text-right text-xs font-bold tabular-nums text-go-navy sm:w-28 sm:text-sm">
                   {t.last_departure
-                    ? `${t.first_departure} – ${t.last_departure}`
+                    ? `${t.first_departure}–${t.last_departure}`
                     : t.first_departure}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-go-navy">
+                <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
                   {cleanHeadsign(t.headsign) || "—"}
                 </span>
                 {t.active && (
-                  <span className="go-badge go-badge--live inline-flex shrink-0 items-center gap-1">
+                  <span className="go-badge go-badge--live inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
                     <LiveIcon className="h-3 w-3" title="Active" />
-                    Active
+                    <span className="hidden sm:inline">Active</span>
                   </span>
                 )}
                 <Link
                   href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
-                  className="shrink-0 text-xs font-semibold text-go-green hover:underline"
+                  className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-go-green hover:underline sm:text-xs"
                 >
                   Open
                 </Link>
@@ -183,15 +183,17 @@ export function RunViewClient({
             {upcomingStops.map((s) => (
               <li
                 key={`${s.stop_id}-${s.scheduled}`}
-                className="flex items-center gap-4 px-5 py-3"
+                className="flex items-center gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3"
               >
-                <span className="w-16 shrink-0 text-right text-lg font-bold tabular-nums text-go-navy">
+                <span className="w-12 shrink-0 text-right text-base font-bold tabular-nums text-go-navy sm:w-16 sm:text-lg">
                   {s.predicted ?? s.scheduled}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-go-navy">{s.name}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-go-navy sm:text-base">
+                  {s.name}
+                </span>
                 {s.delayMin != null && s.delayMin !== 0 && (
                   <span
-                    className={`go-badge shrink-0 ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}
+                    className={`go-badge shrink-0 whitespace-nowrap ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}
                   >
                     {formatDelayLabel(s.delayMin)}
                   </span>

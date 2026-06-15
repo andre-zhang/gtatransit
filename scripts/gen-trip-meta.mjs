@@ -15,7 +15,6 @@ const FEEDS = ["go", "miway", "ttc"];
 const SERVICE_DATE = process.env.SERVICE_DATE ?? new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
 function gtfsDirFor(feedId) {
-  if (feedId === "ttc") return join(gtfsRoot, "tmp", "surface");
   return join(gtfsRoot, "extracted-demo", feedId);
 }
 
@@ -118,7 +117,7 @@ async function buildBlockIndex(feedId) {
     const compact = list.map((t) => ({
       trip_id: t.trip_id,
       first_departure: (t.first_departure ?? "—").slice(0, 5),
-      ...(feedId !== "ttc" && t.headsign ? { headsign: t.headsign } : {}),
+      ...(t.headsign ? { headsign: t.headsign } : {}),
     }));
     blockIndex[blockId] = compact;
     for (const t of compact) tripToBlock[t.trip_id] = blockId;
