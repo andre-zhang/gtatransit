@@ -272,3 +272,93 @@ export async function probeMetrolinxKey(apiKey: string): Promise<{
 }
 
 export { metrolinxOk, metrolinxError };
+
+export type GoTrainDetail = {
+  cars: number | null;
+  carsLabel: string | null;
+  occupancyPercent: number | null;
+  display: string | null;
+};
+
+const trainsCache = { at: 0, rows: [] as Record<string, unknown>[] };
+const TRAINS_TTL_MS = 30_000;
+
+function parseGoTripRef(tripId: string): { line: string; tripNumber: string } | null {
+  const dated = tripId.match(/^\d{8}-([A-Za-z]{2,3})-(\d+)$/);
+  if (dated) return { line: dated[1]!.toUpperCase(), tripNumber: dated[2]! };
+  const bare = tripId.match(/^([A-Za-z]{2,3})-(\d+)$/);
+  if (bare) return { line: bare[1]!.toUpperCase(), tripNumber: bare[2]! };
+  return null;
+}
+
+function parseCars(raw: unknown): { count: number | null; label: string | null } {
+  if (raw == null || raw === "") return { count: null, label: null };
+  const s = String(raw).trim();
+  const n = Number(s);
+  if (Number.isFinite(n) && n > 0) {
+    return { count: n, label: `${n} coach${n === 1 ? "" : "es"}` };
+  }
+  const m = s.match(/(\d+)/);
+  if (m) {
+    const count = Number(m[1]);
+    if (Number.isFinite(count) && count > 0) {
+      return { count, label: `${count} coach${count === 1 ? "" : "es"}` };
+    }
+  }
+  return { count: null, label: s };
+}
+
+async function loadGoTrains(apiKey: string): Promise<Record<string, unknown>[]> {
+  if (trainsCache.rows.length && Date.now() - trainsCache.at < TRAINS_TTL_MS) {
+    return trainsCache.rows;
+  }
+
+  const res = await fetch(
+    metrolinxApiUrl("api/V1/ServiceataGlance/Trains/All", apiKey),
+    { next: { revalidate: 0 } },
+  );
+  if (res.status === 204) {
+    trainsCache.at = Date.now();
+    trainsCache.rows = [];
+    return [];
+  }
+  if (!res.ok) return trainsCache.rows;
+
+  const data: unknown = await res.json();
+  if (!metrolinxOk(data)) return trainsCache.rows;
+
+  const root = data as Record<string, unknown>;
+  const trips = root.Trips as Record<string, unknown> | undefined;
+  const rows = asArray(trips?.Trip ?? trips?.trip).filter(
+    (x) => x && typeof x === "object",
+  ) as Record<string, unknown>[];
+
+  trainsCache.at = Date.now();
+  trainsCache.rows = rows;
+  return rows;
+}
+
+export async function fetchGoTrainDetail(
+  tripId: string,
+  apiKey: string,
+): Promise<GoTrainDetail | null> {
+  const ref = parseGoTripRef(tripId);
+  if (!ref) return null;
+
+  const rows = await loadGoTrains(apiKey);
+  const match = rows.find((row) => {
+    const line = String(row.LineCode ?? row.lineCode ?? "").trim().toUpperCase();
+    const tripNum = String(row.TripNumber ?? row.tripNumber ?? "").trim();
+    return line === ref.line && tripNum === ref.tripNumber;
+  });
+  if (!match) return null;
+
+  const { count, label } = parseCars(match.Cars ?? match.cars);
+  const occupancy = Number(match.OccupancyPercentage ?? match.occupancyPercentage);
+  return {
+    cars: count,
+    carsLabel: label,
+    occupancyPercent: Number.isFinite(occupancy) ? occupancy : null,
+    display: match.Display != null ? String(match.Display) : null,
+  };
+}

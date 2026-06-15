@@ -143,9 +143,16 @@ export async function resolveVehicleBlock(
   feedId: string,
   liveTripId: string | undefined,
   scheduleTripId: string | undefined,
-): Promise<{ blockId: string | null; blockTrips: BlockTripRow[] }> {
+): Promise<{
+  blockId: string | null;
+  blockTrips: BlockTripRow[];
+  blockStart: string | null;
+  blockEnd: string | null;
+}> {
   const lookupIds = [...new Set([liveTripId, scheduleTripId].filter(Boolean))] as string[];
-  if (!lookupIds.length) return { blockId: null, blockTrips: [] };
+  if (!lookupIds.length) {
+    return { blockId: null, blockTrips: [], blockStart: null, blockEnd: null };
+  }
 
   const activeTripId = liveTripId ?? scheduleTripId ?? lookupIds[0]!;
 
@@ -158,9 +165,12 @@ export async function resolveVehicleBlock(
     );
     if (blockTrips.length) {
       const meta = await loadFeedTripMeta(feedId, tripId);
-      return { blockId: meta.blockId, blockTrips };
+      const blockStart = blockTrips[0]!.first_departure;
+      const last = blockTrips[blockTrips.length - 1]!;
+      const blockEnd = last.last_departure ?? last.first_departure;
+      return { blockId: meta.blockId, blockTrips, blockStart, blockEnd };
     }
   }
 
-  return { blockId: null, blockTrips: [] };
+  return { blockId: null, blockTrips: [], blockStart: null, blockEnd: null };
 }

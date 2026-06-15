@@ -283,9 +283,14 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     tripRt?.delaySec ??
     vehicle.delaySec;
 
-  const { blockId, blockTrips } = liveTripId || scheduleTripId
+  const { blockId, blockTrips, blockStart, blockEnd } = liveTripId || scheduleTripId
     ? await resolveVehicleBlock(feedId, liveTripId, scheduleTripId)
-    : { blockId: null as string | null, blockTrips: [] };
+    : {
+        blockId: null as string | null,
+        blockTrips: [],
+        blockStart: null as string | null,
+        blockEnd: null as string | null,
+      };
 
   return {
     vehicle: {
@@ -326,6 +331,8 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
       : null,
     upcomingStops: nextStops,
     blockTrips,
+    blockStart,
+    blockEnd,
     shape,
   };
 }

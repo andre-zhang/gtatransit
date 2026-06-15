@@ -107,6 +107,12 @@ export async function GET(
     }
   }
 
+  const blockStart = blockTrips[0]?.first_departure ?? null;
+  const blockLast = blockTrips[blockTrips.length - 1];
+  const blockEnd = blockLast
+    ? (blockLast.last_departure ?? blockLast.first_departure)
+    : null;
+
   let currentStop = null;
   if (v.trip_id && v.current_stop_sequence) {
     const stops = await db<Array<{ stop_id: string; name: string }>>`
@@ -201,6 +207,8 @@ export async function GET(
     currentStop,
     upcomingStops,
     blockTrips,
+    blockStart,
+    blockEnd,
     shape: shape[0]?.geojson ? JSON.parse(shape[0].geojson) : null,
   });
 }
