@@ -12,10 +12,10 @@ import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 
 export type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 
-const FEEDS_WITH_SCHEDULE_FILES = ["go", "up", "ttc", "miway"] as const;
+import { hasDemoScheduleFeed } from "./demo-schedule-feeds";
 
 async function rowsForMember(feedId: string, stopId: string): Promise<ScheduleRow[]> {
-  if ((FEEDS_WITH_SCHEDULE_FILES as readonly string[]).includes(feedId)) {
+  if (hasDemoScheduleFeed(feedId)) {
     return loadStopScheduleRows(feedId, stopId);
   }
   const union = await loadUnionSchedule();

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDelayLabel } from "@/lib/delay-label";
-import { isGoRailLine } from "@/lib/go-rail";
+import { isMetrolinxRailFeed, goLineCode } from "@/lib/go-rail";
 import { cleanHeadsign } from "@/lib/headsign";
 import { LiveIcon } from "./LiveIcon";
 import { PageEmpty } from "./PageEmpty";
@@ -113,8 +113,8 @@ export function RunViewClient({
   }, [feedId, vehicleId]);
 
   useEffect(() => {
-    void refresh();
     const id = setInterval(() => void refresh(), 20_000);
+    if (!hadDataRef.current) void refresh();
     return () => clearInterval(id);
   }, [refresh]);
 
@@ -146,7 +146,16 @@ export function RunViewClient({
   const early = vehicle.delayMin != null && vehicle.delayMin < 0;
   const late = vehicle.delayMin != null && vehicle.delayMin > 0;
   const delayLabel = formatDelayLabel(vehicle.delayMin);
-  const isGoTrain = feedId === "go" && isGoRailLine(route?.short_name);
+  const lineCode =
+    goLineCode(route?.short_name) ??
+    goLineCode(trip?.headsign ?? undefined) ??
+    route?.short_name ??
+    null;
+  const isGoTrain = isMetrolinxRailFeed(feedId, lineCode);
+  const vehicleLabel =
+    vehicle.label?.trim() && vehicle.label.trim() !== vehicle.id
+      ? vehicle.label.trim()
+      : vehicle.id;
   const blockRange = blockTimeRange(blockStart, blockEnd);
 
   return (
@@ -167,7 +176,7 @@ export function RunViewClient({
         </div>
         <div className="p-5">
           <div className="go-section-title mb-1">Vehicle</div>
-          <div className="text-lg font-bold text-go-navy">#{vehicle.id}</div>
+          <div className="text-lg font-bold text-go-navy">#{vehicleLabel}</div>
         </div>
         <div className="p-5">
           <div className="go-section-title mb-1">Current stop</div>

@@ -10,7 +10,7 @@ import { createInterface } from "node:readline";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const gtfsRoot = join(root, "data", "gtfs");
 const outDir = join(root, "apps", "web", "public", "demo");
-const FEEDS = ["go", "miway", "ttc"];
+const FEEDS = ["go", "up", "miway", "ttc", "brampton", "drt", "yrt"];
 /** Match demo fixture service day (GO trip ids embed this date). */
 const SERVICE_DATE = process.env.SERVICE_DATE ?? new Date().toISOString().slice(0, 10).replace(/-/g, "");
 

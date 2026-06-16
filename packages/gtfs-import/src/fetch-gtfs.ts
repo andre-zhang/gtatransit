@@ -20,15 +20,14 @@ async function download(url: string, dest: string): Promise<string> {
 }
 
 for (const feed of FEEDS) {
-  if (feed.localPath) {
-    if (!existsSync(feed.localPath)) {
-      console.warn(`Skip ${feed.id}: set YRT_GTFS_ZIP to ${feed.localPath}`);
-      continue;
-    }
+  if (feed.localPath && existsSync(feed.localPath)) {
     console.log(`${feed.id}: using local ${feed.localPath}`);
     continue;
   }
-  if (!feed.url) continue;
+  if (!feed.url) {
+    console.warn(`Skip ${feed.id}: no URL configured`);
+    continue;
+  }
   const dest = join(dataDir, `${feed.id}.zip`);
   try {
     const hash = await download(feed.url, dest);

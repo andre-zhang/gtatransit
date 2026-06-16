@@ -2,14 +2,7 @@
  * Builds apps/web/public/demo/fixtures.json from downloaded GTFS zips (routes + shapes).
  * Run after fetch-gtfs — no database required.
  */
-import {
-  createReadStream,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  writeFileSync,
-  copyFileSync,
-} from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readdirSync, writeFileSync, copyFileSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pipeline } from "node:stream/promises";
@@ -40,6 +33,7 @@ const FEEDS: Array<{ id: string; name: string; zip: string }> = [
   { id: "miway", name: "MiWay", zip: "miway.zip" },
   { id: "brampton", name: "Brampton Transit", zip: "brampton.zip" },
   { id: "drt", name: "Durham Region Transit", zip: "drt.zip" },
+  { id: "yrt", name: "YRT / Viva", zip: "yrt.zip" },
 ];
 
 const MODE_LABELS: Record<number, string> = {
@@ -272,20 +266,6 @@ async function main() {
     feedDirs.push({ feedId: loaded.id, dir: loaded.gtfsDir });
   }
 
-  const yrtZip = process.env.YRT_GTFS_ZIP;
-  if (yrtZip && existsSync(yrtZip)) {
-    const yrtDir = join(dataDir, "extracted-demo", "yrt");
-    mkdirSync(dirname(yrtDir), { recursive: true });
-    const yrtCopy = join(dataDir, "yrt.zip");
-    if (!existsSync(yrtCopy)) copyFileSync(yrtZip, yrtCopy);
-    const loaded = await loadFeed("yrt", "YRT / Viva", "yrt.zip");
-    if (loaded) {
-      agencies.push({ id: loaded.id, name: loaded.name, modes: loaded.modes });
-      features.push(...(loaded.features as Feature[]));
-      feedDirs.push({ feedId: loaded.id, dir: loaded.gtfsDir });
-    }
-  }
-
   console.log("Building stop data & schedules…");
   const unionSchedule = await buildUnionDepartures(feedDirs);
   console.log(`Union area departures (TTC/MiWay): ${unionSchedule.length} trips`);
@@ -308,6 +288,12 @@ async function main() {
   let ttcTripStops: Record<string, unknown> = {};
   let miwaySchedules: Record<string, unknown> = {};
   let miwayTripStops: Record<string, unknown> = {};
+  let bramptonSchedules: Record<string, unknown> = {};
+  let bramptonTripStops: Record<string, unknown> = {};
+  let drtSchedules: Record<string, unknown> = {};
+  let drtTripStops: Record<string, unknown> = {};
+  let yrtSchedules: Record<string, unknown> = {};
+  let yrtTripStops: Record<string, unknown> = {};
 
   const stopMetaByFeed: Record<
     string,
@@ -353,6 +339,9 @@ async function main() {
   }
 
   const goFeed = feedDirs.find((f) => f.feedId === "go");
+  const unionMembers: Array<{ feedId: string; stopId: string }> = [
+    { feedId: "go", stopId: "UN" },
+  ];
   if (goFeed) {
     console.log("Indexing GO stop_times (may take a few minutes)…");
     const goStops = await loadGoStops(goFeed.dir);
@@ -394,10 +383,31 @@ async function main() {
     );
   }
 
+  for (const feedId of ["brampton", "drt", "yrt"] as const) {
+    const feed = feedDirs.find((f) => f.feedId === feedId);
+    if (!feed) continue;
+    console.log(`Building ${feedId} stops & schedules…`);
+    const stops = await loadGoStops(feed.dir);
+    const stopIds = new Set(stops.map((s) => s.stopId));
+    const built = await buildFeedSchedules(feedId, feed.dir, stopIds);
+    registerStops(feedId, stops);
+    await loadStopMeta(feedId, feed.dir);
+    if (feedId === "brampton") {
+      bramptonSchedules = built.schedulesByStop;
+      bramptonTripStops = built.tripStops;
+    } else if (feedId === "drt") {
+      drtSchedules = built.schedulesByStop;
+      drtTripStops = built.tripStops;
+    } else {
+      yrtSchedules = built.schedulesByStop;
+      yrtTripStops = built.tripStops;
+    }
+    console.log(
+      `${feedId}: ${stops.length} stops, ${Object.keys(built.schedulesByStop).length} with schedules`,
+    );
+  }
+
   const ttcFeed = feedDirs.find((f) => f.feedId === "ttc");
-  const unionMembers: Array<{ feedId: string; stopId: string }> = [
-    { feedId: "go", stopId: "UN" },
-  ];
   if (ttcFeed) {
     console.log("Building TTC subway + bus/streetcar stops…");
     const subway = await loadTtcSubwayStops(ttcFeed.dir);
@@ -424,10 +434,13 @@ async function main() {
   }
   for (const row of unionSchedule) {
     if (
-      row.feedId === "miway" &&
-      !unionMembers.some((m) => m.feedId === "miway" && m.stopId === row.stopId)
+      (row.feedId === "miway" ||
+        row.feedId === "brampton" ||
+        row.feedId === "drt" ||
+        row.feedId === "yrt") &&
+      !unionMembers.some((m) => m.feedId === row.feedId && m.stopId === row.stopId)
     ) {
-      unionMembers.push({ feedId: "miway", stopId: row.stopId });
+      unionMembers.push({ feedId: row.feedId, stopId: row.stopId });
     }
   }
 
@@ -474,7 +487,39 @@ async function main() {
     writeShardedRecord(outDir, "miway-schedules", miwaySchedules);
     writeShardedRecord(outDir, "miway-trip-stops", miwayTripStops);
   }
+  if (Object.keys(bramptonSchedules).length) {
+    writeShardedRecord(outDir, "brampton-schedules", bramptonSchedules);
+    writeShardedRecord(outDir, "brampton-trip-stops", bramptonTripStops);
+  }
+  if (Object.keys(drtSchedules).length) {
+    writeShardedRecord(outDir, "drt-schedules", drtSchedules);
+    writeShardedRecord(outDir, "drt-trip-stops", drtTripStops);
+  }
+  if (Object.keys(yrtSchedules).length) {
+    writeShardedRecord(outDir, "yrt-schedules", yrtSchedules);
+    writeShardedRecord(outDir, "yrt-trip-stops", yrtTripStops);
+  }
   writeFileSync(join(outDir, "union-schedule.json"), JSON.stringify(unionSchedule));
+
+  const shardManifest: Record<string, string[]> = {};
+  const shardRe = /^(.*-(?:schedules|trip-stops))(?:\.\d+)?\.json$/;
+  for (const name of readdirSync(outDir)) {
+    const m = name.match(shardRe);
+    if (!m) continue;
+    const base = m[1]!;
+    if (!shardManifest[base]) shardManifest[base] = [];
+    shardManifest[base]!.push(name);
+  }
+  for (const key of Object.keys(shardManifest)) {
+    shardManifest[key]!.sort((a, b) => {
+      const idx = (n: string) => {
+        const hit = n.match(/\.(\d+)\.json$/);
+        return hit ? Number(hit[1]) : -1;
+      };
+      return idx(a) - idx(b);
+    });
+  }
+  writeFileSync(join(outDir, "shard-manifest.json"), JSON.stringify(shardManifest));
 
   console.log(`Wrote ${outDir} (${agencies.length} agencies, ${features.length} routes, ${stopFeatures.length} stops)`);
 }

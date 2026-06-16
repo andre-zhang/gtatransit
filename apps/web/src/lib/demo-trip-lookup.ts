@@ -5,13 +5,13 @@ import {
 } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
 
-const FEEDS_WITH_SCHEDULE_FILES = ["go", "up", "ttc", "miway"] as const;
+import { hasDemoScheduleFeed } from "./demo-schedule-feeds";
 
 export async function lookupTripFromSchedules(
   feedId: string,
   tripId: string,
 ): Promise<ScheduleRow | undefined> {
-  if ((FEEDS_WITH_SCHEDULE_FILES as readonly string[]).includes(feedId)) {
+  if (hasDemoScheduleFeed(feedId)) {
     const hit = await lookupTripScheduleRow(feedId, tripId);
     if (hit) return hit;
   }
@@ -23,7 +23,7 @@ export async function lookupRouteFromSchedules(
   feedId: string,
   routeId: string,
 ): Promise<ScheduleRow | undefined> {
-  if ((FEEDS_WITH_SCHEDULE_FILES as readonly string[]).includes(feedId)) {
+  if (hasDemoScheduleFeed(feedId)) {
     const rows = await loadRouteScheduleRows(feedId, routeId);
     if (rows[0]) return rows[0];
   }

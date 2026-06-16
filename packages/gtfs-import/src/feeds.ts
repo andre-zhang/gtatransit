@@ -30,16 +30,17 @@ export const FEEDS: FeedConfig[] = [
   {
     id: "brampton",
     name: "Brampton Transit",
-    url: "https://geohub.brampton.ca/api/download/v1/items/a355aabd5a8c490186bdce559c9c75fb/public/GTFS.zip",
+    url: "https://www.arcgis.com/sharing/rest/content/items/a355aabd5a8c490186bdce559c9c75fb/data",
   },
   {
     id: "drt",
     name: "Durham Region Transit",
-    url: "https://maps.durham.ca/OpenDataGTFS/GTFS_Durham_TX.zip",
+    url: "https://maps.durham.ca/OpenDataGTFS/GTFS_Durham_TXT.zip",
   },
   {
     id: "yrt",
     name: "YRT / Viva",
+    url: "https://www.yrt.ca/google/google_transit.zip",
     localPath: process.env.YRT_GTFS_ZIP,
   },
 ];

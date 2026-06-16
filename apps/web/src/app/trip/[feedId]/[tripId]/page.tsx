@@ -6,6 +6,8 @@ import { Section } from "@/components/Section";
 import { StopTimeline } from "@/components/StopTimeline";
 import { cleanHeadsign } from "@/lib/headsign";
 import { getPageMeta } from "@/lib/page-meta";
+import { loadDemoTripPayload } from "@/lib/load-demo-trip";
+import { refreshRtCache } from "@/lib/rt-cache";
 import { stopBoardHref } from "@/lib/stop-group-href";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
@@ -62,10 +64,21 @@ export default async function TripPage({
   const { feedId, tripId } = await params;
   const sp = await searchParams;
   const { demo, rtUpdated } = await getPageMeta();
-  const data = await load(feedId, tripId, {
+  const tripOpts = {
     fromStop: sp.fromStop,
     scheduleTrip: sp.scheduleTrip,
-  });
+  };
+  let data: TripPayload | null = null;
+  if (demo) {
+    try {
+      await refreshRtCache();
+      data = await loadDemoTripPayload(feedId, tripId, tripOpts);
+    } catch {
+      data = null;
+    }
+  } else {
+    data = await load(feedId, tripId, tripOpts);
+  }
 
   if (!data) {
     return (

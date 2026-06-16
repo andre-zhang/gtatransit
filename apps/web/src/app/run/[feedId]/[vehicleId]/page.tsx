@@ -4,6 +4,7 @@ import { PageShell } from "@/components/PageShell";
 import { RunViewClient } from "@/components/RunViewClient";
 import { cleanHeadsign } from "@/lib/headsign";
 import { getPageMeta } from "@/lib/page-meta";
+import { getDemoRun } from "@/lib/demo-run";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 async function load(feedId: string, vehicleId: string) {
@@ -23,7 +24,9 @@ export default async function RunPage({
 }) {
   const { feedId, vehicleId } = await params;
   const { demo, rtUpdated } = await getPageMeta();
-  const data = await load(feedId, vehicleId);
+  const data = demo
+    ? await getDemoRun(feedId, vehicleId)
+    : await load(feedId, vehicleId);
 
   if (!data) {
     return (

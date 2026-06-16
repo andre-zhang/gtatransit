@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { formatDelayLabel } from "@/lib/delay-label";
 import { PageEmpty } from "@/components/PageEmpty";
 import { Section } from "@/components/Section";
@@ -14,13 +14,19 @@ type Vehicle = {
   delay_sec: number | null;
 };
 
+type RouteDetail = {
+  trips: Trip[];
+  vehicles: Vehicle[];
+  directionLabels?: [string, string];
+};
+
 export function RouteViewClient({
   feedId,
   routeId,
-  direction,
-  directionLabels,
-  trips,
-  vehicles,
+  direction: initialDirection,
+  directionLabels: initialLabels,
+  trips: initialTrips,
+  vehicles: initialVehicles,
 }: {
   feedId: string;
   routeId: string;
@@ -29,8 +35,44 @@ export function RouteViewClient({
   trips: Trip[];
   vehicles: Vehicle[];
 }) {
-  const router = useRouter();
-  const labels: [string, string] = directionLabels ?? ["Outbound", "Inbound"];
+  const [direction, setDirection] = useState(initialDirection);
+  const [labels, setLabels] = useState<[string, string]>(
+    initialLabels ?? ["Outbound", "Inbound"],
+  );
+  const [trips, setTrips] = useState(initialTrips);
+  const [vehicles, setVehicles] = useState(initialVehicles);
+  const [switching, setSwitching] = useState(false);
+
+  useEffect(() => {
+    setDirection(initialDirection);
+    setTrips(initialTrips);
+    setVehicles(initialVehicles);
+    if (initialLabels) setLabels(initialLabels);
+  }, [initialDirection, initialTrips, initialVehicles, initialLabels]);
+
+  const switchDirection = useCallback(
+    async (d: number) => {
+      if (d === direction) return;
+      setDirection(d);
+      setSwitching(true);
+      try {
+        const res = await fetch(
+          `/api/routes/${feedId}/${encodeURIComponent(routeId)}?direction=${d}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as RouteDetail;
+        setTrips(data.trips);
+        setVehicles(data.vehicles);
+        if (data.directionLabels) setLabels(data.directionLabels);
+        const href = `/route/${feedId}/${encodeURIComponent(routeId)}?direction=${d}`;
+        window.history.replaceState(null, "", href);
+      } finally {
+        setSwitching(false);
+      }
+    },
+    [direction, feedId, routeId],
+  );
 
   return (
     <>
@@ -39,14 +81,13 @@ export function RouteViewClient({
           <button
             key={d}
             type="button"
-            onClick={() =>
-              router.push(`/route/${feedId}/${encodeURIComponent(routeId)}?direction=${d}`)
-            }
+            onClick={() => void switchDirection(d)}
+            disabled={switching}
             className={`flex-1 rounded-sm px-2 py-2.5 text-sm font-bold transition ${
               direction === d
                 ? "bg-go-surface text-go-green shadow-sm"
                 : "text-go-slate hover:text-go-navy"
-            }`}
+            } ${switching ? "opacity-80" : ""}`}
           >
             <span className="block truncate">{labels[d]}</span>
           </button>
@@ -84,6 +125,7 @@ export function RouteViewClient({
                   <Link
                     href={`/run/${feedId}/${encodeURIComponent(v.vehicle_id)}`}
                     className="go-link shrink-0"
+                    prefetch
                   >
                     Vehicle
                   </Link>
@@ -113,6 +155,7 @@ export function RouteViewClient({
                 <Link
                   href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
                   className="go-link shrink-0"
+                  prefetch
                 >
                   Trip
                 </Link>

@@ -346,10 +346,12 @@ export async function fetchGoTrainDetail(
   if (!ref) return null;
 
   const rows = await loadGoTrains(apiKey);
+  const tripNum = ref.tripNumber.replace(/^0+/, "") || ref.tripNumber;
   const match = rows.find((row) => {
     const line = String(row.LineCode ?? row.lineCode ?? "").trim().toUpperCase();
-    const tripNum = String(row.TripNumber ?? row.tripNumber ?? "").trim();
-    return line === ref.line && tripNum === ref.tripNumber;
+    const tripNumRaw = String(row.TripNumber ?? row.tripNumber ?? "").trim();
+    const tripNumNorm = tripNumRaw.replace(/^0+/, "") || tripNumRaw;
+    return line === ref.line && (tripNumNorm === tripNum || tripNumRaw === ref.tripNumber);
   });
   if (!match) return null;
 

@@ -12,9 +12,7 @@ import {
 import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
 import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
-import { buildDemoTripStops } from "@/lib/demo-trip-stops";
-import { pickScheduleTripId, resolveDemoTrip } from "@/lib/demo-trip-resolve";
-import { preloadTripHeadsignIndex, tripHeadsign } from "@/lib/demo-trip-headsign";
+import { loadDemoTripPayload } from "@/lib/load-demo-trip";
 import { stopGroupIdFor } from "@/lib/stop-group-href";
 import { getStopTripRt, getTripRt, refreshRtCache } from "@/lib/rt-cache";
 
@@ -30,47 +28,15 @@ export async function GET(
   await refreshRtCache();
 
   if (await useDemoFixtures()) {
-    const { ensureDemoAssets } = await import("@/lib/demo-assets");
-    await ensureDemoAssets();
-    await preloadTripHeadsignIndex(feedId);
-
-    const resolved = await resolveDemoTrip(feedId, tripId);
-    const scheduleTripId = await pickScheduleTripId(
-      feedId,
-      tripId,
-      scheduleTripParam,
-      resolved,
-    );
-    const liveTripId = resolved.liveTripId;
-    const tripRt = getTripRt(feedId, liveTripId);
-    const headsign = await tripHeadsign(feedId, liveTripId);
-
-    const scheduleRow = resolved.scheduleRow;
-    const routeId = scheduleRow?.routeId ?? tripRt?.routeId;
-
-    const stops = await buildDemoTripStops({
-      feedId,
-      liveTripId,
-      scheduleTripId,
-      fromStop,
-    });
-
-    return NextResponse.json({
-      tripId,
-      feedId,
-      fromStop,
-      headsign,
-      scheduleTripId,
-      vehicleId: tripRt?.vehicleId,
-      route: routeId
-        ? {
-            routeId,
-            shortName: scheduleRow?.routeShort ?? routeId,
-            color: scheduleRow?.routeColor ?? "#da291c",
-          }
-        : null,
-      stops,
-    });
+    try {
+      const payload = await loadDemoTripPayload(feedId, tripId, {
+        fromStop,
+        scheduleTrip: scheduleTripParam,
+      });
+      return NextResponse.json(payload);
+    } catch {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
   }
 
   const db = getSql();

@@ -22,7 +22,7 @@ import type { ScheduleRow } from "./demo-schedule-types";
 import { needsHeadsignLookup, preloadTripHeadsignIndex, tripHeadsign } from "./demo-trip-headsign";
 import { resolveVehicleBlock } from "./demo-trip-meta";
 import { fetchGoTrainDetail } from "./go-metrolinx-rest";
-import { isGoRailLine } from "./go-rail";
+import { isMetrolinxRailFeed, goLineCode } from "./go-rail";
 import { liveStopDisplayName, resolveTtcRtStopIds } from "./ttc-stop-registry";
 import {
   getRtVehicle,
@@ -298,8 +298,14 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
       };
 
   let trainDetail = null;
-  const routeShort = route?.short_name ?? scheduleTrip?.routeShort ?? null;
-  if ((feedId === "go" || feedId === "up") && isGoRailLine(routeShort) && liveTripId) {
+  const routeShort =
+    goLineCode(route?.short_name) ??
+    goLineCode(scheduleTrip?.routeShort) ??
+    goLineCode(headsign) ??
+    route?.short_name ??
+    scheduleTrip?.routeShort ??
+    null;
+  if (isMetrolinxRailFeed(feedId, routeShort) && liveTripId) {
     const { normalizeMetrolinxKey } = await import("./rt-cache");
     const apiKey = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
     if (apiKey) {

@@ -1,7 +1,7 @@
 "use client";
 
 import type { FeatureCollection } from "geojson";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import maplibregl from "maplibre-gl";
 import { LayerPanel } from "./LayerPanel";
@@ -24,6 +24,7 @@ type Props = { filterTree: FilterTree; rtUpdated?: string | null; demoMode?: boo
 
 export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
   const router = useRouter();
+  const [, startTransition] = useTransition();
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const refreshRef = useRef<() => void>(() => {});
@@ -105,7 +106,14 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
   const navigate = (href: string) => {
     persistMapView();
     setRoutePicker(null);
-    router.push(href);
+    router.prefetch(href);
+    startTransition(() => {
+      router.push(href);
+    });
+  };
+
+  const prefetchHref = (href: string) => {
+    router.prefetch(href);
   };
 
   const refreshLayers = useCallback(async () => {
@@ -306,21 +314,37 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         if (!hits.length) setRoutePicker(null);
       });
 
-      map.on("mouseenter", "routes-hit", () => {
+      map.on("mouseenter", "routes-hit", (e) => {
+        const f = e.features?.[0];
+        if (f?.properties?.feedId && f?.properties?.routeId) {
+          prefetchHref(
+            `/route/${f.properties.feedId}/${encodeURIComponent(String(f.properties.routeId))}`,
+          );
+        }
         map.getCanvas().style.cursor = "pointer";
       });
       map.on("mouseleave", "routes-hit", () => {
         map.getCanvas().style.cursor = "";
       });
 
-      map.on("mouseenter", "stops-hit", () => {
+      map.on("mouseenter", "stops-hit", (e) => {
+        const f = e.features?.[0];
+        if (f?.properties?.groupId) {
+          prefetchHref(`/stop/${f.properties.groupId}`);
+        }
         map.getCanvas().style.cursor = "pointer";
       });
       map.on("mouseleave", "stops-hit", () => {
         map.getCanvas().style.cursor = "";
       });
 
-      map.on("mouseenter", "vehicles-hit", () => {
+      map.on("mouseenter", "vehicles-hit", (e) => {
+        const f = e.features?.[0];
+        if (f?.properties?.feedId && f?.properties?.vehicleId) {
+          prefetchHref(
+            `/run/${f.properties.feedId}/${encodeURIComponent(String(f.properties.vehicleId))}`,
+          );
+        }
         map.getCanvas().style.cursor = "pointer";
       });
       map.on("mouseleave", "vehicles-hit", () => {

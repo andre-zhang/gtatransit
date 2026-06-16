@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gtfsTimeToSec, normalizeServiceSec, torontoNowSec } from "./calendar";
 import { resolveDemoDir } from "./demo-dir";
@@ -39,6 +39,20 @@ const SHARD_MANIFEST: Record<string, string[]> = {
 };
 
 const shardIndexCache = new Map<string, Record<string, string>>();
+let runtimeShardManifest: Record<string, string[]> | null = null;
+
+function loadRuntimeShardManifest(): Record<string, string[]> {
+  if (runtimeShardManifest) return runtimeShardManifest;
+  try {
+    const demoDir = resolveDemoDir();
+    const raw = readFileSync(join(demoDir, "shard-manifest.json"), "utf8");
+    runtimeShardManifest = JSON.parse(raw) as Record<string, string[]>;
+    return runtimeShardManifest;
+  } catch {
+    runtimeShardManifest = SHARD_MANIFEST;
+    return runtimeShardManifest;
+  }
+}
 
 async function loadShardIndex(basename: string): Promise<Record<string, string>> {
   const hit = shardIndexCache.get(basename);
@@ -55,10 +69,11 @@ async function loadShardIndex(basename: string): Promise<Record<string, string>>
 }
 
 function listShardFiles(basename: string): string[] {
-  if (process.env.VERCEL) return SHARD_MANIFEST[basename] ?? [];
+  const manifest = loadRuntimeShardManifest();
+  if (process.env.VERCEL) return manifest[basename] ?? SHARD_MANIFEST[basename] ?? [];
 
   const demoDir = resolveDemoDir();
-  if (!existsSync(demoDir)) return SHARD_MANIFEST[basename] ?? [];
+  if (!existsSync(demoDir)) return manifest[basename] ?? SHARD_MANIFEST[basename] ?? [];
   const re = new RegExp(
     `^${basename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\.(\\d+))?\\.json$`,
   );
@@ -71,7 +86,7 @@ function listShardFiles(basename: string): string[] {
       };
       return idx(a) - idx(b);
     });
-  return local.length ? local : (SHARD_MANIFEST[basename] ?? []);
+  return local.length ? local : (manifest[basename] ?? SHARD_MANIFEST[basename] ?? []);
 }
 
 async function loadShardedRecord<T extends Record<string, unknown>>(

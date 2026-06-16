@@ -3,7 +3,7 @@ import { getSql } from "@/lib/db";
 import { activeServiceSql, serviceDate } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
-import { getDemoRouteDetail } from "@/lib/demo-route-detail";
+import { loadDemoRouteDetail } from "@/lib/load-demo-route";
 import { routesMatch } from "@/lib/route-match";
 import { refreshRtCache } from "@/lib/rt-cache";
 
@@ -16,10 +16,7 @@ export async function GET(
   const { feedId, routeId } = await params;
   const direction = Number(req.nextUrl.searchParams.get("direction") ?? 0);
   if (await useDemoFixtures()) {
-    const { ensureDemoAssets } = await import("@/lib/demo-assets");
-    await ensureDemoAssets();
-    await refreshRtCache();
-    const detail = await getDemoRouteDetail(feedId, routeId, direction);
+    const detail = await loadDemoRouteDetail(feedId, routeId, direction);
     if (!detail) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(detail);
   }

@@ -1,6 +1,6 @@
 import { getFilterTree } from "@/lib/filters-server";
 import { useDemoFixtures } from "@/lib/demo-mode";
-import { getRtLastUpdatedIso, refreshRtCache } from "@/lib/rt-cache";
+import { getRtLastUpdatedIso } from "@/lib/rt-cache";
 
 export async function getPageMeta(): Promise<{
   demo: boolean;
@@ -12,7 +12,6 @@ export async function getPageMeta(): Promise<{
   if (demo) {
     const { ensureDemoAssets, getDemoCore } = await import("@/lib/demo");
     await ensureDemoAssets();
-    await refreshRtCache();
     rtUpdated = getRtLastUpdatedIso() ?? getDemoCore().rtUpdated;
   } else {
     try {

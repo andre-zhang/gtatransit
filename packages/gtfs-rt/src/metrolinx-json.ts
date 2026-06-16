@@ -116,6 +116,9 @@ export function parseMetrolinxJsonVehicles(
         field(vp, "current_stop_sequence", "Current_stop_sequence", "CurrentStopSequence"),
       ),
       delaySec: num(field(vp, "delay", "Delay")),
+      occupancyStatus: num(
+        field(vp, "occupancy_status", "Occupancy_status", "OccupancyStatus"),
+      ),
     });
   }
   return out;

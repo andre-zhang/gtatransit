@@ -10,6 +10,7 @@ import {
   preloadTripHeadsignIndex,
   tripHeadsign,
 } from "./demo-trip-headsign";
+import { hasDemoScheduleFeed } from "./demo-schedule-feeds";
 import { routesMatch } from "./route-match";
 import { getRtVehicles, getTripRt } from "./rt-cache";
 
@@ -53,7 +54,7 @@ async function collectScheduleRows(
   const matches = (row: ScheduleRow) =>
     row.routeId === routeId || row.routeShort === routeId;
 
-  if (feedId === "go" || feedId === "up" || feedId === "ttc" || feedId === "miway") {
+  if (hasDemoScheduleFeed(feedId)) {
     return loadRouteScheduleRows(feedId, routeId);
   }
 

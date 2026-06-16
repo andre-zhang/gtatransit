@@ -115,6 +115,14 @@ export const RT_FEEDS: Record<
     vehicles: "https://www.miapp.ca/GTFS_RT/Vehicle/VehiclePositions.pb",
     tripUpdates: "https://www.miapp.ca/GTFS_RT/TripUpdate/TripUpdates.pb",
   },
+  yrt: {
+    vehicles: "https://rtu.york.ca/gtfsrealtime/VehiclePositions",
+    tripUpdates: "https://rtu.york.ca/gtfsrealtime/TripUpdates",
+  },
+  drt: {
+    vehicles: "https://drtonline.durhamregiontransit.com/gtfsrealtime/VehiclePositions",
+    tripUpdates: "https://drtonline.durhamregiontransit.com/gtfsrealtime/TripUpdates",
+  },
 };
 
 export async function fetchRt(url: string, headers?: Record<string, string>) {

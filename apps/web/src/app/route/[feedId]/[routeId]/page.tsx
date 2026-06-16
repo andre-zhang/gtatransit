@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { RouteViewClient } from "./RouteViewClient";
 import { getPageMeta } from "@/lib/page-meta";
+import { loadDemoRouteDetail } from "@/lib/load-demo-route";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
 async function load(feedId: string, routeId: string, direction: number) {
@@ -26,7 +27,9 @@ export default async function RoutePage({
   const sp = await searchParams;
   const direction = Number(sp.direction ?? 0);
   const { demo, rtUpdated } = await getPageMeta();
-  const data = await load(feedId, routeId, direction);
+  const data = demo
+    ? await loadDemoRouteDetail(feedId, routeId, direction)
+    : await load(feedId, routeId, direction);
 
   if (!data) {
     return (
