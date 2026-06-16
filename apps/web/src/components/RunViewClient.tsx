@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDelayLabel, isPlausibleDelayMin } from "@/lib/delay-label";
+import { tripPageHref } from "@/lib/detail-href";
 import { isMetrolinxRailFeed, goLineCode } from "@/lib/go-rail";
 import { cleanHeadsign } from "@/lib/headsign";
 import { DepartureActions } from "./DepartureStatus";
@@ -11,6 +12,8 @@ import { PageEmpty } from "./PageEmpty";
 import { RunMap } from "./RunMap";
 import { Section } from "./Section";
 import { StopTimeline } from "./StopTimeline";
+import { TripLink } from "./TripLink";
+import { VehicleLink } from "./VehicleLink";
 
 type UpcomingStop = {
   stop_id: string;
@@ -91,6 +94,7 @@ export function RunViewClient({
 }) {
   const [data, setData] = useState<RunData | null>(initial);
   const [loading, setLoading] = useState(initial == null);
+  const [trainDetail, setTrainDetail] = useState<GoTrainDetail | null>(null);
   const hadDataRef = useRef(initial != null);
 
   const refresh = useCallback(async () => {
@@ -142,7 +146,6 @@ export function RunViewClient({
     blockTrips,
     blockStart,
     blockEnd,
-    trainDetail,
   } = data;
   const early = isPlausibleDelayMin(vehicle.delayMin) && vehicle.delayMin! < 0;
   const late = isPlausibleDelayMin(vehicle.delayMin) && vehicle.delayMin! > 0;
@@ -155,6 +158,28 @@ export function RunViewClient({
     route?.short_name ??
     null;
   const isGoTrain = isMetrolinxRailFeed(feedId, lineCode);
+
+  useEffect(() => {
+    if (!isGoTrain || !trip?.trip_id) {
+      setTrainDetail(null);
+      return;
+    }
+    let cancelled = false;
+    void fetch(`/api/go/train-detail?tripId=${encodeURIComponent(trip.trip_id)}`, {
+      cache: "no-store",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((detail) => {
+        if (!cancelled) setTrainDetail(detail as GoTrainDetail | null);
+      })
+      .catch(() => {
+        if (!cancelled) setTrainDetail(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isGoTrain, trip?.trip_id]);
+
   const vehicleLabel =
     vehicle.label?.trim() && vehicle.label.trim() !== vehicle.id
       ? vehicle.label.trim()
@@ -179,7 +204,9 @@ export function RunViewClient({
         </div>
         <div className="p-5">
           <div className="go-section-title mb-1">Vehicle</div>
-          <div className="text-lg font-bold text-go-navy">#{vehicleLabel}</div>
+          <div className="text-lg font-bold">
+            <VehicleLink feedId={feedId} vehicleId={vehicle.id} label={vehicleLabel} />
+          </div>
         </div>
         <div className="p-5">
           <div className="go-section-title mb-1">Current stop</div>
@@ -248,21 +275,27 @@ export function RunViewClient({
                 key={t.trip_id}
                 className={`flex items-center gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3 ${t.active ? "bg-go-bg/40" : ""}`}
               >
-                <span className="w-[5.5rem] shrink-0 text-right text-xs font-bold tabular-nums text-go-navy sm:w-32 sm:text-sm">
+                <TripLink
+                  feedId={feedId}
+                  tripId={t.trip_id}
+                  className="w-[5.5rem] shrink-0 text-right text-xs font-bold tabular-nums text-go-navy hover:text-go-green sm:w-32 sm:text-sm"
+                >
                   {blockTripTime(t)}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
+                </TripLink>
+                <TripLink
+                  feedId={feedId}
+                  tripId={t.trip_id}
+                  className="min-w-0 flex-1 truncate text-sm text-go-navy hover:text-go-green"
+                >
                   {cleanHeadsign(t.headsign) || "—"}
-                </span>
+                </TripLink>
                 {t.active && (
                   <span className="go-badge go-badge--live inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
                     <LiveIcon className="h-3 w-3" title="Active" />
                     <span className="hidden sm:inline">Active</span>
                   </span>
                 )}
-                <DepartureActions
-                  tripHref={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
-                />
+                <DepartureActions tripHref={tripPageHref(feedId, t.trip_id)} />
               </li>
             ))}
           </ul>

@@ -1,10 +1,13 @@
+import { Suspense } from "react";
+import { DetailLoading } from "@/components/DetailLoading";
 import { PageEmpty } from "@/components/PageEmpty";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
-import { RouteViewClient } from "./RouteViewClient";
-import { getPageMeta } from "@/lib/page-meta";
+import { routePageHref } from "@/lib/detail-href";
 import { loadDemoRouteDetail } from "@/lib/load-demo-route";
+import { getPageMeta } from "@/lib/page-meta";
 import { serverBaseUrl } from "@/lib/server-base-url";
+import { RouteViewClient } from "./RouteViewClient";
 
 async function load(feedId: string, routeId: string, direction: number) {
   const base = await serverBaseUrl();
@@ -16,38 +19,38 @@ async function load(feedId: string, routeId: string, direction: number) {
   return res.json();
 }
 
-export default async function RoutePage({
-  params,
-  searchParams,
+async function RoutePageContent({
+  feedId,
+  routeId,
+  direction,
+  demo,
 }: {
-  params: Promise<{ feedId: string; routeId: string }>;
-  searchParams: Promise<{ direction?: string }>;
+  feedId: string;
+  routeId: string;
+  direction: number;
+  demo: boolean;
 }) {
-  const { feedId, routeId } = await params;
-  const sp = await searchParams;
-  const direction = Number(sp.direction ?? 0);
-  const { demo, rtUpdated } = await getPageMeta();
   const data = demo
     ? await loadDemoRouteDetail(feedId, routeId, direction)
     : await load(feedId, routeId, direction);
 
   if (!data) {
     return (
-      <PageShell rtUpdated={rtUpdated} demo={demo}>
+      <>
         <PageHeader title="Route unavailable" />
         <PageEmpty
           title="Could not load this route"
           hint="It may not exist in the schedule, or the server timed out."
         />
-      </PageShell>
+      </>
     );
   }
 
   const title = data.route.long_name ?? data.route.short_name ?? routeId;
-  const routeHref = `/route/${feedId}/${encodeURIComponent(routeId)}`;
+  const routeHref = routePageHref(feedId, routeId);
 
   return (
-    <PageShell rtUpdated={rtUpdated} demo={demo}>
+    <>
       <PageHeader
         title={title}
         routeBadge={{
@@ -64,6 +67,32 @@ export default async function RoutePage({
         trips={data.trips}
         vehicles={data.vehicles}
       />
+    </>
+  );
+}
+
+export default async function RoutePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ feedId: string; routeId: string }>;
+  searchParams: Promise<{ direction?: string }>;
+}) {
+  const { feedId, routeId } = await params;
+  const sp = await searchParams;
+  const direction = Number(sp.direction ?? 0);
+  const { demo, rtUpdated } = await getPageMeta();
+
+  return (
+    <PageShell rtUpdated={rtUpdated} demo={demo}>
+      <Suspense fallback={<DetailLoading message="Loading route…" />}>
+        <RoutePageContent
+          feedId={feedId}
+          routeId={routeId}
+          direction={direction}
+          demo={demo}
+        />
+      </Suspense>
     </PageShell>
   );
 }

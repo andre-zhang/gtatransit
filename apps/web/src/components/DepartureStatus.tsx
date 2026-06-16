@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDelayLabel, isPlausibleDelayMin } from "@/lib/delay-label";
+import { VehicleLink } from "./VehicleLink";
 
 function CheckIcon({ className }: { className?: string }) {
   return (
@@ -170,6 +171,8 @@ export function DepartureStatusRow({
   latenessMin,
   tripHref,
   vehicleHref,
+  feedId,
+  vehicleId,
   onClick,
   compact,
 }: {
@@ -177,6 +180,8 @@ export function DepartureStatusRow({
   latenessMin?: number;
   tripHref: string;
   vehicleHref?: string;
+  feedId?: string;
+  vehicleId?: string;
   onClick?: (e: React.MouseEvent) => void;
   compact?: boolean;
 }) {
@@ -187,6 +192,14 @@ export function DepartureStatusRow({
         latenessMin={latenessMin}
         compact={compact}
       />
+      {vehicleHref && feedId && vehicleId && (
+        <VehicleLink
+          feedId={feedId}
+          vehicleId={vehicleId}
+          className="text-xs font-bold text-go-slate hover:text-go-green"
+          onClick={onClick}
+        />
+      )}
       <DepartureActions
         tripHref={tripHref}
         vehicleHref={vehicleHref}

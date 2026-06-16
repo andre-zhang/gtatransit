@@ -16,6 +16,7 @@ import { expandGoStopId, goStopIdsMatch } from "./go-stop-aliases";
 import {
   fixtureStopIdForLive,
   liveStopDisplayName,
+  mapFixtureStopsToRt,
   resolveTtcRtStopIds,
 } from "./ttc-stop-registry";
 import { resolveStopGroupForMember } from "./demo-stop-groups";
@@ -38,22 +39,6 @@ function stopName(feedId: string, stopId: string): string {
     | Record<string, { name: string }>
     | undefined;
   return meta?.[stopId]?.name ?? stopId;
-}
-
-async function rtForFixtureStop(
-  feedId: string,
-  liveTripId: string,
-  fixtureStopId: string,
-) {
-  const liveIds =
-    feedId === "ttc"
-      ? await resolveTtcRtStopIds([{ feedId: "ttc", stopId: fixtureStopId }])
-      : expandGoStopId(fixtureStopId);
-  for (const liveId of liveIds) {
-    const rt = getStopTripRt(feedId, liveTripId, liveId);
-    if (rt) return rt;
-  }
-  return undefined;
 }
 
 async function resolveFromStopCandidates(
@@ -126,14 +111,16 @@ export async function buildDemoTripStops(opts: {
     const baseSeq = startIdx >= 0 ? schedStops[startIdx]!.sequence : 0;
     const rawSecs = slice.map((s) => gtfsTimeToSec(s.departureTime));
     let monoSecs = makeMonotonicGtfsSecs(rawSecs);
-    const firstRt = await rtForFixtureStop(feedId, liveTripId, slice[0]!.stopId);
+    const rtByFixture = await mapFixtureStopsToRt(feedId, slice.map((s) => s.stopId), (liveId) =>
+      getStopTripRt(feedId, liveTripId, liveId),
+    );
+    const firstRt = rtByFixture.get(slice[0]!.stopId);
     if (firstRt?.predictedSec != null) {
       monoSecs = shiftTripToPrediction(monoSecs, firstRt.predictedSec);
     }
-    return Promise.all(
-      slice.map(async (s, idx) => {
+    return slice.map((s, idx) => {
         const schedSec = monoSecs[idx]!;
-        const rt = await rtForFixtureStop(feedId, liveTripId, s.stopId);
+        const rt = rtByFixture.get(s.stopId);
         const delaySec =
           rt?.predictedSec != null
             ? computeDelaySec(schedSec, {
@@ -160,8 +147,7 @@ export async function buildDemoTripStops(opts: {
             ? schedNorm < now - 60
             : useFromStop && startIdx >= 0 && s.sequence < baseSeq,
         };
-      }),
-    );
+      });
   }
 
   if (!rtUpdates.length) return [];

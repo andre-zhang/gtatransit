@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { GoCheck } from "./GoCheck";
 import { AGENCY_COLORS } from "@/lib/colors";
+import { routePageHref } from "@/lib/detail-href";
 import { layerRouteKey } from "@/lib/route-key";
 import { ZOOM_ROUTES, ZOOM_STOPS } from "@/lib/map-zoom";
 import type { FilterTree } from "@/lib/types";
@@ -156,12 +158,21 @@ export function LayerPanel(props: Props) {
                             <div className="ml-7 mt-1.5 space-y-1">
                               {m.routes.map((r, ri) => {
                                 const rKey = layerRouteKey(ag.id, r, ri);
+                                const routeLabel = r.shortName || r.longName || r.id;
                                 return (
                                   <GoCheck
                                     key={rKey}
                                     checked={selectedRoutes.has(rKey)}
                                     onChange={() => onToggleRoute(rKey)}
-                                    label={r.shortName || r.longName || r.id}
+                                    label={
+                                      <Link
+                                        href={routePageHref(ag.id, r.id)}
+                                        className="hover:text-go-green"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {routeLabel}
+                                      </Link>
+                                    }
                                     className="[&_span:last-child]:text-xs [&_span:last-child]:font-normal [&_span:last-child]:text-go-slate"
                                   />
                                 );

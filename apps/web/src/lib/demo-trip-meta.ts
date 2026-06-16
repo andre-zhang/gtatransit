@@ -109,15 +109,16 @@ export async function loadBlockTrips(
     active: activeIds.some((id) => tripIdsMatch(feedId, t.trip_id, id)),
   }));
 
-  await preloadTripHeadsignIndex(feedId);
-  const hits = await tripHeadsigns(
-    feedId,
-    mapped.map((t) => t.trip_id),
-  );
+  const missingIds = mapped.filter((t) => !t.headsign?.trim()).map((t) => t.trip_id);
+  let hits = new Map<string, string | null>();
+  if (missingIds.length) {
+    await preloadTripHeadsignIndex(feedId);
+    hits = await tripHeadsigns(feedId, missingIds);
+  }
 
   return mapped.map((t) => ({
     trip_id: t.trip_id,
-    headsign: t.headsign ?? hits.get(t.trip_id) ?? null,
+    headsign: t.headsign?.trim() ? t.headsign : hits.get(t.trip_id) ?? null,
     first_departure: t.first_departure,
     last_departure: t.last_departure,
     active: t.active,

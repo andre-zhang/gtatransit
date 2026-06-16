@@ -14,7 +14,7 @@ import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { loadDemoTripPayload } from "@/lib/load-demo-trip";
 import { stopGroupIdFor } from "@/lib/stop-group-href";
-import { getStopTripRt, getTripRt, refreshRtCache } from "@/lib/rt-cache";
+import { ensureRtCache, getStopTripRt, getTripRt } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
@@ -25,7 +25,6 @@ export async function GET(
   const { feedId, tripId } = await params;
   const fromStop = req.nextUrl.searchParams.get("fromStop") ?? undefined;
   const scheduleTripParam = req.nextUrl.searchParams.get("scheduleTrip") ?? undefined;
-  await refreshRtCache();
 
   if (await useDemoFixtures()) {
     try {

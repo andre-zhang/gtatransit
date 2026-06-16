@@ -19,11 +19,9 @@ import {
   unixToTorontoSec,
 } from "./calendar";
 import type { ScheduleRow } from "./demo-schedule-types";
-import { needsHeadsignLookup, preloadTripHeadsignIndex, tripHeadsign } from "./demo-trip-headsign";
+import { needsHeadsignLookup, preloadTripHeadsignIndex, tripHeadsign, headsignFromWarmIndex } from "./demo-trip-headsign";
 import { resolveVehicleBlock } from "./demo-trip-meta";
-import { fetchGoTrainDetail } from "./go-metrolinx-rest";
-import { isMetrolinxRailFeed, goLineCode } from "./go-rail";
-import { liveStopDisplayName, resolveTtcRtStopIds } from "./ttc-stop-registry";
+import { liveStopDisplayName, mapFixtureStopsToRt, resolveTtcRtStopIds } from "./ttc-stop-registry";
 import {
   getRtVehicle,
   getTripRt,
@@ -105,20 +103,6 @@ async function resolveScheduleTrip(
   return { row: resolved.scheduleRow, fuzzy: resolved.fuzzy };
 }
 
-async function rtForScheduleStop(
-  feedId: string,
-  fixtureStopId: string,
-  rtByLiveId: Map<string, ReturnType<typeof getTripStopUpdates>[number]>,
-) {
-  if (feedId !== "ttc") return rtByLiveId.get(fixtureStopId);
-  const liveIds = await resolveTtcRtStopIds([{ feedId: "ttc", stopId: fixtureStopId }]);
-  for (const liveId of liveIds) {
-    const hit = rtByLiveId.get(liveId);
-    if (hit) return hit;
-  }
-  return undefined;
-}
-
 type UpcomingStop = {
   stop_id: string;
   name: string;
@@ -154,14 +138,16 @@ async function buildUpcomingStops(
     const slice = startIdx >= 0 ? schedStops.slice(startIdx) : schedStops;
     const rawSecs = slice.map((s) => gtfsTimeToSec(s.departureTime));
     let monoSecs = makeMonotonicGtfsSecs(rawSecs);
-    const firstRt = await rtForScheduleStop(feedId, slice[0]!.stopId, rtByLiveId);
+    const rtByFixture = await mapFixtureStopsToRt(feedId, slice.map((s) => s.stopId), (liveId) =>
+      rtByLiveId.get(liveId),
+    );
+    const firstRt = rtByFixture.get(slice[0]!.stopId);
     if (firstRt?.predictedSec != null) {
       monoSecs = shiftTripToPrediction(monoSecs, firstRt.predictedSec);
     }
-    const mapped = await Promise.all(
-      slice.map(async (s, idx) => {
+    const mapped = slice.map((s, idx) => {
         const schedSec = monoSecs[idx]!;
-        const rt = await rtForScheduleStop(feedId, s.stopId, rtByLiveId);
+        const rt = rtByFixture.get(s.stopId);
         const delaySec =
           rt?.predictedSec != null
             ? computeDelaySec(schedSec, {
@@ -184,8 +170,7 @@ async function buildUpcomingStops(
           delayMin: delayMinFromSec(delaySec),
           groupId: resolveStopGroupForMember(feedId, s.stopId) ?? undefined,
         };
-      }),
-    );
+      });
     return mapped;
   }
 
@@ -240,42 +225,59 @@ function inferCurrentStopIndex(
 
 export async function getDemoRun(feedId: string, vehicleId: string) {
   await ensureDemoAssets();
-  const { refreshRtCache } = await import("./rt-cache");
-  await refreshRtCache();
+  const { ensureRtCache } = await import("./rt-cache");
+  await ensureRtCache();
 
   const vehicle = getRtVehicle(feedId, vehicleId);
   if (!vehicle || vehicle.lat == null || vehicle.lon == null) return null;
 
   const liveTripId = vehicle.tripId;
   const tripRt = liveTripId ? getTripRt(feedId, liveTripId) : undefined;
-  const routeId =
-    vehicle.routeId ?? tripRt?.routeId;
-  const route = await findRouteMeta(feedId, routeId);
-  const resolved = liveTripId
-    ? await resolveScheduleTrip(feedId, liveTripId)
-    : undefined;
+  const routeId = vehicle.routeId ?? tripRt?.routeId;
+  const shape = findShape(feedId, routeId);
+
+  const [, route, resolved] = await Promise.all([
+    preloadTripHeadsignIndex(feedId),
+    findRouteMeta(feedId, routeId),
+    liveTripId ? resolveScheduleTrip(feedId, liveTripId) : Promise.resolve(undefined),
+  ]);
+
   const scheduleTrip = resolved?.row;
   const scheduleTripId = scheduleTrip?.tripId;
   const useScheduleStops = Boolean(scheduleTripId);
-  const shape = findShape(feedId, routeId ?? scheduleTrip?.routeId);
-  await preloadTripHeadsignIndex(feedId);
+
+  const warmHeadsign =
+    liveTripId != null ? headsignFromWarmIndex(feedId, liveTripId) : null;
   const headsign =
     (scheduleTrip?.headsign?.trim() && !needsHeadsignLookup(scheduleTrip.headsign)
       ? scheduleTrip.headsign.trim()
       : null) ??
-    (liveTripId ? await tripHeadsign(feedId, liveTripId) : null) ??
+    warmHeadsign ??
+    (liveTripId && !warmHeadsign ? await tripHeadsign(feedId, liveTripId) : null) ??
     route?.long_name ??
     null;
 
-  const allUpcoming = liveTripId
-    ? await buildUpcomingStops(
-        feedId,
-        liveTripId,
-        scheduleTripId,
-        useScheduleStops,
-        vehicle.currentStopSequence,
-      )
-    : [];
+  const [allUpcoming, blockResult] = await Promise.all([
+    liveTripId
+      ? buildUpcomingStops(
+          feedId,
+          liveTripId,
+          scheduleTripId,
+          useScheduleStops,
+          vehicle.currentStopSequence,
+        )
+      : Promise.resolve([] as UpcomingStop[]),
+    liveTripId || scheduleTripId
+      ? resolveVehicleBlock(feedId, liveTripId, scheduleTripId)
+      : Promise.resolve({
+          blockId: null as string | null,
+          blockTrips: [] as Awaited<ReturnType<typeof resolveVehicleBlock>>["blockTrips"],
+          blockStart: null as string | null,
+          blockEnd: null as string | null,
+        }),
+  ]);
+
+  const { blockId, blockTrips, blockStart, blockEnd } = blockResult;
 
   const currentIdx = inferCurrentStopIndex(
     allUpcoming,
@@ -288,31 +290,6 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     (liveTripId ? getTripDelaySec(feedId, liveTripId) : undefined) ??
     tripRt?.delaySec ??
     vehicle.delaySec;
-
-  const { blockId, blockTrips, blockStart, blockEnd } = liveTripId || scheduleTripId
-    ? await resolveVehicleBlock(feedId, liveTripId, scheduleTripId)
-    : {
-        blockId: null as string | null,
-        blockTrips: [],
-        blockStart: null as string | null,
-        blockEnd: null as string | null,
-      };
-
-  let trainDetail = null;
-  const routeShort =
-    goLineCode(route?.short_name) ??
-    goLineCode(scheduleTrip?.routeShort) ??
-    goLineCode(headsign) ??
-    route?.short_name ??
-    scheduleTrip?.routeShort ??
-    null;
-  if (isMetrolinxRailFeed(feedId, routeShort) && liveTripId) {
-    const { normalizeMetrolinxKey } = await import("./rt-cache");
-    const apiKey = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
-    if (apiKey) {
-      trainDetail = await fetchGoTrainDetail(liveTripId, apiKey);
-    }
-  }
 
   return {
     vehicle: {
@@ -359,7 +336,6 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     blockTrips,
     blockStart,
     blockEnd,
-    trainDetail,
     shape,
   };
 }

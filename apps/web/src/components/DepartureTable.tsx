@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { cleanHeadsign } from "@/lib/headsign";
+import { routePageHref, runPageHref, tripPageHref } from "@/lib/detail-href";
 import { AgencyMark } from "./AgencyMark";
 import { DepartureStatusRow } from "./DepartureStatus";
 import { LiveIcon } from "./LiveIcon";
@@ -153,16 +154,13 @@ export function DepartureTable({
     const showStruck = r.realtime && r.predicted != null && r.predicted !== r.time;
     const rowKey = `${r.tripId}-${i}`;
     const isOpen = expanded === rowKey;
-    const tripParams = new URLSearchParams();
-    if (r.stopId) tripParams.set("fromStop", r.stopId);
-    if (r.scheduleTripId && r.scheduleTripId !== r.tripId) {
-      tripParams.set("scheduleTrip", r.scheduleTripId);
-    }
-    const tripQs = tripParams.toString() ? `?${tripParams}` : "";
-    const tripHref = `/trip/${r.feedId}/${encodeURIComponent(r.tripId)}${tripQs}`;
+    const tripHref = tripPageHref(r.feedId, r.tripId, {
+      fromStop: r.stopId,
+      scheduleTrip: r.scheduleTripId,
+    });
     const vehicleHref =
       r.realtime && r.vehicleId
-        ? `/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`
+        ? runPageHref(r.feedId, r.vehicleId)
         : undefined;
     return {
       prevDay,
@@ -213,7 +211,7 @@ export function DepartureTable({
                     <RoutePill
                       shortName={r.routeShort}
                       color={r.routeColor}
-                      href={`/route/${r.feedId}/${encodeURIComponent(r.routeId)}`}
+                      href={routePageHref(r.feedId, r.routeId)}
                     />
                     <Link
                       href={m.tripHref}
@@ -229,6 +227,8 @@ export function DepartureTable({
                       latenessMin={r.latenessMin}
                       tripHref={m.tripHref}
                       vehicleHref={m.vehicleHref}
+                      feedId={r.feedId}
+                      vehicleId={r.vehicleId}
                       onClick={(e) => e.stopPropagation()}
                       compact
                     />
@@ -316,7 +316,7 @@ export function DepartureTable({
                       shortName={r.routeShort}
                       color={r.routeColor}
                       size="lg"
-                      href={`/route/${r.feedId}/${encodeURIComponent(r.routeId)}`}
+                      href={routePageHref(r.feedId, r.routeId)}
                     />
                   </td>
                   <td className="max-w-[14rem] truncate px-3 py-3">
@@ -336,6 +336,8 @@ export function DepartureTable({
                       latenessMin={r.latenessMin}
                       tripHref={m.tripHref}
                       vehicleHref={m.vehicleHref}
+                      feedId={r.feedId}
+                      vehicleId={r.vehicleId}
                       onClick={(e) => e.stopPropagation()}
                     />
                   </td>

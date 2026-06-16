@@ -11,7 +11,7 @@ import {
 import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { getDemoRun } from "@/lib/demo-run";
-import { getStopTripRt, refreshRtCache } from "@/lib/rt-cache";
+import { ensureRtCache, getStopTripRt } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
@@ -20,7 +20,6 @@ export async function GET(
   { params }: { params: Promise<{ feedId: string; vehicleId: string }> },
 ) {
   const { feedId, vehicleId } = await params;
-  await refreshRtCache();
 
   if (await useDemoFixtures()) {
     const run = await getDemoRun(feedId, vehicleId);
@@ -30,6 +29,7 @@ export async function GET(
 
   const db = getSql();
   const date = serviceDate();
+  await ensureRtCache();
 
   const vehicles = await db<
     Array<{

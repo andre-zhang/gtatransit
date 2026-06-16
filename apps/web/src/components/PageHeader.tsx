@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { RoutePill } from "./RoutePill";
 
 export function PageHeader({
@@ -9,7 +10,7 @@ export function PageHeader({
 }: {
   backHref?: string;
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   routeBadge?: { shortName: string; color: string; href?: string };
 }) {
   return (

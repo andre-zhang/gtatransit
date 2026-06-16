@@ -3,7 +3,7 @@ import {
   normalizeServiceSec,
   torontoNowSec,
 } from "./calendar";
-import { loadStopScheduleRows, loadTripStopsForTrip } from "./demo-schedule-data";
+import { loadStopScheduleRows } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedule-types";
 import { isDemoFixtureTripId } from "./demo-trip-id";
 import { lookupTripFromSchedules } from "./demo-trip-lookup";
@@ -96,10 +96,9 @@ export async function pickScheduleTripId(
   const fallback = resolved.scheduleTripId ?? liveTripId;
   if (!candidate || candidate === liveTripId) return fallback;
 
-  const stops = await loadTripStopsForTrip(feedId, candidate);
-  if (!stops.length) return fallback;
-
   const candidateRow = await lookupTripFromSchedules(feedId, candidate);
+  if (!candidateRow) return fallback;
+
   const rt = getTripRt(feedId, liveTripId);
 
   if (candidateRow && rt?.routeId) {

@@ -732,6 +732,17 @@ function snapshotTripUpdates(): RtTripUpdate[] {
   return out;
 }
 
+/** True when in-memory RT was refreshed recently. */
+export function isRtCacheWarm(): boolean {
+  return tripMap.size > 0 && Date.now() - lastRefresh < TTL_MS;
+}
+
+/** Refresh RT only when the cache is empty or stale. */
+export async function ensureRtCache(force = false): Promise<void> {
+  if (!force && isRtCacheWarm()) return;
+  await refreshRtCache(force);
+}
+
 /** ISO timestamp of the most recent successful RT poll (for UI freshness). */
 export function getRtLastUpdatedIso(): string | null {
   const ts = Math.max(goRtLastOk, lastRefresh);

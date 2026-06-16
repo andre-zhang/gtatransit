@@ -8,7 +8,7 @@ import {
   directionFromWarmIndex,
   headsignFromWarmIndex,
   preloadTripHeadsignIndex,
-  tripHeadsign,
+  tripHeadsigns,
 } from "./demo-trip-headsign";
 import { hasDemoScheduleFeed } from "./demo-schedule-feeds";
 import { routesMatch } from "./route-match";
@@ -200,30 +200,41 @@ export async function getDemoRouteDetail(
       routesMatch(feedId, routeId, meta.short_name, v.routeId),
   );
 
-  const vehicles = (
-    await Promise.all(
-      liveVehicles.slice(0, 80).map(async (v) => {
-        let headsign: string | null = null;
-        if (v.tripId) {
-          const dir = directionFromWarmIndex(feedId, v.tripId);
-          if (dir != null && dir !== direction) return null;
-          headsign =
-            headsignFromWarmIndex(feedId, v.tripId) ??
-            (await tripHeadsign(feedId, v.tripId));
-        }
-        return {
-          vehicle_id: v.vehicleId,
-          label: v.label?.trim() || v.vehicleId,
-          lat: v.lat!,
-          lon: v.lon!,
-          headsign,
-          delay_sec:
-            v.delaySec ??
-            (v.tripId ? (getTripRt(feedId, v.tripId)?.delaySec ?? null) : null),
-        };
-      }),
-    )
-  ).filter((v): v is NonNullable<typeof v> => v != null);
+  const missingTripIds = [
+    ...new Set(
+      liveVehicles
+        .filter((v) => v.tripId && !headsignFromWarmIndex(feedId, v.tripId))
+        .map((v) => v.tripId!),
+    ),
+  ];
+  const headsignHits =
+    missingTripIds.length > 0
+      ? await tripHeadsigns(feedId, missingTripIds)
+      : new Map<string, string | null>();
+
+  const vehicles = liveVehicles.slice(0, 80).flatMap((v) => {
+    if (v.tripId) {
+      const dir = directionFromWarmIndex(feedId, v.tripId);
+      if (dir != null && dir !== direction) return [];
+    }
+    const headsign = v.tripId
+      ? headsignFromWarmIndex(feedId, v.tripId) ??
+        headsignHits.get(v.tripId) ??
+        null
+      : null;
+    return [
+      {
+        vehicle_id: v.vehicleId,
+        label: v.label?.trim() || v.vehicleId,
+        lat: v.lat!,
+        lon: v.lon!,
+        headsign,
+        delay_sec:
+          v.delaySec ??
+          (v.tripId ? (getTripRt(feedId, v.tripId)?.delaySec ?? null) : null),
+      },
+    ];
+  });
 
   return {
     route: meta,

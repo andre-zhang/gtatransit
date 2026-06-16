@@ -1,8 +1,12 @@
 import { ensureDemoAssets } from "@/lib/demo-assets";
 import { buildDemoTripStops } from "@/lib/demo-trip-stops";
 import { pickScheduleTripId, resolveDemoTrip } from "@/lib/demo-trip-resolve";
-import { preloadTripHeadsignIndex, tripHeadsign } from "@/lib/demo-trip-headsign";
-import { getTripRt } from "@/lib/rt-cache";
+import {
+  headsignFromWarmIndex,
+  preloadTripHeadsignIndex,
+  tripHeadsign,
+} from "@/lib/demo-trip-headsign";
+import { getTripRt, ensureRtCache } from "@/lib/rt-cache";
 
 export type DemoTripPayload = {
   tripId: string;
@@ -25,9 +29,13 @@ export async function loadDemoTripPayload(
   opts?: { fromStop?: string; scheduleTrip?: string },
 ): Promise<DemoTripPayload> {
   await ensureDemoAssets();
-  await preloadTripHeadsignIndex(feedId);
+  await ensureRtCache();
 
-  const resolved = await resolveDemoTrip(feedId, tripId);
+  const [, resolved] = await Promise.all([
+    preloadTripHeadsignIndex(feedId),
+    resolveDemoTrip(feedId, tripId),
+  ]);
+
   const scheduleTripId = await pickScheduleTripId(
     feedId,
     tripId,
@@ -36,17 +44,21 @@ export async function loadDemoTripPayload(
   );
   const liveTripId = resolved.liveTripId;
   const tripRt = getTripRt(feedId, liveTripId);
-  const headsign = await tripHeadsign(feedId, liveTripId);
-
+  const warmHeadsign = headsignFromWarmIndex(feedId, liveTripId);
   const scheduleRow = resolved.scheduleRow;
   const routeId = scheduleRow?.routeId ?? tripRt?.routeId;
 
-  const stops = await buildDemoTripStops({
-    feedId,
-    liveTripId,
-    scheduleTripId,
-    fromStop: opts?.fromStop,
-  });
+  const [headsign, stops] = await Promise.all([
+    warmHeadsign != null
+      ? Promise.resolve(warmHeadsign)
+      : tripHeadsign(feedId, liveTripId),
+    buildDemoTripStops({
+      feedId,
+      liveTripId,
+      scheduleTripId,
+      fromStop: opts?.fromStop,
+    }),
+  ]);
 
   return {
     tripId,

@@ -1,9 +1,10 @@
-import { StopBoardClient } from "@/components/StopBoardClient";
+import { Suspense } from "react";
+import { DetailLoading } from "@/components/DetailLoading";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
+import { StopBoardClient } from "@/components/StopBoardClient";
 import type { DepartureRow } from "@/components/DepartureTable";
 import { ensureDemoAssets, getDemoCore } from "@/lib/demo";
-import { useDemoFixtures } from "@/lib/demo-mode";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
 import { getPageMeta } from "@/lib/page-meta";
 import { buildDemoStopDepartures } from "@/lib/stop-departures";
@@ -16,13 +17,13 @@ async function loadRemote(groupId: string) {
   return res.json() as Promise<{ name: string; rows: DepartureRow[] }>;
 }
 
-export default async function StopPage({
-  params,
+async function StopPageContent({
+  groupId,
+  demo,
 }: {
-  params: Promise<{ groupId: string }>;
+  groupId: string;
+  demo: boolean;
 }) {
-  const { groupId } = await params;
-  const { demo, rtUpdated } = await getPageMeta();
   let name = "Stop";
   let rows: DepartureRow[] = [];
   let resolved = groupId;
@@ -43,9 +44,26 @@ export default async function StopPage({
   }
 
   return (
-    <PageShell rtUpdated={rtUpdated} demo={demo}>
+    <>
       <PageHeader title={name} />
       <StopBoardClient groupId={groupId} initialName={name} initialRows={rows} />
+    </>
+  );
+}
+
+export default async function StopPage({
+  params,
+}: {
+  params: Promise<{ groupId: string }>;
+}) {
+  const { groupId } = await params;
+  const { demo, rtUpdated } = await getPageMeta();
+
+  return (
+    <PageShell rtUpdated={rtUpdated} demo={demo}>
+      <Suspense fallback={<DetailLoading message="Loading departures…" />}>
+        <StopPageContent groupId={groupId} demo={demo} />
+      </Suspense>
     </PageShell>
   );
 }

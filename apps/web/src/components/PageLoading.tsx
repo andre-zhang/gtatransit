@@ -1,4 +1,4 @@
-export function PageLoading() {
+export function PageLoading({ message = "Loading…" }: { message?: string }) {
   return (
     <div className="flex min-h-screen flex-col bg-go-bg">
       <header className="flex h-12 shrink-0 items-center border-b border-[#a61e14] bg-go-green px-4">
@@ -8,9 +8,8 @@ export function PageLoading() {
         <div className="w-full max-w-3xl overflow-hidden bg-go-surface sm:border sm:border-[#d9d9d9]">
           <div className="border-b border-go-bg px-5 py-4">
             <div className="h-7 w-2/3 max-w-xs animate-pulse rounded bg-go-bg" />
-            <div className="mt-2 h-4 w-1/3 max-w-[8rem] animate-pulse rounded bg-go-bg" />
-          </div>
-          <div className="space-y-3 px-5 py-4">
+            <p className="mt-3 text-sm font-medium text-go-slate">{message}</p>
+          </div>          <div className="space-y-3 px-5 py-4">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="flex gap-3">
                 <div className="h-4 w-14 shrink-0 animate-pulse rounded bg-go-bg" />

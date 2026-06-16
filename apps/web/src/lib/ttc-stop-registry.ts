@@ -84,6 +84,35 @@ function resolveIdsForMember(m: StopMember): string[] {
   return resolved;
 }
 
+/** Map demo fixture stop ids to RT rows via live stop_id aliases (TTC Surface ids). */
+export async function mapFixtureStopsToRt<T>(
+  feedId: string,
+  fixtureStopIds: string[],
+  lookup: (liveStopId: string) => T | undefined,
+): Promise<Map<string, T>> {
+  const out = new Map<string, T>();
+
+  if (feedId === "ttc") {
+    await ensureRegistry();
+    for (const stopId of fixtureStopIds) {
+      for (const liveId of resolveIdsForMember({ feedId: "ttc", stopId })) {
+        const hit = lookup(liveId);
+        if (hit) {
+          out.set(stopId, hit);
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  for (const stopId of fixtureStopIds) {
+    const hit = lookup(stopId);
+    if (hit) out.set(stopId, hit);
+  }
+  return out;
+}
+
 export async function resolveTtcRtStopIds(members: StopMember[]): Promise<string[]> {
   await ensureRegistry();
   const ids = new Set<string>();

@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { DepartureActions, DepartureStatus } from "@/components/DepartureStatus";
 import { PageEmpty } from "@/components/PageEmpty";
 import { Section } from "@/components/Section";
+import { TripLink } from "@/components/TripLink";
+import { VehicleLink } from "@/components/VehicleLink";
+import { tripPageHref } from "@/lib/detail-href";
 
 type Trip = { trip_id: string; headsign: string | null; first_departure: string };
 type Vehicle = {
@@ -104,8 +107,13 @@ export function RouteViewClient({
                   key={v.vehicle_id}
                   className="flex items-center gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3"
                 >
-                  <span className="w-16 shrink-0 font-bold text-go-navy sm:w-20">
-                    {v.label ?? v.vehicle_id}
+                  <span className="w-16 shrink-0 sm:w-20">
+                    <VehicleLink
+                      feedId={feedId}
+                      vehicleId={v.vehicle_id}
+                      label={v.label}
+                      className="font-bold text-go-navy hover:text-go-green"
+                    />
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
                     {v.headsign ?? "Headsign unavailable"}
@@ -131,13 +139,21 @@ export function RouteViewClient({
                 key={t.trip_id}
                 className="flex items-center gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3"
               >
-                <span className="w-16 shrink-0 text-right text-lg font-bold tabular-nums text-go-navy sm:w-20">
+                <TripLink
+                  feedId={feedId}
+                  tripId={t.trip_id}
+                  className="w-16 shrink-0 text-right text-lg font-bold tabular-nums text-go-navy hover:text-go-green sm:w-20"
+                >
                   {t.first_departure}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
+                </TripLink>
+                <TripLink
+                  feedId={feedId}
+                  tripId={t.trip_id}
+                  className="min-w-0 flex-1 truncate text-sm text-go-navy hover:text-go-green"
+                >
                   {t.headsign ?? "Headsign unavailable"}
-                </span>
-                <DepartureActions tripHref={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`} />
+                </TripLink>
+                <DepartureActions tripHref={tripPageHref(feedId, t.trip_id)} />
               </li>
             ))}
           </ul>
