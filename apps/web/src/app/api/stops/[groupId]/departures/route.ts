@@ -10,7 +10,7 @@ import { routeColor } from "@/lib/colors";
 import { getDemoCore, useDemoFixtures } from "@/lib/demo";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
 import { buildDemoStopDepartures } from "@/lib/stop-departures";
-import { mergeRtIntoDeparture, refreshRtCache } from "@/lib/rt-cache";
+import { ensureRtCache, mergeRtIntoDeparture } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
@@ -31,7 +31,7 @@ export async function GET(
     return NextResponse.json(board);
   }
 
-  await refreshRtCache();
+  await ensureRtCache();
   const db = getSql();
   const date = serviceDate();
 

@@ -33,10 +33,9 @@ export async function getStopSchedule(groupId: string): Promise<ScheduleRow[]> {
   const stop = getDemoCore().stops[resolved] as DemoStopMeta | undefined;
   if (!stop) return [];
 
-  const rows: ScheduleRow[] = [];
-  for (const m of stop.members) {
-    rows.push(...(await rowsForMember(m.feedId, m.stopId)));
-  }
+  const rows = (
+    await Promise.all(stop.members.map((m) => rowsForMember(m.feedId, m.stopId)))
+  ).flat();
   return rows;
 }
 

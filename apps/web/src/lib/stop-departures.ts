@@ -28,7 +28,7 @@ import {
   getRtPredictionsForStop,
   mergeRtIntoDeparture,
   normalizeMetrolinxKey,
-  refreshRtCache,
+  ensureRtCache,
   type RtStopPrediction,
 } from "@/lib/rt-cache";
 import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
@@ -229,7 +229,7 @@ export async function buildDemoStopDepartures(
 ): Promise<{ name: string; rows: DepartureRowOut[] }> {
   const usedRtTrips = new Set<string>();
 
-  await refreshRtCache();
+  await ensureRtCache();
   const rawSchedule = await getStopSchedule(groupId);
   const schedule = filterScheduleToBoardWindow(scheduleForMembers(rawSchedule, stop.members));
   const rtStopIdsByFeed = new Map<string, string[]>();
