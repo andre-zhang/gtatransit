@@ -162,6 +162,26 @@ body {
   color: var(--color-go-navy);
 }
 
+.departure-status-row {
+  min-width: 7.5rem;
+}
+
+.departure-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 4px;
+  color: var(--color-go-green);
+  text-decoration: none;
+}
+
+.departure-action-btn:hover {
+  background: var(--color-go-bg);
+  color: var(--color-go-navy);
+}
+
 .go-meta-bar {
   display: flex;
   flex-wrap: wrap;

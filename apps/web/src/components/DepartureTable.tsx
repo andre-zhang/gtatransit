@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { cleanHeadsign } from "@/lib/headsign";
-import { formatDelayLabel } from "@/lib/delay-label";
 import { AgencyMark } from "./AgencyMark";
+import { DepartureStatusRow } from "./DepartureStatus";
 import { LiveIcon } from "./LiveIcon";
 import { PageEmpty } from "./PageEmpty";
 import { RoutePill } from "./RoutePill";
@@ -151,8 +151,6 @@ export function DepartureTable({
       dayOffset === 1 ? "Tomorrow" : dayOffset > 1 ? `+${dayOffset} days` : null;
     const displayTime = r.predicted ?? r.time;
     const showStruck = r.realtime && r.predicted != null && r.predicted !== r.time;
-    const late = r.latenessMin != null && r.latenessMin > 0;
-    const early = r.latenessMin != null && r.latenessMin < 0;
     const rowKey = `${r.tripId}-${i}`;
     const isOpen = expanded === rowKey;
     const tripParams = new URLSearchParams();
@@ -162,17 +160,20 @@ export function DepartureTable({
     }
     const tripQs = tripParams.toString() ? `?${tripParams}` : "";
     const tripHref = `/trip/${r.feedId}/${encodeURIComponent(r.tripId)}${tripQs}`;
+    const vehicleHref =
+      r.realtime && r.vehicleId
+        ? `/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`
+        : undefined;
     return {
       prevDay,
       dayOffset,
       showDayBreak,
       dayLabel,
       displayTime,
-      late,
-      early,
       rowKey,
       isOpen,
       tripHref,
+      vehicleHref,
       showStruck,
     };
   };
@@ -223,35 +224,14 @@ export function DepartureTable({
                     >
                       {cleanHeadsign(r.destination)}
                     </Link>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {m.late || m.early ? (
-                        <span
-                          className={`go-badge whitespace-nowrap ${m.late ? "go-badge--late" : "go-badge--early"}`}
-                        >
-                          {formatDelayLabel(r.latenessMin)}
-                        </span>
-                      ) : r.realtime && r.latenessMin === 0 ? (
-                        <span className="go-badge go-badge--ontime whitespace-nowrap">On time</span>
-                      ) : !r.realtime ? (
-                        <span className="go-badge go-badge--sched whitespace-nowrap">Scheduled</span>
-                      ) : null}
-                      {r.realtime && r.vehicleId && (
-                        <Link
-                          href={`/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="go-link go-link--muted"
-                        >
-                          Vehicle
-                        </Link>
-                      )}
-                      <Link
-                        href={m.tripHref}
-                        onClick={(e) => e.stopPropagation()}
-                        className="go-link"
-                      >
-                        Trip
-                      </Link>
-                    </div>
+                    <DepartureStatusRow
+                      realtime={r.realtime}
+                      latenessMin={r.latenessMin}
+                      tripHref={m.tripHref}
+                      vehicleHref={m.vehicleHref}
+                      onClick={(e) => e.stopPropagation()}
+                      compact
+                    />
                   </div>
                 </button>
                 {m.isOpen && (
@@ -351,35 +331,13 @@ export function DepartureTable({
                     </Link>
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      {m.late || m.early ? (
-                        <span
-                          className={`go-badge ${m.late ? "go-badge--late" : "go-badge--early"}`}
-                        >
-                          {formatDelayLabel(r.latenessMin)}
-                        </span>
-                      ) : r.realtime && r.latenessMin === 0 ? (
-                        <span className="go-badge go-badge--ontime">On time</span>
-                      ) : !r.realtime ? (
-                        <span className="go-badge go-badge--sched">Scheduled</span>
-                      ) : null}
-                      {r.realtime && r.vehicleId && (
-                        <Link
-                          href={`/run/${r.feedId}/${encodeURIComponent(r.vehicleId)}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="go-link go-link--muted"
-                        >
-                          Vehicle
-                        </Link>
-                      )}
-                      <Link
-                        href={m.tripHref}
-                        onClick={(e) => e.stopPropagation()}
-                        className="go-link"
-                      >
-                        Trip
-                      </Link>
-                    </div>
+                    <DepartureStatusRow
+                      realtime={r.realtime}
+                      latenessMin={r.latenessMin}
+                      tripHref={m.tripHref}
+                      vehicleHref={m.vehicleHref}
+                      onClick={(e) => e.stopPropagation()}
+                    />
                   </td>
                 </tr>
                 {m.isOpen && (

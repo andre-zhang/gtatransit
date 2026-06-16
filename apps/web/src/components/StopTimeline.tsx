@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatDelayLabel } from "@/lib/delay-label";
+import { isPlausibleDelayMin } from "@/lib/delay-label";
+import { DepartureStatus } from "./DepartureStatus";
 import { TimePair } from "./TimePair";
 
 type Stop = {
@@ -61,12 +62,8 @@ export function StopTimeline({ stops }: { stops: Stop[] }) {
               />
             </span>
             {nameEl}
-            {s.delayMin != null && s.delayMin !== 0 && (
-              <span
-                className={`go-badge ml-auto shrink-0 whitespace-nowrap ${s.delayMin > 0 ? "go-badge--late" : "go-badge--early"}`}
-              >
-                {formatDelayLabel(s.delayMin)}
-              </span>
+            {isPlausibleDelayMin(s.delayMin) && s.delayMin !== 0 && (
+              <DepartureStatus realtime latenessMin={s.delayMin} compact />
             )}
           </li>
         );

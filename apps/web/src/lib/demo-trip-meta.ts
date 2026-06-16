@@ -1,7 +1,5 @@
 import { preloadTripHeadsignIndex, tripHeadsigns } from "./demo-trip-headsign";
 import { readDemoJsonFile } from "./demo-read";
-import { loadTripStopsForTrip } from "./demo-schedule-data";
-import { formatBoardTime, gtfsTimeToSec, torontoNowSec } from "./calendar";
 import { goTripSuffix, goTripsMatch } from "./go-stop-aliases";
 
 type BlockTrip = {
@@ -71,11 +69,6 @@ function findBlockForTrip(
   return undefined;
 }
 
-function formatTripTime(raw: string): string {
-  const fmt = formatBoardTime(gtfsTimeToSec(raw), torontoNowSec());
-  return fmt.time;
-}
-
 export async function loadFeedTripMeta(
   feedId: string,
   tripId: string,
@@ -122,23 +115,13 @@ export async function loadBlockTrips(
     mapped.map((t) => t.trip_id),
   );
 
-  const withTimes = await Promise.all(
-    mapped.map(async (t) => {
-      const stops = await loadTripStopsForTrip(feedId, t.trip_id);
-      const last = stops[stops.length - 1];
-      return {
-        trip_id: t.trip_id,
-        headsign: t.headsign ?? hits.get(t.trip_id) ?? null,
-        first_departure: t.first_departure,
-        last_departure:
-          t.last_departure ??
-          (last ? formatTripTime(last.departureTime) : undefined),
-        active: t.active,
-      };
-    }),
-  );
-
-  return withTimes;
+  return mapped.map((t) => ({
+    trip_id: t.trip_id,
+    headsign: t.headsign ?? hits.get(t.trip_id) ?? null,
+    first_departure: t.first_departure,
+    last_departure: t.last_departure,
+    active: t.active,
+  }));
 }
 
 /** Resolve block trips using live RT trip id first, then schedule id. */
@@ -172,6 +155,26 @@ export async function resolveVehicleBlock(
       const last = blockTrips[blockTrips.length - 1]!;
       const blockEnd = last.last_departure ?? last.first_departure;
       return { blockId: meta.blockId, blockTrips, blockStart, blockEnd };
+    }
+  }
+
+  if (liveTripId && !scheduleTripId) {
+    const { resolveDemoTrip } = await import("./demo-trip-resolve");
+    const resolved = await resolveDemoTrip(feedId, liveTripId);
+    if (resolved.scheduleTripId && resolved.scheduleTripId !== liveTripId) {
+      const blockTrips = await loadBlockTrips(
+        feedId,
+        resolved.scheduleTripId,
+        activeTripId,
+        resolved.scheduleTripId,
+      );
+      if (blockTrips.length) {
+        const meta = await loadFeedTripMeta(feedId, resolved.scheduleTripId);
+        const blockStart = blockTrips[0]!.first_departure;
+        const last = blockTrips[blockTrips.length - 1]!;
+        const blockEnd = last.last_departure ?? last.first_departure;
+        return { blockId: meta.blockId, blockTrips, blockStart, blockEnd };
+      }
     }
   }
 

@@ -240,9 +240,9 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         source: "stops",
         minzoom: ZOOM_STOPS,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 4.5, 14, 6.5, 16, 9, 18, 12],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2, 14, 4, 16, 6.5, 18, 10],
           "circle-color": "#ffffff",
-          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 12, 1, 16, 1.5],
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 12, 0.75, 16, 1.25],
           "circle-stroke-color": "#da291c",
         },
       });
@@ -252,7 +252,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         source: "stops",
         minzoom: ZOOM_STOPS,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 18, 14, 22, 16, 28],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 10, 14, 14, 16, 18],
           "circle-opacity": 0,
         },
       });
@@ -264,7 +264,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         type: "circle",
         source: "vehicles",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 14, 14, 18, 16, 22],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 8, 14, 12, 16, 16],
           "circle-opacity": 0,
         },
       });
@@ -274,7 +274,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         source: "vehicles",
         layout: {
           "icon-image": VEHICLE_ARROW_IMAGE_ID,
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 10, 0.32, 14, 0.42, 16, 0.52],
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 10, 0.18, 14, 0.28, 16, 0.38, 18, 0.48],
           "icon-rotate": ["coalesce", ["get", "bearing"], 0],
           "icon-rotation-alignment": "map",
           "icon-allow-overlap": true,

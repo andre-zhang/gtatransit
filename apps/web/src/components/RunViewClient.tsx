@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { formatDelayLabel } from "@/lib/delay-label";
+import { formatDelayLabel, isPlausibleDelayMin } from "@/lib/delay-label";
 import { isMetrolinxRailFeed, goLineCode } from "@/lib/go-rail";
 import { cleanHeadsign } from "@/lib/headsign";
+import { DepartureActions } from "./DepartureStatus";
 import { LiveIcon } from "./LiveIcon";
 import { PageEmpty } from "./PageEmpty";
 import { RunMap } from "./RunMap";
@@ -143,9 +144,11 @@ export function RunViewClient({
     blockEnd,
     trainDetail,
   } = data;
-  const early = vehicle.delayMin != null && vehicle.delayMin < 0;
-  const late = vehicle.delayMin != null && vehicle.delayMin > 0;
-  const delayLabel = formatDelayLabel(vehicle.delayMin);
+  const early = isPlausibleDelayMin(vehicle.delayMin) && vehicle.delayMin! < 0;
+  const late = isPlausibleDelayMin(vehicle.delayMin) && vehicle.delayMin! > 0;
+  const delayLabel = formatDelayLabel(
+    isPlausibleDelayMin(vehicle.delayMin) ? vehicle.delayMin : null,
+  );
   const lineCode =
     goLineCode(route?.short_name) ??
     goLineCode(trip?.headsign ?? undefined) ??
@@ -257,12 +260,9 @@ export function RunViewClient({
                     <span className="hidden sm:inline">Active</span>
                   </span>
                 )}
-                <Link
-                  href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
-                  className="go-link shrink-0"
-                >
-                  Trip
-                </Link>
+                <DepartureActions
+                  tripHref={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
+                />
               </li>
             ))}
           </ul>

@@ -58,6 +58,8 @@ export function dedupeDepartures(rows: DepartureInput[]): DepartureInput[] {
   return [...keptLive, ...keptScheduled];
 }
 
+const MAX_DISPLAY_DELAY_SEC = 120 * 60;
+
 /** Compare live prediction to schedule; don't trust agency delay=0 alone. */
 export function computeDelaySec(
   schedSec: number,
@@ -69,13 +71,22 @@ export function computeDelaySec(
 ): number | null {
   const now = opts.now ?? torontoNowSec();
   const schedNorm = normalizeServiceSec(schedSec, now);
-  let delaySec = opts.agencyDelaySec ?? null;
+  let delaySec: number | null = null;
+  if (
+    opts.agencyDelaySec != null &&
+    Math.abs(opts.agencyDelaySec) <= MAX_DISPLAY_DELAY_SEC
+  ) {
+    delaySec = opts.agencyDelaySec;
+  }
 
   if (opts.predictedSec != null) {
     const pred = isUnixTimestamp(opts.predictedSec)
       ? unixToTorontoSec(opts.predictedSec)
       : opts.predictedSec;
     const drift = normalizeServiceSec(pred, now) - schedNorm;
+    if (Math.abs(drift) > MAX_DISPLAY_DELAY_SEC) {
+      return null;
+    }
     if (delaySec == null || Math.abs(drift) > Math.abs(delaySec)) {
       delaySec = drift;
     }
@@ -85,7 +96,10 @@ export function computeDelaySec(
 }
 
 export function delayMinFromSec(delaySec: number | null | undefined): number | undefined {
-  return delaySec != null ? Math.round(delaySec / 60) : undefined;
+  if (delaySec == null) return undefined;
+  const min = Math.round(delaySec / 60);
+  if (Math.abs(min) > 120) return undefined;
+  return min;
 }
 
 export type DepartureInput = {

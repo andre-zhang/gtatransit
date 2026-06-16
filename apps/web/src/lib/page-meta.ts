@@ -1,5 +1,6 @@
 import { getFilterTree } from "@/lib/filters-server";
 import { useDemoFixtures } from "@/lib/demo-mode";
+import { readDemoJsonFile } from "@/lib/demo-read";
 import { getRtLastUpdatedIso } from "@/lib/rt-cache";
 
 export async function getPageMeta(): Promise<{
@@ -10,9 +11,12 @@ export async function getPageMeta(): Promise<{
   let rtUpdated: string | null = null;
 
   if (demo) {
-    const { ensureDemoAssets, getDemoCore } = await import("@/lib/demo");
-    await ensureDemoAssets();
-    rtUpdated = getRtLastUpdatedIso() ?? getDemoCore().rtUpdated;
+    try {
+      const core = await readDemoJsonFile<{ rtUpdated?: string }>("fixtures.json");
+      rtUpdated = getRtLastUpdatedIso() ?? core.rtUpdated ?? null;
+    } catch {
+      rtUpdated = getRtLastUpdatedIso();
+    }
   } else {
     try {
       const data = await getFilterTree();

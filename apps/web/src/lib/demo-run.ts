@@ -162,16 +162,17 @@ async function buildUpcomingStops(
       slice.map(async (s, idx) => {
         const schedSec = monoSecs[idx]!;
         const rt = await rtForScheduleStop(feedId, s.stopId, rtByLiveId);
-        const delaySec = computeDelaySec(schedSec, {
-          predictedSec: rt?.predictedSec,
-          agencyDelaySec: rt?.delaySec,
-          now,
-        });
+        const delaySec =
+          rt?.predictedSec != null
+            ? computeDelaySec(schedSec, {
+                predictedSec: rt.predictedSec,
+                agencyDelaySec: rt.delaySec,
+                now,
+              })
+            : null;
         let predictedSec: number | undefined;
         if (rt?.predictedSec != null) {
           predictedSec = alignPredictionToSchedule(rt.predictedSec, schedSec);
-        } else if (delaySec != null) {
-          predictedSec = schedSec + delaySec;
         }
         return {
           stop_id: s.stopId,
@@ -205,7 +206,7 @@ async function buildUpcomingStops(
         name,
         scheduled: displayTripClockTime(schedSec),
         predicted: displayTripClockTime(schedSec),
-        delayMin: u.delaySec != null ? Math.round(u.delaySec / 60) : undefined,
+        delayMin: u.delaySec != null ? delayMinFromSec(u.delaySec) : undefined,
         groupId: resolveStopGroupForMember(feedId, u.stopId) ?? undefined,
       };
     }),
@@ -322,7 +323,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
       bearing: vehicle.bearing ?? null,
       speed: vehicle.speed ?? null,
       occupancy: OCCUPANCY_LABELS[vehicle.occupancyStatus ?? 7] ?? "No data",
-      delayMin: delaySec != null ? Math.round(delaySec / 60) : null,
+      delayMin: delayMinFromSec(delaySec),
       updatedAt: new Date().toISOString(),
     },
     trip: liveTripId

@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { formatDelayLabel } from "@/lib/delay-label";
+import { DepartureActions, DepartureStatus } from "@/components/DepartureStatus";
 import { PageEmpty } from "@/components/PageEmpty";
 import { Section } from "@/components/Section";
 
@@ -99,9 +98,7 @@ export function RouteViewClient({
           <ul className="divide-y divide-go-bg">
             {vehicles.map((v) => {
               const delayMin =
-                v.delay_sec != null ? Math.round(v.delay_sec / 60) : null;
-              const late = delayMin != null && delayMin > 0;
-              const early = delayMin != null && delayMin < 0;
+                v.delay_sec != null ? Math.round(v.delay_sec / 60) : undefined;
               return (
                 <li
                   key={v.vehicle_id}
@@ -113,22 +110,10 @@ export function RouteViewClient({
                   <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
                     {v.headsign ?? "Headsign unavailable"}
                   </span>
-                  {late || early ? (
-                    <span
-                      className={`go-badge shrink-0 ${late ? "go-badge--late" : "go-badge--early"}`}
-                    >
-                      {formatDelayLabel(delayMin)}
-                    </span>
-                  ) : (
-                    <span className="go-badge go-badge--ontime shrink-0">On time</span>
-                  )}
-                  <Link
-                    href={`/run/${feedId}/${encodeURIComponent(v.vehicle_id)}`}
-                    className="go-link shrink-0"
-                    prefetch
-                  >
-                    Vehicle
-                  </Link>
+                  <DepartureStatus realtime latenessMin={delayMin} />
+                  <DepartureActions
+                    vehicleHref={`/run/${feedId}/${encodeURIComponent(v.vehicle_id)}`}
+                  />
                 </li>
               );
             })}
@@ -152,13 +137,7 @@ export function RouteViewClient({
                 <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
                   {t.headsign ?? "Headsign unavailable"}
                 </span>
-                <Link
-                  href={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`}
-                  className="go-link shrink-0"
-                  prefetch
-                >
-                  Trip
-                </Link>
+                <DepartureActions tripHref={`/trip/${feedId}/${encodeURIComponent(t.trip_id)}`} />
               </li>
             ))}
           </ul>
