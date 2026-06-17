@@ -20,7 +20,7 @@ export function TimePair({
     size === "lg"
       ? "text-lg font-bold"
       : size === "sm"
-        ? "text-sm font-bold"
+        ? "text-sm font-bold tabular-nums"
         : "text-base font-bold sm:text-lg";
 
   return (
@@ -31,7 +31,7 @@ export function TimePair({
     >
       <span className={`text-go-navy ${mainSize}`}>{actual}</span>
       {showStruck && (
-        <span className="text-[10px] text-go-slate line-through sm:text-xs">{scheduled}</span>
+        <span className="text-[0.625rem] text-go-slate line-through sm:text-[10px]">{scheduled}</span>
       )}
     </span>
   );

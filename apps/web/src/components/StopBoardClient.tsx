@@ -75,7 +75,7 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
       <PageHeader title={loading && name === "Stop" ? "Loading…" : name} />
       <div className="departure-board">
         {(loading || error || refreshing) && (
-          <div className="flex items-center justify-between border-b border-go-bg px-4 py-2 text-xs text-go-slate">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-go-bg px-2.5 py-2 text-xs text-go-slate sm:px-4">
             <span>
               {loading
                 ? "Loading departures…"

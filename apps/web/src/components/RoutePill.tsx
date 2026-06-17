@@ -15,18 +15,22 @@ export function RoutePill({
   textColor,
   size = "md",
   href,
+  className,
 }: {
   shortName: string;
   color: string;
   textColor?: string;
-  size?: "md" | "lg";
+  size?: "sm" | "md" | "lg";
   href?: string;
+  className?: string;
 }) {
   const bg = color.startsWith("#") ? color : `#${color}`;
   const sizes =
     size === "lg"
       ? "min-w-[2.75rem] px-2.5 py-1 text-base"
-      : "min-w-[2.25rem] px-2 py-0.5 text-sm";
+      : size === "sm"
+        ? "max-w-[5.5rem] truncate px-1.5 py-0.5 text-xs"
+        : "min-w-[2.25rem] px-2 py-0.5 text-sm";
 
   const pill = (
     <span
@@ -44,7 +48,11 @@ export function RoutePill({
 
   if (href) {
     return (
-      <Link href={href} className="shrink-0" title={`Route ${shortName}`}>
+      <Link
+        href={href}
+        className={`shrink-0 ${className ?? ""}`.trim()}
+        title={`Route ${shortName}`}
+      >
         {pill}
       </Link>
     );

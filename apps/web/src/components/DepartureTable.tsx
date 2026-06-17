@@ -84,14 +84,14 @@ function TripStopsPanel({
 
   if (loading) {
     return (
-      <div className="departure-board-expand px-5 py-3 text-sm text-go-slate">
+      <div className="departure-board-expand px-3 py-2.5 text-sm text-go-slate sm:px-5 sm:py-3">
         Loading upcoming stops…
       </div>
     );
   }
   if (error || !stops?.length) {
     return (
-      <div className="departure-board-expand px-5 py-3 text-sm text-go-slate">
+      <div className="departure-board-expand px-3 py-2.5 text-sm text-go-slate sm:px-5 sm:py-3">
         {error ? "Could not load trip detail." : "No upcoming stops for this trip."}
       </div>
     );
@@ -100,8 +100,8 @@ function TripStopsPanel({
   return (
     <ul className="departure-board-expand divide-y divide-go-bg bg-go-bg/30">
       {stops.map((s, i) => (
-        <li key={`${s.stopId}-${i}`} className="flex items-center gap-3 px-5 py-2.5 text-sm">
-          <span className="w-14 shrink-0">
+        <li key={`${s.stopId}-${i}`} className="flex items-center gap-2 px-3 py-2.5 text-sm sm:gap-3 sm:px-5">
+          <span className="w-12 shrink-0 sm:w-14">
             <TimePair scheduled={s.scheduled} predicted={s.predicted} size="sm" />
           </span>
           {s.groupId ? (
@@ -177,8 +177,7 @@ export function DepartureTable({
 
   return (
     <>
-      <div className="md:hidden">
-        <ul className="divide-y divide-go-bg">
+      <ul className="departure-board-cards divide-y divide-go-bg">
           {rows.map((r, i) => {
             const m = renderRowMeta(r, i);
             return (
@@ -212,6 +211,7 @@ export function DepartureTable({
                       <RoutePill
                         shortName={r.routeShort}
                         color={r.routeColor}
+                        size="sm"
                         href={routePageHref(r.feedId, r.routeId)}
                       />
                     </div>
@@ -245,9 +245,8 @@ export function DepartureTable({
             );
           })}
         </ul>
-      </div>
 
-      <div className="hidden md:block">
+      <div className="departure-board-table-wrap">
       <table className="departure-board-table departure-board-table--compact w-full">
         <thead>
           <tr className="departure-board-head">
