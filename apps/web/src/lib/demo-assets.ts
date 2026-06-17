@@ -13,37 +13,60 @@ type DemoCoreFile = {
   routes: Record<string, unknown>;
 };
 
-let cache: {
+type DemoCache = {
   core: DemoCoreFile;
   stopsGeo: FeatureCollection;
   stopMeta: Record<string, Record<string, unknown>>;
   unionSchedule: ScheduleRow[];
-  routesGeo: FeatureCollection;
-} | null = null;
+  routesGeo?: FeatureCollection;
+};
 
-let loading: Promise<void> | null = null;
+const EMPTY_FC: FeatureCollection = { type: "FeatureCollection", features: [] };
 
-export async function ensureDemoAssets(): Promise<void> {
+let cache: DemoCache | null = null;
+let stopLoading: Promise<void> | null = null;
+let routesLoading: Promise<void> | null = null;
+
+/** Stop board + grouping only — skips heavy routes.json. */
+export async function ensureDemoStopAssets(): Promise<void> {
   if (cache) return;
-  if (loading) return loading;
+  if (stopLoading) return stopLoading;
 
-  loading = (async () => {
-    const [core, stopsGeo, stopMeta, unionSchedule, routesGeo] = await Promise.all([
+  stopLoading = (async () => {
+    const [core, stopsGeo, stopMeta, unionSchedule] = await Promise.all([
       readDemoJsonFile<DemoCoreFile>("fixtures.json"),
       readDemoJsonFile<FeatureCollection>("stops.json"),
       readDemoJsonFile<Record<string, Record<string, unknown>>>("stop-meta.json"),
       readDemoJsonFile<ScheduleRow[]>("union-schedule.json"),
-      readDemoJsonFile<FeatureCollection>("routes.json"),
     ]);
-    cache = { core, stopsGeo, stopMeta, unionSchedule, routesGeo };
+    cache = { core, stopsGeo, stopMeta, unionSchedule };
   })();
 
-  return loading;
+  return stopLoading;
+}
+
+export async function ensureDemoAssets(): Promise<void> {
+  await ensureDemoStopAssets();
+  if (cache?.routesGeo) return;
+  if (routesLoading) return routesLoading;
+
+  routesLoading = (async () => {
+    const routesGeo = await readDemoJsonFile<FeatureCollection>("routes.json");
+    cache = { ...cache!, routesGeo };
+  })();
+
+  return routesLoading;
 }
 
 export function loadDemoAssets() {
   if (!cache) {
-    throw new Error("Demo assets not loaded — call ensureDemoAssets() first");
+    throw new Error("Demo assets not loaded — call ensureDemoStopAssets() first");
   }
-  return cache;
+  return {
+    core: cache.core,
+    stopsGeo: cache.stopsGeo,
+    stopMeta: cache.stopMeta,
+    unionSchedule: cache.unionSchedule,
+    routesGeo: cache.routesGeo ?? EMPTY_FC,
+  };
 }

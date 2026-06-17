@@ -29,7 +29,7 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
         }`;
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) {
-          if (!isBackground && rowsRef.current.length === 0) {
+          if (rowsRef.current.length === 0 && (isBackground || !isQuick)) {
             setError("Could not load departures.");
           }
           return;
@@ -40,13 +40,14 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
         rowsRef.current = data.rows;
         setError(null);
       } catch {
-        if (!isBackground && rowsRef.current.length === 0) {
+        if (rowsRef.current.length === 0 && (isBackground || !isQuick)) {
           setError("Could not load departures.");
         }
       } finally {
         if (isBackground) {
           setRefreshing(false);
-        } else {
+        }
+        if (!isBackground || rowsRef.current.length === 0) {
           setLoading(false);
         }
       }

@@ -300,10 +300,9 @@ export async function buildDemoStopDepartures(
     };
   }
 
-  await loadFixturesTree();
+  await Promise.all([loadFixturesTree(), ensureRtCacheWithin(6000)]);
   const usedRtTrips = new Set<string>();
 
-  await ensureRtCacheWithin(8000);
   const { rtStopIdsByFeed, ttcRtByStopId, allowedTtcRtStopIds } =
     await buildRtStopIdMaps(stop);
 

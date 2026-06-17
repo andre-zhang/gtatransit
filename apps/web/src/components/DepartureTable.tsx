@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { cleanHeadsign } from "@/lib/headsign";
 import { routePageHref, runPageHref, tripPageHref } from "@/lib/detail-href";
 import { AgencyMark } from "./AgencyMark";
-import { DepartureStatusRow } from "./DepartureStatus";
+import { DepartureActionLinks, DepartureStatus } from "./DepartureStatus";
 import { PageEmpty } from "./PageEmpty";
 import { RoutePill } from "./RoutePill";
 import { TimePair } from "./TimePair";
@@ -196,6 +196,10 @@ export function DepartureTable({
                 >
                   <div className="departure-board-card-grid">
                     <div className="departure-board-card-time">
+                      <DepartureStatus
+                        realtime={r.realtime}
+                        latenessMin={r.latenessMin}
+                      />
                       <TimePair
                         scheduled={r.time}
                         predicted={m.showStruck ? r.predicted : undefined}
@@ -212,15 +216,10 @@ export function DepartureTable({
                       />
                     </div>
                     <div className="departure-board-card-status">
-                      <DepartureStatusRow
-                        realtime={r.realtime}
-                        latenessMin={r.latenessMin}
+                      <DepartureActionLinks
                         tripHref={m.tripHref}
                         vehicleHref={m.vehicleHref}
-                        feedId={r.feedId}
-                        vehicleId={r.vehicleId}
                         onClick={(e) => e.stopPropagation()}
-                        compact
                       />
                     </div>
                     <Link
@@ -249,21 +248,16 @@ export function DepartureTable({
       </div>
 
       <div className="hidden md:block">
-      <table className="departure-board-table departure-board-table--compact w-full table-fixed">
-        <colgroup>
-          <col className="w-[4.5rem]" />
-          {showAgency && <col className="w-7" />}
-          <col className="w-14" />
-          <col />
-          <col className="w-[5.25rem]" />
-        </colgroup>
+      <table className="departure-board-table departure-board-table--compact w-full">
         <thead>
           <tr className="departure-board-head">
-            <th className="text-right">Time</th>
-            {showAgency && <th>Agency</th>}
-            <th>Route</th>
-            <th>Headsign</th>
-            <th className="text-right">Status</th>
+            <th className="departure-board-time-cell text-right">Time</th>
+            {showAgency && <th className="departure-board-agency-cell">Agency</th>}
+            <th className="departure-board-route-cell">Route</th>
+            <th className="departure-board-dest-cell">Headsign</th>
+            <th className="departure-board-actions-cell text-right">
+              <span className="sr-only">Links</span>
+            </th>
           </tr>
         </thead>
         <tbody className="departure-board-body">
@@ -295,8 +289,12 @@ export function DepartureTable({
                   role="button"
                   aria-expanded={m.isOpen}
                 >
-                  <td className="text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  <td className="departure-board-time-cell text-right">
+                    <div className="departure-board-time-wrap">
+                      <DepartureStatus
+                        realtime={r.realtime}
+                        latenessMin={r.latenessMin}
+                      />
                       <TimePair
                         scheduled={r.time}
                         predicted={m.showStruck ? r.predicted : undefined}
@@ -311,11 +309,11 @@ export function DepartureTable({
                     </div>
                   </td>
                   {showAgency && (
-                    <td>
+                    <td className="departure-board-agency-cell">
                       <AgencyMark feedId={r.feedId} iconOnly />
                     </td>
                   )}
-                  <td>
+                  <td className="departure-board-route-cell">
                     <RoutePill
                       shortName={r.routeShort}
                       color={r.routeColor}
@@ -323,7 +321,7 @@ export function DepartureTable({
                       href={routePageHref(r.feedId, r.routeId)}
                     />
                   </td>
-                  <td className="min-w-0">
+                  <td className="departure-board-dest-cell">
                     <Link
                       href={m.tripHref}
                       onClick={(e) => e.stopPropagation()}
@@ -334,14 +332,10 @@ export function DepartureTable({
                       {cleanHeadsign(r.destination)}
                     </Link>
                   </td>
-                  <td className="text-right">
-                    <DepartureStatusRow
-                      realtime={r.realtime}
-                      latenessMin={r.latenessMin}
+                  <td className="departure-board-actions-cell text-right">
+                    <DepartureActionLinks
                       tripHref={m.tripHref}
                       vehicleHref={m.vehicleHref}
-                      feedId={r.feedId}
-                      vehicleId={r.vehicleId}
                       onClick={(e) => e.stopPropagation()}
                     />
                   </td>

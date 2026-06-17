@@ -6,7 +6,7 @@ import {
   loadUnionScheduleForBoard,
 } from "./demo-schedule-data";
 import { resolveStopGroupId, TORONTO_UNION_ID } from "./demo-stop-groups";
-import { ensureDemoAssets } from "./demo-assets";
+import { ensureDemoStopAssets } from "./demo-assets";
 
 import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 
@@ -34,7 +34,7 @@ export async function getStopSchedule(
 
   let meta = stop;
   if (!meta) {
-    await ensureDemoAssets();
+    await ensureDemoStopAssets();
     meta = getDemoCore().stops[resolved] as DemoStopMeta | undefined;
   }
   if (!meta) return [];

@@ -2,7 +2,7 @@ import { getGroupedDemoStops } from "./demo-stop-groups";
 import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
 
 export { isDemoMode, useDemoFixtures } from "./demo-mode";
-export { ensureDemoAssets } from "./demo-assets";
+export { ensureDemoAssets, ensureDemoStopAssets } from "./demo-assets";
 
 export type DemoStopMeta = {
   name: string;

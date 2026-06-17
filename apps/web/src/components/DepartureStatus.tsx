@@ -139,12 +139,31 @@ export function DepartureActions({
   );
 }
 
+export function DepartureActionLinks({
+  tripHref,
+  vehicleHref,
+  onClick,
+}: {
+  tripHref?: string;
+  vehicleHref?: string;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <DepartureActions
+      tripHref={tripHref}
+      vehicleHref={vehicleHref}
+      onClick={onClick}
+    />
+  );
+}
+
 export function DepartureStatusRow({
   realtime,
   latenessMin,
   tripHref,
   vehicleHref,
   onClick,
+  part = "all",
 }: {
   realtime: boolean;
   latenessMin?: number;
@@ -154,7 +173,21 @@ export function DepartureStatusRow({
   vehicleId?: string;
   onClick?: (e: React.MouseEvent) => void;
   compact?: boolean;
+  part?: "all" | "live" | "actions";
 }) {
+  if (part === "live") {
+    return <DepartureStatus realtime={realtime} latenessMin={latenessMin} />;
+  }
+  if (part === "actions") {
+    return (
+      <DepartureActions
+        tripHref={tripHref}
+        vehicleHref={vehicleHref}
+        onClick={onClick}
+      />
+    );
+  }
+
   return (
     <div className="departure-status-row flex items-center justify-end gap-1.5">
       <DepartureStatus realtime={realtime} latenessMin={latenessMin} />
