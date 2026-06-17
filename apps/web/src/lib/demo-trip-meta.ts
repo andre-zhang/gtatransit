@@ -102,9 +102,10 @@ export async function loadBlockTrips(
   const idx = await loadBlockIndex(feedId);
   const list = findBlockForTrip(idx, feedId, tripId);
   if (!list || list.length <= 1) return [];
+  const capped = list.length > 50 ? list.slice(0, 50) : list;
 
   const activeIds = [...new Set([activeTripId, tripId, scheduleTripId].filter(Boolean))] as string[];
-  const mapped = list.map((t) => ({
+  const mapped = capped.map((t) => ({
     ...t,
     active: activeIds.some((id) => tripIdsMatch(feedId, t.trip_id, id)),
   }));

@@ -39,6 +39,8 @@ const SHARD_MANIFEST: Record<string, string[]> = {
 };
 
 const shardIndexCache = new Map<string, Record<string, string>>();
+const shardFileCache = new Map<string, Record<string, TripStopRow[]>>();
+const tripStopRowCache = new Map<string, TripStopRow[]>();
 let runtimeShardManifest: Record<string, string[]> | null = null;
 
 function loadRuntimeShardManifest(): Record<string, string[]> {
@@ -292,19 +294,34 @@ export async function loadFeedTripStops(
   return data;
 }
 
+async function readTripStopShard(file: string): Promise<Record<string, TripStopRow[]>> {
+  const hit = shardFileCache.get(file);
+  if (hit) return hit;
+  const part = await readDemoJsonFile<Record<string, TripStopRow[]>>(file);
+  shardFileCache.set(file, part);
+  return part;
+}
+
 /** Load one trip's stop list without merging every trip-stop shard. */
 export async function loadTripStopsForTrip(
   feedId: string,
   tripId: string,
 ): Promise<TripStopRow[]> {
+  const rowKey = `${feedId}:${tripId}`;
+  const rowHit = tripStopRowCache.get(rowKey);
+  if (rowHit) return rowHit;
+
   const files = listShardFiles(`${feedId}-trip-stops`);
   if (!files.length) {
     try {
       const data = await readDemoJsonFile<Record<string, TripStopRow[]>>(
         `${feedId}-trip-stops.json`,
       );
-      return data[tripId] ?? [];
+      const rows = data[tripId] ?? [];
+      tripStopRowCache.set(rowKey, rows);
+      return rows;
     } catch {
+      tripStopRowCache.set(rowKey, []);
       return [];
     }
   }
@@ -313,25 +330,34 @@ export async function loadTripStopsForTrip(
   const index = await loadShardIndex(basename);
   const indexedFile = index[tripId];
   if (indexedFile) {
-    const part = await readDemoJsonFile<Record<string, TripStopRow[]>>(indexedFile);
-    return part[tripId] ?? [];
+    const part = await readTripStopShard(indexedFile);
+    const rows = part[tripId] ?? [];
+    tripStopRowCache.set(rowKey, rows);
+    return rows;
   }
 
   if (feedId === "go") {
     const suffix = goTripSuffix(tripId);
     for (const [key, file] of Object.entries(index)) {
       if (goTripSuffix(key) !== suffix) continue;
-      const part = await readDemoJsonFile<Record<string, TripStopRow[]>>(file);
+      const part = await readTripStopShard(file);
       const rows = part[key];
-      if (rows?.length) return rows;
+      if (rows?.length) {
+        tripStopRowCache.set(rowKey, rows);
+        return rows;
+      }
     }
   }
 
   for (const file of files) {
-    const part = await readDemoJsonFile<Record<string, TripStopRow[]>>(file);
+    const part = await readTripStopShard(file);
     const rows = part[tripId];
-    if (rows?.length) return rows;
+    if (rows?.length) {
+      tripStopRowCache.set(rowKey, rows);
+      return rows;
+    }
   }
+  tripStopRowCache.set(rowKey, []);
   return [];
 }
 

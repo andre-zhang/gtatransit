@@ -1,6 +1,6 @@
 import type { LineString } from "geojson";
 import { formatGtfsDepartureTime } from "./calendar";
-import { ensureDemoAssets, loadDemoAssets } from "./demo-assets";
+import { loadDemoAssets } from "./demo-assets";
 import { routeColor } from "./colors";
 import { loadRouteScheduleRows, loadUnionSchedule } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedules";
@@ -148,7 +148,6 @@ export async function getDemoRouteDetail(
   routeId: string,
   direction: number,
 ) {
-  await ensureDemoAssets();
   await preloadTripHeadsignIndex(feedId);
 
   let meta = findRouteMeta(feedId, routeId);

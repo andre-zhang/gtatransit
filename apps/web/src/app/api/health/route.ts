@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { useDemoFixtures } from "@/lib/demo-mode";
-import { ensureDemoAssets, loadDemoAssets } from "@/lib/demo-assets";
-import { getGoRtStatus, normalizeMetrolinxKey, refreshRtCache } from "@/lib/rt-cache";
+import { ensureDemoStopAssets, loadDemoAssets } from "@/lib/demo-assets";
+import { ensureRtCacheWithin, getGoRtStatus, normalizeMetrolinxKey } from "@/lib/rt-cache";
 import { probeMetrolinxKey } from "@/lib/go-metrolinx-rest";
 
 export async function GET() {
@@ -12,7 +12,7 @@ export async function GET() {
 
   if (demo) {
     try {
-      await ensureDemoAssets();
+      await ensureDemoStopAssets();
       const { core } = loadDemoAssets();
       agencies = core.filterTree.agencies.length;
       stops = Object.keys(core.stops).length;
@@ -21,8 +21,7 @@ export async function GET() {
     }
   }
 
-  await refreshRtCache();
-  const goRt = getGoRtStatus();
+  await ensureRtCacheWithin(3000);  const goRt = getGoRtStatus();
 
   let metrolinxProbe: Awaited<ReturnType<typeof probeMetrolinxKey>> | null = null;
   if (goRt.configured && !goRt.active) {

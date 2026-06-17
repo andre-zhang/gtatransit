@@ -6,6 +6,7 @@ import {
   existsSync,
   readdirSync,
   readFileSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -13,6 +14,8 @@ import { join } from "node:path";
 
 const demoDir = join(process.cwd(), "apps/web/public/demo");
 const MAX_SHARD_BYTES = 4 * 1024 * 1024;
+/** Trip-stop shards are read whole per lookup — keep them small. */
+const MAX_TRIP_STOP_SHARD_BYTES = 2 * 1024 * 1024;
 
 function shardBasename(name) {
   return name.replace(/\.json$/, "");
@@ -61,6 +64,67 @@ function writeShardIndex(basename) {
   console.log(`Wrote ${out} (${Object.keys(index).length} keys, ${files.length} shards)`);
 }
 
+function splitIntoShards(data, basename, maxBytes) {
+  const keys = Object.keys(data);
+  if (!keys.length) return [];
+
+  const shards = [];
+  let batch = {};
+  for (const key of keys) {
+    const next = { ...batch, [key]: data[key] };
+    if (
+      Buffer.byteLength(JSON.stringify(next), "utf8") > maxBytes &&
+      Object.keys(batch).length > 0
+    ) {
+      shards.push(batch);
+      batch = { [key]: data[key] };
+    } else {
+      batch = next;
+    }
+  }
+  if (Object.keys(batch).length) shards.push(batch);
+  return shards;
+}
+
+function writeShards(basename, shards) {
+  for (const file of listShards(basename)) {
+    unlinkSync(join(demoDir, file));
+  }
+  for (let i = 0; i < shards.length; i++) {
+    writeFileSync(
+      join(demoDir, `${basename}.${i}.json`),
+      JSON.stringify(shards[i]),
+    );
+  }
+  console.log(`Sharded ${basename} → ${shards.length} parts`);
+}
+
+/** Re-split when any existing shard still exceeds the byte limit. */
+function reshardIfOversized(basename, maxBytes) {
+  const files = listShards(basename);
+  if (!files.length) return;
+
+  const oversized = files.some(
+    (file) => statSync(join(demoDir, file)).size > maxBytes,
+  );
+  if (!oversized) {
+    console.log(`skip reshard ${basename}: all shards under ${(maxBytes / 1e6).toFixed(1)}MB`);
+    return;
+  }
+
+  console.log(`Resharding ${basename} (oversized shard detected)...`);
+  const merged = {};
+  for (const file of files) {
+    Object.assign(merged, JSON.parse(readFileSync(join(demoDir, file), "utf8")));
+  }
+  const shards = splitIntoShards(merged, basename, maxBytes);
+  if (shards.length <= 1) {
+    console.log(`skip reshard ${basename}: would remain single shard`);
+    return;
+  }
+  writeShards(basename, shards);
+}
+
 function shardMonolith(filename) {
   const path = join(demoDir, filename);
   if (!existsSync(path)) return;
@@ -79,38 +143,14 @@ function shardMonolith(filename) {
   }
 
   const data = JSON.parse(raw);
-  const keys = Object.keys(data);
-  if (!keys.length) return;
-
-  const shards = [];
-  let batch = {};
-  for (const key of keys) {
-    const next = { ...batch, [key]: data[key] };
-    if (
-      Buffer.byteLength(JSON.stringify(next), "utf8") > MAX_SHARD_BYTES &&
-      Object.keys(batch).length > 0
-    ) {
-      shards.push(batch);
-      batch = { [key]: data[key] };
-    } else {
-      batch = next;
-    }
-  }
-  if (Object.keys(batch).length) shards.push(batch);
-
+  const shards = splitIntoShards(data, basename, MAX_SHARD_BYTES);
   if (shards.length <= 1) {
     console.log(`skip shard ${filename}: single shard`);
     return;
   }
 
   unlinkSync(path);
-  for (let i = 0; i < shards.length; i++) {
-    writeFileSync(
-      join(demoDir, `${basename}.${i}.json`),
-      JSON.stringify(shards[i]),
-    );
-  }
-  console.log(`Sharded ${filename} → ${shards.length} parts`);
+  writeShards(basename, shards);
 }
 
 shardMonolith("go-schedules.json");
@@ -125,6 +165,17 @@ shardMonolith("brampton-schedules.json");
 shardMonolith("brampton-trip-stops.json");
 shardMonolith("drt-schedules.json");
 shardMonolith("drt-trip-stops.json");
+
+for (const base of [
+  "ttc-trip-stops",
+  "miway-trip-stops",
+  "yrt-trip-stops",
+  "brampton-trip-stops",
+  "drt-trip-stops",
+  "go-trip-stops",
+]) {
+  reshardIfOversized(base, MAX_TRIP_STOP_SHARD_BYTES);
+}
 
 for (const base of [
   "ttc-schedules",

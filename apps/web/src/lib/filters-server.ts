@@ -1,8 +1,8 @@
 import { getSql } from "@/lib/db";
 import { MODE_LABELS } from "@/lib/colors";
-import { ensureDemoAssets, getDemoCore } from "@/lib/demo";
+import { ensureDemoStopAssets, getDemoCore } from "@/lib/demo";
 import { useDemoFixtures } from "@/lib/demo-mode";
-import { getRtLastUpdatedIso, refreshRtCache } from "@/lib/rt-cache";
+import { ensureRtCacheWithin, getRtLastUpdatedIso } from "@/lib/rt-cache";
 import type { FilterTree } from "@/lib/types";
 
 export async function getFilterTree(): Promise<{
@@ -10,9 +10,9 @@ export async function getFilterTree(): Promise<{
   rtUpdated: string | null;
 }> {
   if (await useDemoFixtures()) {
-    await ensureDemoAssets();
+    await ensureDemoStopAssets();
     const demo = getDemoCore();
-    await refreshRtCache();
+    await ensureRtCacheWithin(3000);
     return {
       tree: demo.filterTree as FilterTree,
       rtUpdated: getRtLastUpdatedIso() ?? demo.rtUpdated,

@@ -11,6 +11,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const gtfsRoot = join(root, "data", "gtfs");
 const outDir = join(root, "apps", "web", "public", "demo");
 const FEEDS = ["go", "up", "miway", "ttc", "brampton", "drt", "yrt"];
+/** Blocks with more trips are usually placeholder GTFS block_ids (e.g. UP assigns one id to all trips). */
+const MAX_BLOCK_TRIPS = 100;
 /** Match demo fixture service day (GO trip ids embed this date). */
 const SERVICE_DATE = process.env.SERVICE_DATE ?? new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
@@ -116,7 +118,7 @@ async function buildBlockIndex(feedId) {
   const blockIndex = {};
   const tripToBlock = {};
   for (const [blockId, list] of blocks) {
-    if (list.length <= 1) continue;
+    if (list.length <= 1 || list.length > MAX_BLOCK_TRIPS) continue;
     list.sort((a, b) => a.first_departure.localeCompare(b.first_departure));
     const compact = list.map((t) => ({
       trip_id: t.trip_id,

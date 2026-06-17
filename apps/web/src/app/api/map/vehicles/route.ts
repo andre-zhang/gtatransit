@@ -14,9 +14,10 @@ export async function GET(req: NextRequest) {
   const { bbox } = mapQueryParams(req.nextUrl.searchParams);
 
   if (await useDemoFixtures()) {
-    const { ensureDemoAssets } = await import("@/lib/demo-assets");
-    await ensureDemoAssets();
-    await refreshRtCache();
+    const { ensureDemoStopAssets } = await import("@/lib/demo-assets");
+    const { ensureRtCacheWithin } = await import("@/lib/rt-cache");
+    await ensureDemoStopAssets();
+    await ensureRtCacheWithin(3000);
     const filters = parseMapFilters(req.nextUrl.searchParams);
     const vehicles = getRtVehicles().filter((v) => vehicleMatchesFilters(v, filters));
     const fc = vehicleCollection(

@@ -1,4 +1,5 @@
-import { ensureDemoAssets } from "./demo";
+import { ensureDemoStopAssets } from "./demo";
+import { ensureDemoAssets } from "./demo-assets";
 import { loadDemoAssets } from "./demo-assets";
 import { getGroupedDemoStops, resolveStopGroupForMember, resolveStopGroupId } from "./demo-stop-groups";
 import { getTripStops } from "./demo-schedules";
@@ -224,9 +225,9 @@ function inferCurrentStopIndex(
 }
 
 export async function getDemoRun(feedId: string, vehicleId: string) {
-  await ensureDemoAssets();
-  const { ensureRtCache } = await import("./rt-cache");
-  await ensureRtCache();
+  await ensureDemoStopAssets();
+  const { ensureRtCacheWithin } = await import("./rt-cache");
+  await ensureRtCacheWithin(2000);
 
   const vehicle = getRtVehicle(feedId, vehicleId);
   if (!vehicle || vehicle.lat == null || vehicle.lon == null) return null;
@@ -234,13 +235,15 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
   const liveTripId = vehicle.tripId;
   const tripRt = liveTripId ? getTripRt(feedId, liveTripId) : undefined;
   const routeId = vehicle.routeId ?? tripRt?.routeId;
-  const shape = findShape(feedId, routeId);
 
   const [, route, resolved] = await Promise.all([
     preloadTripHeadsignIndex(feedId),
     findRouteMeta(feedId, routeId),
     liveTripId ? resolveScheduleTrip(feedId, liveTripId) : Promise.resolve(undefined),
+    ensureDemoAssets(),
   ]);
+
+  const shape = findShape(feedId, routeId);
 
   const scheduleTrip = resolved?.row;
   const scheduleTripId = scheduleTrip?.tripId;
