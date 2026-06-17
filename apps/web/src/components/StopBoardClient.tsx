@@ -12,41 +12,62 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
   const [error, setError] = useState<string | null>(null);
   const rowsRef = useRef<DepartureRow[]>([]);
 
-  const load = useCallback(async (opts?: { background?: boolean }) => {
-    if (opts?.background) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-    try {
-      const res = await fetch(`/api/stops/${encodeURIComponent(groupId)}/departures`, {
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        setError("Could not load departures.");
-        return;
+  const load = useCallback(
+    async (opts?: { background?: boolean; quick?: boolean }) => {
+      const isQuick = opts?.quick === true;
+      const isBackground = opts?.background === true;
+
+      if (isBackground) {
+        setRefreshing(true);
+      } else if (!isQuick) {
+        setLoading(true);
       }
-      const data = (await res.json()) as { name: string; rows: DepartureRow[] };
-      setName(data.name || "Stop");
-      setRows(data.rows);
-      rowsRef.current = data.rows;
-      setError(null);
-    } catch {
-      setError("Could not load departures.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [groupId]);
+
+      try {
+        const url = `/api/stops/${encodeURIComponent(groupId)}/departures${
+          isQuick ? "?quick=1" : ""
+        }`;
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) {
+          if (!isBackground && rowsRef.current.length === 0) {
+            setError("Could not load departures.");
+          }
+          return;
+        }
+        const data = (await res.json()) as { name: string; rows: DepartureRow[] };
+        setName(data.name || "Stop");
+        setRows(data.rows);
+        rowsRef.current = data.rows;
+        setError(null);
+      } catch {
+        if (!isBackground && rowsRef.current.length === 0) {
+          setError("Could not load departures.");
+        }
+      } finally {
+        if (isBackground) {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    [groupId],
+  );
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      setLoading(true);
+      await load({ quick: true });
+      void load({ background: true });
+    })();
   }, [load]);
 
   useEffect(() => {
     const id = setInterval(() => void load({ background: true }), 20_000);
     return () => clearInterval(id);
   }, [load]);
+
+  const showTable = !error && (rows.length > 0 || !loading);
 
   return (
     <>
@@ -58,15 +79,13 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
               {loading
                 ? "Loading departures…"
                 : refreshing
-                  ? "Updating…"
+                  ? "Updating live times…"
                   : " "}
             </span>
             {error && <span className="text-go-late">{error}</span>}
           </div>
         )}
-        {!loading && !error && (
-          <DepartureTable rows={rows} stopName={name} />
-        )}
+        {showTable && <DepartureTable rows={rows} stopName={name} />}
       </div>
     </>
   );

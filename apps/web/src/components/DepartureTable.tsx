@@ -6,7 +6,6 @@ import { cleanHeadsign } from "@/lib/headsign";
 import { routePageHref, runPageHref, tripPageHref } from "@/lib/detail-href";
 import { AgencyMark } from "./AgencyMark";
 import { DepartureStatusRow } from "./DepartureStatus";
-import { LiveIcon } from "./LiveIcon";
 import { PageEmpty } from "./PageEmpty";
 import { RoutePill } from "./RoutePill";
 import { TimePair } from "./TimePair";
@@ -197,9 +196,6 @@ export function DepartureTable({
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <div className="flex w-[3.75rem] shrink-0 items-center justify-end gap-1">
-                      {r.realtime && (
-                        <LiveIcon className="h-3 w-3 shrink-0 text-go-green" title="Live" />
-                      )}
                       <TimePair
                         scheduled={r.time}
                         predicted={m.showStruck ? r.predicted : undefined}
@@ -290,9 +286,6 @@ export function DepartureTable({
                 >
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      {r.realtime && (
-                        <LiveIcon className="h-3.5 w-3.5 shrink-0 text-go-green" title="Live" />
-                      )}
                       <TimePair
                         scheduled={r.time}
                         predicted={m.showStruck ? r.predicted : undefined}

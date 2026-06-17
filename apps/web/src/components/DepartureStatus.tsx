@@ -1,41 +1,6 @@
 import Link from "next/link";
 import { formatDelayLabel, isPlausibleDelayMin } from "@/lib/delay-label";
-import { VehicleLink } from "./VehicleLink";
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-function ClockIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </svg>
-  );
-}
+import { LiveIcon } from "./LiveIcon";
 
 function BusIcon({ className }: { className?: string }) {
   return (
@@ -77,55 +42,63 @@ function RouteIcon({ className }: { className?: string }) {
   );
 }
 
+function ScheduledIcon({ className, title }: { className?: string; title?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={title ? undefined : true}
+      role={title ? "img" : undefined}
+    >
+      {title ? <title>{title}</title> : null}
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 0 1 3.5 3.5" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+function statusTitle(realtime: boolean, latenessMin?: number): string {
+  if (!realtime) return "Scheduled";
+  const label = formatDelayLabel(latenessMin);
+  const late = isPlausibleDelayMin(latenessMin) && latenessMin! > 0;
+  const early = isPlausibleDelayMin(latenessMin) && latenessMin! < 0;
+  if (late) return label ?? "Late";
+  if (early) return label ?? "Early";
+  return "On time";
+}
+
+/** Icon-only status: grey ? when scheduled, green live arcs when on time/early, red when late. */
 export function DepartureStatus({
   realtime,
   latenessMin,
-  compact,
 }: {
   realtime: boolean;
   latenessMin?: number;
   compact?: boolean;
 }) {
-  const label = formatDelayLabel(latenessMin);
-  const late = isPlausibleDelayMin(latenessMin) && latenessMin! > 0;
-  const early = isPlausibleDelayMin(latenessMin) && latenessMin! < 0;
-  const onTime = realtime && latenessMin === 0;
-  const scheduled = !realtime;
-
-  let badgeClass = "go-badge go-badge--sched";
-  let icon = <ClockIcon className="h-3 w-3 shrink-0 opacity-80" />;
-  let text = "Scheduled";
-
-  if (late) {
-    badgeClass = "go-badge go-badge--late";
-    icon = <ClockIcon className="h-3 w-3 shrink-0" />;
-    text = label ?? "Late";
-  } else if (early) {
-    badgeClass = "go-badge go-badge--early";
-    icon = <ClockIcon className="h-3 w-3 shrink-0" />;
-    text = label ?? "Early";
-  } else if (onTime) {
-    badgeClass = "go-badge go-badge--ontime";
-    icon = <CheckIcon className="h-3 w-3 shrink-0" />;
-    text = "On time";
-  }
-
-  if (scheduled && !realtime) {
+  if (!realtime) {
     return (
-      <span className={`${badgeClass} inline-flex items-center gap-1 whitespace-nowrap`}>
-        {icon}
-        {!compact && <span>{text}</span>}
-      </span>
+      <ScheduledIcon
+        className="h-4 w-4 shrink-0 text-go-slate"
+        title={statusTitle(false)}
+      />
     );
   }
 
-  if (!late && !early && !onTime) return null;
+  const late = isPlausibleDelayMin(latenessMin) && latenessMin! > 0;
+  const colorClass = late ? "text-go-late" : "text-[#007934]";
 
   return (
-    <span className={`${badgeClass} inline-flex items-center gap-1 whitespace-nowrap`}>
-      {icon}
-      {!compact && <span>{text}</span>}
-    </span>
+    <LiveIcon
+      className={`h-4 w-4 shrink-0 ${colorClass}`}
+      title={statusTitle(realtime, latenessMin)}
+    />
   );
 }
 
@@ -171,10 +144,7 @@ export function DepartureStatusRow({
   latenessMin,
   tripHref,
   vehicleHref,
-  feedId,
-  vehicleId,
   onClick,
-  compact,
 }: {
   realtime: boolean;
   latenessMin?: number;
@@ -187,19 +157,7 @@ export function DepartureStatusRow({
 }) {
   return (
     <div className="departure-status-row flex items-center justify-end gap-1.5">
-      <DepartureStatus
-        realtime={realtime}
-        latenessMin={latenessMin}
-        compact={compact}
-      />
-      {vehicleHref && feedId && vehicleId && (
-        <VehicleLink
-          feedId={feedId}
-          vehicleId={vehicleId}
-          className="text-xs font-bold text-go-slate hover:text-go-green"
-          onClick={onClick}
-        />
-      )}
+      <DepartureStatus realtime={realtime} latenessMin={latenessMin} />
       <DepartureActions
         tripHref={tripHref}
         vehicleHref={vehicleHref}

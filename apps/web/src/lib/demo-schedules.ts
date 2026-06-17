@@ -22,19 +22,25 @@ async function rowsForMember(feedId: string, stopId: string): Promise<ScheduleRo
   return union.filter((r) => r.feedId === feedId && r.stopId === stopId);
 }
 
-export async function getStopSchedule(groupId: string): Promise<ScheduleRow[]> {
-  await ensureDemoAssets();
+export async function getStopSchedule(
+  groupId: string,
+  stop?: DemoStopMeta | null,
+): Promise<ScheduleRow[]> {
   const resolved = resolveStopGroupId(groupId);
   if (resolved === TORONTO_UNION_ID) {
-    const hub = getDemoCore().stops[TORONTO_UNION_ID];
-    return loadUnionScheduleForBoard(hub?.members ?? [{ feedId: "go", stopId: "UN" }]);
+    const members = stop?.members ?? [{ feedId: "go", stopId: "UN" }];
+    return loadUnionScheduleForBoard(members);
   }
 
-  const stop = getDemoCore().stops[resolved] as DemoStopMeta | undefined;
-  if (!stop) return [];
+  let meta = stop;
+  if (!meta) {
+    await ensureDemoAssets();
+    meta = getDemoCore().stops[resolved] as DemoStopMeta | undefined;
+  }
+  if (!meta) return [];
 
   const rows = (
-    await Promise.all(stop.members.map((m) => rowsForMember(m.feedId, m.stopId)))
+    await Promise.all(meta.members.map((m) => rowsForMember(m.feedId, m.stopId)))
   ).flat();
   return rows;
 }

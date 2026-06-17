@@ -743,6 +743,15 @@ export async function ensureRtCache(force = false): Promise<void> {
   await refreshRtCache(force);
 }
 
+/** Wait for RT refresh but don't block the board longer than maxMs. */
+export async function ensureRtCacheWithin(maxMs: number, force = false): Promise<void> {
+  if (!force && isRtCacheWarm()) return;
+  await Promise.race([
+    ensureRtCache(force),
+    new Promise<void>((resolve) => setTimeout(resolve, maxMs)),
+  ]);
+}
+
 /** ISO timestamp of the most recent successful RT poll (for UI freshness). */
 export function getRtLastUpdatedIso(): string | null {
   const ts = Math.max(goRtLastOk, lastRefresh);

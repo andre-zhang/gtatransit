@@ -14,9 +14,10 @@ import {
   unixToTorontoSec,
 } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
-import { getDemoCore } from "@/lib/demo";
 import type { DemoStopMeta } from "@/lib/demo";
 import type { ScheduleRow } from "@/lib/demo-schedule-types";
+import { readDemoJsonFile } from "@/lib/demo-read";
+import type { FilterTree } from "@/lib/types";
 import {
   needsHeadsignLookup,
   preloadTripHeadsignIndex,
@@ -27,12 +28,11 @@ import { routesMatch, routeTail } from "@/lib/route-match";
 import {
   getRtPredictionsForStop,
   mergeRtIntoDeparture,
-  normalizeMetrolinxKey,
-  ensureRtCache,
+  ensureRtCacheWithin,
+  isRtCacheWarm,
   type RtStopPrediction,
 } from "@/lib/rt-cache";
 import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
-import { fetchGoNextService } from "@/lib/go-metrolinx-rest";
 import { cleanHeadsign } from "@/lib/headsign";
 import { resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
 
@@ -61,9 +61,22 @@ function filterScheduleToBoardWindow(schedule: ScheduleRow[]): ScheduleRow[] {
   return upcoming;
 }
 
-function routeMetaFromCore(feedId: string, routeId: string | undefined) {
+let fixturesTree: FilterTree | null = null;
+
+async function loadFixturesTree(): Promise<FilterTree> {
+  if (fixturesTree) return fixturesTree;
+  const core = await readDemoJsonFile<{ filterTree: FilterTree }>("fixtures.json");
+  fixturesTree = core.filterTree;
+  return fixturesTree;
+}
+
+function routeMetaFromTree(
+  tree: FilterTree,
+  feedId: string,
+  routeId: string | undefined,
+) {
   if (!routeId) return null;
-  for (const agency of getDemoCore().filterTree.agencies) {
+  for (const agency of tree.agencies) {
     if (agency.id !== feedId) continue;
     for (const mode of agency.modes) {
       const r = mode.routes.find((x) => x.id === routeId || x.shortName === routeId);
@@ -77,6 +90,31 @@ function routeMetaFromCore(feedId: string, routeId: string | undefined) {
     }
   }
   return null;
+}
+
+function scheduleRowsToInputs(schedule: ScheduleRow[]): DepartureInput[] {
+  return schedule.map((r) => ({
+    tripId: r.tripId,
+    scheduleTripId: r.tripId,
+    feedId: r.feedId,
+    routeId: r.routeId,
+    routeShort: r.routeShort,
+    routeColor: r.routeColor,
+    destination: cleanHeadsign(r.headsign),
+    departureTime: r.departureTime,
+    stopId: r.stopId,
+    realtime: false,
+  }));
+}
+
+async function loadBoardSchedule(groupId: string, stop: DemoStopMeta) {
+  const rawSchedule = await getStopSchedule(groupId, stop);
+  return filterScheduleToBoardWindow(scheduleForMembers(rawSchedule, stop.members));
+}
+
+function routeMetaFromCore(feedId: string, routeId: string | undefined) {
+  if (!routeId || !fixturesTree) return null;
+  return routeMetaFromTree(fixturesTree, feedId, routeId);
 }
 
 function rtPredictionToDeparture(
@@ -161,16 +199,6 @@ function rtPredictionToDeparture(
   };
 }
 
-function recordGoPlatform(
-  platformByRouteSec: Map<string, string>,
-  routeShort: string,
-  predictedSec: number,
-  platform: string | undefined,
-) {
-  if (!platform) return;
-  platformByRouteSec.set(`${routeShort}:${predictedSec}`, platform);
-}
-
 function enrichGoPlatforms(
   rows: DepartureInput[],
   platformByRouteSec: Map<string, string>,
@@ -223,20 +251,20 @@ function enrichGoPlatforms(
   });
 }
 
-export async function buildDemoStopDepartures(
-  groupId: string,
-  stop: DemoStopMeta,
-): Promise<{ name: string; rows: DepartureRowOut[] }> {
-  const usedRtTrips = new Set<string>();
-
-  await ensureRtCache();
-  const rawSchedule = await getStopSchedule(groupId);
-  const schedule = filterScheduleToBoardWindow(scheduleForMembers(rawSchedule, stop.members));
+async function buildRtStopIdMaps(stop: DemoStopMeta) {
   const rtStopIdsByFeed = new Map<string, string[]>();
+  const ttcRtByStopId = new Map<string, string[]>();
+  let ttcRtIds: string[] | null = null;
 
   for (const m of stop.members) {
     if (m.feedId === "ttc") {
-      rtStopIdsByFeed.set("ttc", await resolveTtcRtStopIds(stop.members));
+      if (!ttcRtIds) {
+        ttcRtIds = await resolveTtcRtStopIds(stop.members.filter((x) => x.feedId === "ttc"));
+        rtStopIdsByFeed.set("ttc", ttcRtIds);
+      }
+      if (!ttcRtByStopId.has(m.stopId)) {
+        ttcRtByStopId.set(m.stopId, await resolveTtcRtStopIds([m]));
+      }
     } else if (m.feedId === "go" && !rtStopIdsByFeed.has("go")) {
       const ids = new Set<string>();
       for (const x of stop.members.filter((x) => x.feedId === "go")) {
@@ -251,71 +279,56 @@ export async function buildDemoStopDepartures(
     }
   }
 
-  const inputs: DepartureInput[] = [];
+  return {
+    rtStopIdsByFeed,
+    ttcRtByStopId,
+    allowedTtcRtStopIds: new Set(ttcRtIds ?? []),
+  };
+}
 
-  const allowedTtcRtStopIds = new Set(
-    await resolveTtcRtStopIds(stop.members.filter((m) => m.feedId === "ttc")),
-  );
+export async function buildDemoStopDepartures(
+  groupId: string,
+  stop: DemoStopMeta,
+  opts?: { quick?: boolean },
+): Promise<{ name: string; rows: DepartureRowOut[] }> {
+  const schedule = await loadBoardSchedule(groupId, stop);
 
-  for (const [feedId, rtStopIds] of rtStopIdsByFeed) {
-    for (const extra of getRtPredictionsForStop(feedId, rtStopIds, new Set())) {
-      if (feedId === "ttc" && !allowedTtcRtStopIds.has(extra.stopId)) {
-        continue;
-      }
-      const alreadyScheduled = schedule.some(
-        (s) =>
-          s.feedId === extra.feedId &&
-          (s.tripId === extra.tripId ||
-            (extra.feedId === "go" && goTripsMatch(s.tripId, extra.tripId))),
-      );
-      if (alreadyScheduled) continue;
-      const row = rtPredictionToDeparture(extra, schedule);
-      if (!row) continue;
-      usedRtTrips.add(`${row.feedId}:${row.tripId}`);
-      inputs.push(row);
-    }
+  if (opts?.quick) {
+    return {
+      name: stop.name,
+      rows: filterUpcomingDepartures(scheduleRowsToInputs(schedule)),
+    };
   }
 
-  const goKey = normalizeMetrolinxKey(process.env.METROLINX_API_KEY);
-  const goPlatformByRouteSec = new Map<string, string>();
-  if (goKey && rtStopIdsByFeed.has("go")) {
-    const goCodes = new Set<string>();
-    for (const id of rtStopIdsByFeed.get("go") ?? []) {
-      for (const code of expandGoStopId(id)) goCodes.add(code);
-    }
-    const restRows = await Promise.all(
-      [...goCodes].map((stopCode) => fetchGoNextService(stopCode, goKey)),
-    );
-    for (const { rows: liveRows } of restRows) {
-      for (const live of liveRows) {
-        recordGoPlatform(
-          goPlatformByRouteSec,
-          live.routeShort,
-          live.predictedSec,
-          live.platform,
+  await loadFixturesTree();
+  const usedRtTrips = new Set<string>();
+
+  await ensureRtCacheWithin(8000);
+  const { rtStopIdsByFeed, ttcRtByStopId, allowedTtcRtStopIds } =
+    await buildRtStopIdMaps(stop);
+
+  const inputs: DepartureInput[] = [];
+
+  if (isRtCacheWarm()) {
+    for (const [feedId, rtStopIds] of rtStopIdsByFeed) {
+      for (const extra of getRtPredictionsForStop(feedId, rtStopIds, new Set())) {
+        if (feedId === "ttc" && !allowedTtcRtStopIds.has(extra.stopId)) continue;
+        const alreadyScheduled = schedule.some(
+          (s) =>
+            s.feedId === extra.feedId &&
+            (s.tripId === extra.tripId ||
+              (extra.feedId === "go" && goTripsMatch(s.tripId, extra.tripId))),
         );
-        if (usedRtTrips.has(`go:${live.tripId}`) || usedRtTrips.has(live.tripId)) continue;
-        const pred: RtStopPrediction = {
-          feedId: "go",
-          tripId: live.tripId,
-          stopId: live.stopId,
-          routeId: live.routeShort,
-          predictedSec: live.predictedSec,
-          platform: live.platform,
-        };
-        const row = rtPredictionToDeparture(pred, schedule);
+        if (alreadyScheduled) continue;
+        const row = rtPredictionToDeparture(extra, schedule);
         if (!row) continue;
-        usedRtTrips.add(`go:${row.tripId}`);
+        usedRtTrips.add(`${row.feedId}:${row.tripId}`);
         inputs.push(row);
       }
     }
   }
 
-  const ttcRtByStopId = new Map<string, string[]>();
-  for (const m of stop.members.filter((x) => x.feedId === "ttc")) {
-    if (ttcRtByStopId.has(m.stopId)) continue;
-    ttcRtByStopId.set(m.stopId, await resolveTtcRtStopIds([m]));
-  }
+  const goPlatformByRouteSec = new Map<string, string>();
 
   for (const r of schedule) {
     const rtIds =
@@ -325,18 +338,13 @@ export async function buildDemoStopDepartures(
           ? resolveGoRtStopIds(r.stopId, stop.members)
           : [r.stopId];
     const schedSec = gtfsTimeToSec(r.departureTime);
-    const rt = mergeRtIntoDeparture(
-      r.feedId,
-      r.tripId,
-      r.stopId,
-      schedSec,
-      rtIds,
-      {
-        routeId: r.routeId,
-        routeShort: r.routeShort,
-        usedRtTrips,
-      },
-    );
+    const rt = isRtCacheWarm()
+      ? mergeRtIntoDeparture(r.feedId, r.tripId, r.stopId, schedSec, rtIds, {
+          routeId: r.routeId,
+          routeShort: r.routeShort,
+          usedRtTrips,
+        })
+      : { liveTripId: undefined, delaySec: undefined, predictedSec: undefined, realtime: false, platform: undefined, vehicleId: undefined };
     inputs.push({
       tripId: rt.liveTripId ?? r.tripId,
       scheduleTripId: r.tripId,
@@ -378,21 +386,22 @@ export async function buildDemoStopDepartures(
     if (headsignFromSchedule(row)) continue;
     if (row.realtime || needsHeadsignLookup(row.destination)) {
       if (!missingByFeed.has(row.feedId)) missingByFeed.set(row.feedId, new Set());
-      const lookupId = row.scheduleTripId ?? row.tripId;
-      missingByFeed.get(row.feedId)!.add(lookupId);
+      missingByFeed.get(row.feedId)!.add(row.scheduleTripId ?? row.tripId);
     }
   }
 
   const resolved = new Map<string, string | null>();
-  await Promise.all(
-    [...missingByFeed.entries()].map(async ([feedId, tripIds]) => {
-      await preloadTripHeadsignIndex(feedId);
-      const hits = await tripHeadsigns(feedId, [...tripIds]);
-      for (const [tripId, hs] of hits) {
-        resolved.set(`${feedId}:${tripId}`, hs);
-      }
-    }),
-  );
+  if (missingByFeed.size) {
+    await Promise.all(
+      [...missingByFeed.entries()].map(async ([feedId, tripIds]) => {
+        await preloadTripHeadsignIndex(feedId);
+        const hits = await tripHeadsigns(feedId, [...tripIds]);
+        for (const [tripId, hs] of hits) {
+          resolved.set(`${feedId}:${tripId}`, hs);
+        }
+      }),
+    );
+  }
 
   const withHeadsigns = deduped.map((row) => {
     const hs =

@@ -7,27 +7,32 @@ import {
 } from "@/lib/departures";
 import { activeServiceSql, secToTime, serviceDate } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
-import { getDemoCore, useDemoFixtures } from "@/lib/demo";
+import { useDemoFixtures } from "@/lib/demo";
+import { loadDemoStopMeta } from "@/lib/demo-stop-meta";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
 import { buildDemoStopDepartures } from "@/lib/stop-departures";
+import { getCachedStopBoard, setCachedStopBoard } from "@/lib/stop-board-cache";
 import { ensureRtCache, mergeRtIntoDeparture } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ groupId: string }> },
 ) {
   const { groupId } = await params;
+  const quick = req.nextUrl.searchParams.get("quick") === "1";
 
   if (await useDemoFixtures()) {
-    const { ensureDemoAssets } = await import("@/lib/demo-assets");
-    await ensureDemoAssets();
     const resolved = resolveStopGroupId(groupId);
-    const stop = getDemoCore().stops[resolved];
+    const cached = getCachedStopBoard(resolved, quick);
+    if (cached) return NextResponse.json(cached);
+
+    const stop = await loadDemoStopMeta(resolved);
     if (!stop) return NextResponse.json({ name: "Stop", rows: [] });
 
-    const board = await buildDemoStopDepartures(resolved, stop);
+    const board = await buildDemoStopDepartures(resolved, stop, { quick });
+    setCachedStopBoard(resolved, quick, board);
     return NextResponse.json(board);
   }
 
