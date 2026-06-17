@@ -10,6 +10,7 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const rowsRef = useRef<DepartureRow[]>([]);
 
   const load = useCallback(
@@ -46,10 +47,12 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
       } finally {
         if (isBackground) {
           setRefreshing(false);
+          setInitialLoadDone(true);
         }
         if (!isBackground || rowsRef.current.length === 0) {
           setLoading(false);
         }
+        if (!isQuick) setInitialLoadDone(true);
       }
     },
     [groupId],
@@ -68,7 +71,7 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
     return () => clearInterval(id);
   }, [load]);
 
-  const showTable = !error && (rows.length > 0 || !loading);
+  const showTable = !error && (rows.length > 0 || (initialLoadDone && !loading));
 
   return (
     <>

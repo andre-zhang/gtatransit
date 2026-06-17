@@ -130,11 +130,29 @@ async function buildBlockIndex(feedId) {
     for (const t of compact) tripToBlock[t.trip_id] = blockId;
   }
 
-  const payload = { blocks: blockIndex, tripToBlock };
+  const payload = { tripToBlock };
+  writeFileSync(join(outDir, `${feedId}-trip-to-block.json`), JSON.stringify(payload.tripToBlock));
+
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const blocksDir = join(outDir, `${feedId}-blocks`);
+  try {
+    rmSync(blocksDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  mkdirSync(blocksDir, { recursive: true });
+  for (const [blockId, compact] of Object.entries(blockIndex)) {
+    const safe = Buffer.from(blockId, "utf8").toString("base64url");
+    writeFileSync(join(blocksDir, `${safe}.json`), JSON.stringify(compact));
+  }
+
+  const legacyPayload = { blocks: blockIndex, tripToBlock };
   const outPath = join(outDir, `${feedId}-block-index.json`);
-  writeFileSync(outPath, JSON.stringify(payload));
-  const kb = Math.round(JSON.stringify(payload).length / 1024);
-  console.log(`${feedId}: ${Object.keys(blockIndex).length} blocks (~${kb} KB)`);
+  writeFileSync(outPath, JSON.stringify(legacyPayload));
+  const kb = Math.round(JSON.stringify(legacyPayload).length / 1024);
+  console.log(
+    `${feedId}: ${Object.keys(blockIndex).length} blocks (~${kb} KB legacy, ${Object.keys(tripToBlock).length} trip lookups)`,
+  );
 }
 
 for (const feedId of FEEDS) {

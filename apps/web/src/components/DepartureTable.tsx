@@ -102,7 +102,12 @@ function TripStopsPanel({
       {stops.map((s, i) => (
         <li key={`${s.stopId}-${i}`} className="flex items-center gap-2 px-3 py-2.5 text-sm sm:gap-3 sm:px-5">
           <span className="w-12 shrink-0 sm:w-14">
-            <TimePair scheduled={s.scheduled} predicted={s.predicted} size="sm" />
+            <TimePair
+              scheduled={s.scheduled}
+              predicted={s.predicted}
+              live={s.predicted != null && s.predicted !== s.scheduled}
+              size="sm"
+            />
           </span>
           {s.groupId ? (
             <Link
@@ -150,7 +155,8 @@ export function DepartureTable({
     const dayLabel =
       dayOffset === 1 ? "Tomorrow" : dayOffset > 1 ? `+${dayOffset} days` : null;
     const displayTime = r.predicted ?? r.time;
-    const showStruck = r.realtime && r.predicted != null && r.predicted !== r.time;
+    const showStruck = r.realtime;
+    const predictedDisplay = r.realtime ? (r.predicted ?? r.time) : undefined;
     const rowKey = `${r.tripId}-${i}`;
     const isOpen = expanded === rowKey;
     const tripHref = tripPageHref(r.feedId, r.tripId, {
@@ -172,6 +178,7 @@ export function DepartureTable({
       tripHref,
       vehicleHref,
       showStruck,
+      predictedDisplay,
     };
   };
 
@@ -201,7 +208,8 @@ export function DepartureTable({
                       />
                       <TimePair
                         scheduled={r.time}
-                        predicted={m.showStruck ? r.predicted : undefined}
+                        predicted={m.predictedDisplay}
+                        live={r.realtime}
                         size="sm"
                         align="right"
                       />
@@ -296,7 +304,8 @@ export function DepartureTable({
                       />
                       <TimePair
                         scheduled={r.time}
-                        predicted={m.showStruck ? r.predicted : undefined}
+                        predicted={m.predictedDisplay}
+                        live={r.realtime}
                         size="sm"
                         align="right"
                       />

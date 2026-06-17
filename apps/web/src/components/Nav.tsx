@@ -1,10 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { LiveIcon } from "./LiveIcon";
 
 export function Nav({
-  rtUpdated,
   demo,
 }: {
   rtUpdated?: string | null;
@@ -20,12 +18,6 @@ export function Nav({
         {demo && (
           <span className="border border-white/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/90">
             Demo
-          </span>
-        )}
-        {rtUpdated && (
-          <span className="flex items-center gap-1.5 text-xs font-medium text-white/80 tabular-nums">
-            <LiveIcon className="h-3.5 w-3.5 shrink-0" title="Live data" />
-            {rtUpdated}
           </span>
         )}
       </div>

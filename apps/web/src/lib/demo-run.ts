@@ -21,7 +21,6 @@ import {
 } from "./calendar";
 import type { ScheduleRow } from "./demo-schedule-types";
 import { needsHeadsignLookup, preloadTripHeadsignIndex, tripHeadsign, headsignFromWarmIndex } from "./demo-trip-headsign";
-import { resolveVehicleBlock } from "./demo-trip-meta";
 import { liveStopDisplayName, mapFixtureStopsToRt, resolveTtcRtStopIds } from "./ttc-stop-registry";
 import {
   getRtVehicle,
@@ -260,7 +259,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     route?.long_name ??
     null;
 
-  const [allUpcoming, blockResult] = await Promise.all([
+  const [allUpcoming] = await Promise.all([
     liveTripId
       ? buildUpcomingStops(
           feedId,
@@ -270,17 +269,18 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
           vehicle.currentStopSequence,
         )
       : Promise.resolve([] as UpcomingStop[]),
-    liveTripId || scheduleTripId
-      ? resolveVehicleBlock(feedId, liveTripId, scheduleTripId)
-      : Promise.resolve({
-          blockId: null as string | null,
-          blockTrips: [] as Awaited<ReturnType<typeof resolveVehicleBlock>>["blockTrips"],
-          blockStart: null as string | null,
-          blockEnd: null as string | null,
-        }),
   ]);
 
-  const { blockId, blockTrips, blockStart, blockEnd } = blockResult;
+  const blockId = null;
+  const blockTrips: Array<{
+    trip_id: string;
+    headsign: string | null;
+    first_departure: string;
+    last_departure?: string;
+    active: boolean;
+  }> = [];
+  const blockStart = null;
+  const blockEnd = null;
 
   const currentIdx = inferCurrentStopIndex(
     allUpcoming,

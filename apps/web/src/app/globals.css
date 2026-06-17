@@ -388,9 +388,10 @@ body {
   grid-column: 1;
   grid-row: 1;
   display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.25rem;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.125rem;
   flex-shrink: 0;
 }
 
@@ -433,6 +434,7 @@ body {
     grid-column: 1;
     grid-row: 1;
     justify-content: flex-start;
+    align-items: flex-start;
   }
 
   .departure-board-card-status {

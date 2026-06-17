@@ -22,21 +22,71 @@ export type BlockTripRow = {
   active: boolean;
 };
 
-const cache = new Map<string, BlockIndex>();
+const legacyIndexCache = new Map<string, BlockIndex>();
+const tripToBlockCache = new Map<string, Record<string, string>>();
+const blockListCache = new Map<string, BlockTrip[]>();
 
-async function loadBlockIndex(feedId: string): Promise<BlockIndex> {
-  const hit = cache.get(feedId);
+function blockFileName(blockId: string): string {
+  return `${Buffer.from(blockId, "utf8").toString("base64url")}.json`;
+}
+
+async function loadTripToBlock(feedId: string): Promise<Record<string, string>> {
+  const hit = tripToBlockCache.get(feedId);
   if (hit) return hit;
 
   try {
-    const data = await readDemoJsonFile<BlockIndex>(`${feedId}-block-index.json`);
-    cache.set(feedId, data);
-    return data;
+    const map = await readDemoJsonFile<Record<string, string>>(
+      `${feedId}-trip-to-block.json`,
+    );
+    tripToBlockCache.set(feedId, map);
+    return map;
   } catch {
-    const empty = { blocks: {} };
-    cache.set(feedId, empty);
+    /* fall through */
+  }
+
+  try {
+    const legacy = await readDemoJsonFile<BlockIndex>(`${feedId}-block-index.json`);
+    legacyIndexCache.set(feedId, legacy);
+    const map = legacy.tripToBlock ?? {};
+    tripToBlockCache.set(feedId, map);
+    return map;
+  } catch {
+    const empty = {};
+    tripToBlockCache.set(feedId, empty);
     return empty;
   }
+}
+
+async function loadBlockList(
+  feedId: string,
+  blockId: string,
+): Promise<BlockTrip[] | undefined> {
+  const cacheKey = `${feedId}:${blockId}`;
+  const hit = blockListCache.get(cacheKey);
+  if (hit) return hit;
+
+  try {
+    const list = await readDemoJsonFile<BlockTrip[]>(
+      `${feedId}-blocks/${blockFileName(blockId)}`,
+    );
+    blockListCache.set(cacheKey, list);
+    return list;
+  } catch {
+    /* fall through */
+  }
+
+  let legacy = legacyIndexCache.get(feedId);
+  if (!legacy) {
+    try {
+      legacy = await readDemoJsonFile<BlockIndex>(`${feedId}-block-index.json`);
+      legacyIndexCache.set(feedId, legacy);
+    } catch {
+      return undefined;
+    }
+  }
+  const list = legacy.blocks[blockId];
+  if (list) blockListCache.set(cacheKey, list);
+  return list;
 }
 
 function tripIdsMatch(feedId: string, a: string, b: string): boolean {
@@ -45,24 +95,25 @@ function tripIdsMatch(feedId: string, a: string, b: string): boolean {
   return false;
 }
 
-function findBlockForTrip(
-  idx: BlockIndex,
+async function findBlockForTrip(
   feedId: string,
   tripId: string,
-): BlockTrip[] | undefined {
-  const blockId = idx.tripToBlock?.[tripId];
-  if (blockId && idx.blocks[blockId]) return idx.blocks[blockId];
-
-  for (const list of Object.values(idx.blocks)) {
-    if (list.some((t) => tripIdsMatch(feedId, t.trip_id, tripId))) {
-      return list;
-    }
-  }
+): Promise<BlockTrip[] | undefined> {
+  const tripToBlock = await loadTripToBlock(feedId);
+  const blockId = tripToBlock[tripId];
+  if (blockId) return loadBlockList(feedId, blockId);
 
   if (feedId === "go") {
     const suffix = goTripSuffix(tripId);
-    for (const [tid, bid] of Object.entries(idx.tripToBlock ?? {})) {
-      if (goTripSuffix(tid) === suffix && idx.blocks[bid]) return idx.blocks[bid];
+    for (const [tid, bid] of Object.entries(tripToBlock)) {
+      if (goTripSuffix(tid) === suffix) return loadBlockList(feedId, bid);
+    }
+  }
+
+  const legacy = legacyIndexCache.get(feedId);
+  if (legacy?.blocks) {
+    for (const list of Object.values(legacy.blocks)) {
+      if (list.some((t) => tripIdsMatch(feedId, t.trip_id, tripId))) return list;
     }
   }
 
@@ -73,19 +124,13 @@ export async function loadFeedTripMeta(
   feedId: string,
   tripId: string,
 ): Promise<{ blockId: string | null }> {
-  const idx = await loadBlockIndex(feedId);
-  const mapped = idx.tripToBlock?.[tripId];
+  const tripToBlock = await loadTripToBlock(feedId);
+  const mapped = tripToBlock[tripId];
   if (mapped) return { blockId: mapped };
-
-  for (const [blockId, list] of Object.entries(idx.blocks)) {
-    if (list.some((t) => tripIdsMatch(feedId, t.trip_id, tripId))) {
-      return { blockId };
-    }
-  }
 
   if (feedId === "go") {
     const suffix = goTripSuffix(tripId);
-    for (const [tid, blockId] of Object.entries(idx.tripToBlock ?? {})) {
+    for (const [tid, blockId] of Object.entries(tripToBlock)) {
       if (goTripSuffix(tid) === suffix) return { blockId };
     }
   }
@@ -99,15 +144,14 @@ export async function loadBlockTrips(
   activeTripId: string,
   scheduleTripId?: string,
 ): Promise<BlockTripRow[]> {
-  const idx = await loadBlockIndex(feedId);
-  const list = findBlockForTrip(idx, feedId, tripId);
+  const list = await findBlockForTrip(feedId, tripId);
   if (!list || list.length <= 1) return [];
   const capped = list.length > 50 ? list.slice(0, 50) : list;
 
-  const activeIds = [...new Set([activeTripId, tripId, scheduleTripId].filter(Boolean))] as string[];
+  const primaryActive = scheduleTripId ?? activeTripId;
   const mapped = capped.map((t) => ({
     ...t,
-    active: activeIds.some((id) => tripIdsMatch(feedId, t.trip_id, id)),
+    active: tripIdsMatch(feedId, t.trip_id, primaryActive),
   }));
 
   const missingIds = mapped.filter((t) => !t.headsign?.trim()).map((t) => t.trip_id);
@@ -137,7 +181,7 @@ export async function resolveVehicleBlock(
   blockStart: string | null;
   blockEnd: string | null;
 }> {
-  const lookupIds = [...new Set([liveTripId, scheduleTripId].filter(Boolean))] as string[];
+  const lookupIds = [...new Set([scheduleTripId, liveTripId].filter(Boolean))] as string[];
   if (!lookupIds.length) {
     return { blockId: null, blockTrips: [], blockStart: null, blockEnd: null };
   }

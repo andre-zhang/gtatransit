@@ -45,6 +45,7 @@ type RunData = {
   };
   trip: {
     trip_id: string;
+    schedule_trip_id?: string | null;
     headsign: string | null;
     block_id?: string | null;
   } | null;
@@ -68,19 +69,15 @@ type RunData = {
   shape: GeoJSON.Feature | null;
 };
 
-function blockSectionTitle(trip: RunData["trip"]) {
-  if (trip?.block_id) return `Block ${trip.block_id}`;
-  return "Trips in block";
-}
-
 function blockTimeRange(start?: string | null, end?: string | null) {
   if (!start) return null;
   if (end && end !== start) return `${start} – ${end}`;
   return start;
 }
 
-function blockTripTime(t: { first_departure: string; last_departure?: string }) {
-  return blockTimeRange(t.first_departure, t.last_departure) ?? t.first_departure;
+function blockSectionTitle(trip: RunData["trip"]) {
+  if (trip?.block_id) return `Block ${trip.block_id}`;
+  return "Trips in block";
 }
 
 export function RunViewClient({
@@ -94,6 +91,9 @@ export function RunViewClient({
 }) {
   const [data, setData] = useState<RunData | null>(initial);
   const [loading, setLoading] = useState(initial == null);
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [blockTrips, setBlockTrips] = useState<RunData["blockTrips"]>(initial?.blockTrips);
+  const [blockRange, setBlockRange] = useState<string | null>(null);
   const [trainDetail, setTrainDetail] = useState<GoTrainDetail | null>(null);
   const hadDataRef = useRef(initial != null);
 
@@ -123,6 +123,38 @@ export function RunViewClient({
     return () => clearInterval(id);
   }, [refresh]);
 
+  useEffect(() => {
+    const tripId = data?.trip?.trip_id;
+    if (!tripId) {
+      setBlockTrips(undefined);
+      setBlockRange(null);
+      return;
+    }
+    let cancelled = false;
+    setBlockLoading(true);
+    const params = new URLSearchParams({ tripId });
+    const sched = data.trip?.schedule_trip_id;
+    if (sched) params.set("scheduleTrip", sched);
+    void fetch(`/api/runs/${feedId}/${encodeURIComponent(vehicleId)}/block?${params}`, {
+      cache: "no-store",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((block) => {
+        if (cancelled || !block) return;
+        setBlockTrips(block.blockTrips ?? []);
+        setBlockRange(blockTimeRange(block.blockStart, block.blockEnd));
+      })
+      .catch(() => {
+        if (!cancelled) setBlockTrips([]);
+      })
+      .finally(() => {
+        if (!cancelled) setBlockLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [feedId, vehicleId, data?.trip?.trip_id, data?.trip]);
+
   if (!data) {
     return (
       <PageEmpty
@@ -143,9 +175,6 @@ export function RunViewClient({
     currentStop,
     upcomingStops,
     shape,
-    blockTrips,
-    blockStart,
-    blockEnd,
   } = data;
   const early = isPlausibleDelayMin(vehicle.delayMin) && vehicle.delayMin! < 0;
   const late = isPlausibleDelayMin(vehicle.delayMin) && vehicle.delayMin! > 0;
@@ -184,7 +213,6 @@ export function RunViewClient({
     vehicle.label?.trim() && vehicle.label.trim() !== vehicle.id
       ? vehicle.label.trim()
       : vehicle.id;
-  const blockRange = blockTimeRange(blockStart, blockEnd);
 
   return (
     <>
@@ -267,38 +295,47 @@ export function RunViewClient({
         <PageEmpty title="No upcoming stops" />
       )}
 
-      {blockTrips && blockTrips.length > 0 && (
+      {(blockLoading || (blockTrips && blockTrips.length > 0)) && (
         <Section title={blockSectionTitle(trip)} subtitle={blockRange ?? undefined}>
-          <ul className="divide-y divide-go-bg">
-            {blockTrips.map((t) => (
-              <li
-                key={t.trip_id}
-                className={`flex items-center gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3 ${t.active ? "bg-go-bg/40" : ""}`}
-              >
-                <TripLink
-                  feedId={feedId}
-                  tripId={t.trip_id}
-                  className="w-[5.5rem] shrink-0 text-right text-xs font-bold tabular-nums text-go-navy hover:text-go-green sm:w-32 sm:text-sm"
+          {blockLoading && !blockTrips?.length ? (
+            <div className="px-3 py-2.5 text-sm text-go-slate sm:px-5">Loading block…</div>
+          ) : (
+            <ul className="divide-y divide-go-bg">
+              {blockTrips?.map((t) => (
+                <li
+                  key={t.trip_id}
+                  className={`relative flex items-start gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3 ${t.active ? "bg-go-bg/40" : ""}`}
                 >
-                  {blockTripTime(t)}
-                </TripLink>
-                <TripLink
-                  feedId={feedId}
-                  tripId={t.trip_id}
-                  className="min-w-0 flex-1 truncate text-sm text-go-navy hover:text-go-green"
-                >
-                  {cleanHeadsign(t.headsign) || "—"}
-                </TripLink>
-                {t.active && (
-                  <span className="go-badge go-badge--live inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
-                    <LiveIcon className="h-3 w-3" title="Active" />
-                    <span className="hidden sm:inline">Active</span>
-                  </span>
-                )}
-                <DepartureActions tripHref={tripPageHref(feedId, t.trip_id)} />
-              </li>
-            ))}
-          </ul>
+                  <span
+                    className={`mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 ${
+                      t.active ? "border-go-green bg-go-green" : "border-go-slate bg-white"
+                    }`}
+                  />
+                  <TripLink
+                    feedId={feedId}
+                    tripId={t.trip_id}
+                    className="w-12 shrink-0 text-sm font-bold tabular-nums text-go-navy hover:text-go-green sm:w-14"
+                  >
+                    {t.first_departure}
+                  </TripLink>
+                  <TripLink
+                    feedId={feedId}
+                    tripId={t.trip_id}
+                    className="min-w-0 flex-1 truncate text-sm text-go-navy hover:text-go-green"
+                  >
+                    {cleanHeadsign(t.headsign) || "—"}
+                  </TripLink>
+                  {t.active && (
+                    <span className="go-badge go-badge--live inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+                      <LiveIcon className="h-3 w-3" title="Active" />
+                      <span className="hidden sm:inline">Active</span>
+                    </span>
+                  )}
+                  <DepartureActions tripHref={tripPageHref(feedId, t.trip_id)} />
+                </li>
+              ))}
+            </ul>
+          )}
         </Section>
       )}
 

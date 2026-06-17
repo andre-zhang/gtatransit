@@ -111,7 +111,7 @@ export function normalizeServiceSec(schedSec: number, now: number): number {
     if (depSec >= now - 120) break;
     depSec += 86400;
   }
-  if (depSec > now + 36 * 3600) depSec -= 86400;
+  if (depSec > now + 48 * 3600) depSec -= 86400;
   return depSec;
 }
 

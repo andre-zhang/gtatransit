@@ -34,7 +34,7 @@ import {
 } from "@/lib/rt-cache";
 import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
 import { cleanHeadsign } from "@/lib/headsign";
-import { resolveTtcRtStopIds } from "@/lib/ttc-stop-registry";
+import { resolveTtcRtStopIds, fixtureStopIdForLive } from "@/lib/ttc-stop-registry";
 
 /** Trim large union-style schedules before RT merge (board shows ~80 rows). */
 function scheduleForMembers(
@@ -48,7 +48,7 @@ function scheduleForMembers(
 function filterScheduleToBoardWindow(schedule: ScheduleRow[]): ScheduleRow[] {
   const now = torontoNowSec();
   const pastGrace = 120;
-  const horizon = 2 * 3600;
+  const horizon = 6 * 3600;
   const upcoming = schedule
     .map((r) => ({
       row: r,
@@ -149,12 +149,11 @@ function rtPredictionToDeparture(
     }
   }
 
-  if (!scheduledRow && predNorm != null) {
+  if (!scheduledRow && predNorm != null && routeId) {
     let bestDelta = Infinity;
     for (const s of schedule) {
       if (s.feedId !== row.feedId) continue;
       if (
-        routeId &&
         !routesMatch(row.feedId, routeId, routeShort, s.routeId) &&
         !routesMatch(row.feedId, routeId, routeShort, s.routeShort)
       ) {
@@ -168,6 +167,8 @@ function rtPredictionToDeparture(
       }
     }
   }
+
+  if (!scheduledRow && !routeId) return null;
 
   const schedSec = scheduledRow
     ? gtfsTimeToSec(scheduledRow.departureTime)
@@ -309,18 +310,31 @@ export async function buildDemoStopDepartures(
   await Promise.all([loadFixturesTree(), ensureRtCacheWithin(6000)]);
   const usedRtTrips = new Set<string>();
 
-  const { rtStopIdsByFeed, ttcRtByStopId, allowedTtcRtStopIds } =
-    await buildRtStopIdMaps(stop);
+  const { ttcRtByStopId } = await buildRtStopIdMaps(stop);
 
   const inputs: DepartureInput[] = [];
 
   if (isRtCacheWarm()) {
-    for (const [feedId, rtStopIds] of rtStopIdsByFeed) {
-      for (const extra of getRtPredictionsForStop(feedId, rtStopIds, new Set())) {
-        if (feedId === "ttc" && !allowedTtcRtStopIds.has(extra.stopId)) continue;
+    for (const m of stop.members) {
+      const rtIds =
+        m.feedId === "ttc"
+          ? (ttcRtByStopId.get(m.stopId) ?? [m.stopId])
+          : m.feedId === "go"
+            ? resolveGoRtStopIds(m.stopId, stop.members)
+            : [m.stopId];
+
+      for (const extra of getRtPredictionsForStop(m.feedId, rtIds, usedRtTrips)) {
+        if (m.feedId === "ttc") {
+          const fixtureStop = await fixtureStopIdForLive(extra.stopId);
+          if (!fixtureStop || fixtureStop !== m.stopId) continue;
+        } else if (extra.stopId !== m.stopId) {
+          continue;
+        }
+
         const alreadyScheduled = schedule.some(
           (s) =>
             s.feedId === extra.feedId &&
+            s.stopId === m.stopId &&
             (s.tripId === extra.tripId ||
               (extra.feedId === "go" && goTripsMatch(s.tripId, extra.tripId))),
         );
@@ -328,7 +342,7 @@ export async function buildDemoStopDepartures(
         const row = rtPredictionToDeparture(extra, schedule);
         if (!row) continue;
         usedRtTrips.add(`${row.feedId}:${row.tripId}`);
-        inputs.push(row);
+        inputs.push({ ...row, stopId: m.stopId });
       }
     }
   }
