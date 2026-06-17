@@ -119,6 +119,12 @@ if (!listShards("miway-schedules").length) {
   shardMonolith("miway-schedules.json");
 }
 shardMonolith("miway-trip-stops.json");
+shardMonolith("yrt-schedules.json");
+shardMonolith("yrt-trip-stops.json");
+shardMonolith("brampton-schedules.json");
+shardMonolith("brampton-trip-stops.json");
+shardMonolith("drt-schedules.json");
+shardMonolith("drt-trip-stops.json");
 
 for (const base of [
   "ttc-schedules",
@@ -127,6 +133,33 @@ for (const base of [
   "go-trip-stops",
   "miway-schedules",
   "miway-trip-stops",
+  "yrt-schedules",
+  "yrt-trip-stops",
+  "brampton-schedules",
+  "brampton-trip-stops",
+  "drt-schedules",
+  "drt-trip-stops",
 ]) {
   writeShardIndex(base);
 }
+
+const shardManifest = {};
+const shardRe = /^(.*-(?:schedules|trip-stops))(?:\.\d+)?\.json$/;
+for (const name of readdirSync(demoDir)) {
+  const m = name.match(shardRe);
+  if (!m) continue;
+  const base = m[1];
+  if (!shardManifest[base]) shardManifest[base] = [];
+  shardManifest[base].push(name);
+}
+for (const key of Object.keys(shardManifest)) {
+  shardManifest[key].sort((a, b) => {
+    const idx = (n) => {
+      const hit = n.match(/\.(\d+)\.json$/);
+      return hit ? Number(hit[1]) : -1;
+    };
+    return idx(a) - idx(b);
+  });
+}
+writeFileSync(join(demoDir, "shard-manifest.json"), JSON.stringify(shardManifest));
+console.log(`Wrote shard-manifest.json (${Object.keys(shardManifest).length} bases)`);

@@ -23,4 +23,5 @@ export type RtTripUpdate = {
   arrivalTime?: number;
   departureTime?: number;
   platform?: string;
+  vehicleId?: string;
 };

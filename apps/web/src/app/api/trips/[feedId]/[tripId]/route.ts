@@ -13,7 +13,13 @@ import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
 import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { loadDemoTripPayload } from "@/lib/load-demo-trip";
+import { loadDemoTripStopsLite } from "@/lib/load-demo-trip-stops";
 import { stopGroupIdFor } from "@/lib/stop-group-href";
+import {
+  getCachedTripStops,
+  setCachedTripStops,
+  tripStopsCacheKey,
+} from "@/lib/trip-stops-cache";
 import { ensureRtCache, getStopTripRt, getTripRt } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
@@ -25,9 +31,23 @@ export async function GET(
   const { feedId, tripId } = await params;
   const fromStop = req.nextUrl.searchParams.get("fromStop") ?? undefined;
   const scheduleTripParam = req.nextUrl.searchParams.get("scheduleTrip") ?? undefined;
+  const lite = req.nextUrl.searchParams.get("lite") === "1";
 
   if (await useDemoFixtures()) {
     try {
+      if (lite) {
+        const cacheKey = tripStopsCacheKey(feedId, tripId, fromStop, scheduleTripParam);
+        const cached = getCachedTripStops(cacheKey);
+        if (cached) return NextResponse.json(cached);
+
+        const payload = await loadDemoTripStopsLite(feedId, tripId, {
+          fromStop,
+          scheduleTrip: scheduleTripParam,
+        });
+        setCachedTripStops(cacheKey, payload);
+        return NextResponse.json(payload);
+      }
+
       const payload = await loadDemoTripPayload(feedId, tripId, {
         fromStop,
         scheduleTrip: scheduleTripParam,
@@ -38,6 +58,7 @@ export async function GET(
     }
   }
 
+  await ensureRtCache();
   const db = getSql();
   const tripMeta = await db<
     Array<{ headsign: string | null; route_id: string | null }>

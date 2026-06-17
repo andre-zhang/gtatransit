@@ -253,18 +253,24 @@ function enrichGoPlatforms(
 
 async function buildRtStopIdMaps(stop: DemoStopMeta) {
   const rtStopIdsByFeed = new Map<string, string[]>();
+  const ttcMembers = stop.members.filter((x) => x.feedId === "ttc");
+  const ttcRtIds = ttcMembers.length
+    ? await resolveTtcRtStopIds(ttcMembers)
+    : [];
   const ttcRtByStopId = new Map<string, string[]>();
-  let ttcRtIds: string[] | null = null;
+  if (ttcMembers.length) {
+    await Promise.all(
+      ttcMembers.map(async (m) => {
+        if (!ttcRtByStopId.has(m.stopId)) {
+          ttcRtByStopId.set(m.stopId, await resolveTtcRtStopIds([m]));
+        }
+      }),
+    );
+  }
 
   for (const m of stop.members) {
     if (m.feedId === "ttc") {
-      if (!ttcRtIds) {
-        ttcRtIds = await resolveTtcRtStopIds(stop.members.filter((x) => x.feedId === "ttc"));
-        rtStopIdsByFeed.set("ttc", ttcRtIds);
-      }
-      if (!ttcRtByStopId.has(m.stopId)) {
-        ttcRtByStopId.set(m.stopId, await resolveTtcRtStopIds([m]));
-      }
+      if (!rtStopIdsByFeed.has("ttc")) rtStopIdsByFeed.set("ttc", ttcRtIds);
     } else if (m.feedId === "go" && !rtStopIdsByFeed.has("go")) {
       const ids = new Set<string>();
       for (const x of stop.members.filter((x) => x.feedId === "go")) {
@@ -282,7 +288,7 @@ async function buildRtStopIdMaps(stop: DemoStopMeta) {
   return {
     rtStopIdsByFeed,
     ttcRtByStopId,
-    allowedTtcRtStopIds: new Set(ttcRtIds ?? []),
+    allowedTtcRtStopIds: new Set(ttcRtIds),
   };
 }
 

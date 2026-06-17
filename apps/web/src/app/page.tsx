@@ -2,7 +2,7 @@ import { Nav } from "@/components/Nav";
 import { MapView } from "@/components/MapView";
 import { getFilterTree } from "@/lib/filters-server";
 import { useDemoFixtures } from "@/lib/demo";
-import { getRtLastUpdatedIso, refreshRtCache } from "@/lib/rt-cache";
+import { getRtLastUpdatedIso } from "@/lib/rt-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,12 @@ export default async function HomePage() {
   let rtUpdated: string | null = null;
 
   if (demo) {
-    const { ensureDemoAssets, getDemoCore } = await import("@/lib/demo");
-    await ensureDemoAssets();
+    const { ensureDemoStopAssets, getDemoCore } = await import("@/lib/demo");
+    const { ensureRtCacheWithin, getRtLastUpdatedIso } = await import("@/lib/rt-cache");
+    await ensureDemoStopAssets();
     const core = getDemoCore();
     tree = core.filterTree as typeof tree;
-    await refreshRtCache();
+    void ensureRtCacheWithin(3000);
     rtUpdated = getRtLastUpdatedIso() ?? core.rtUpdated;
   } else {
     try {

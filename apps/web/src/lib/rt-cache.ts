@@ -389,8 +389,10 @@ async function pollFeed(feedId: string) {
         tripMap.set(tk, {
           ...prev,
           routeId: u.routeId ?? prev.routeId,
+          vehicleId: u.vehicleId ?? prev.vehicleId,
           delaySec: u.delaySec ?? prev.delaySec,
           predictedSec: u.departureTime ?? prev.predictedSec,
+          platform: u.platform ?? prev.platform,
           updatedAt: now,
         });
       }
@@ -403,6 +405,17 @@ async function pollFeed(feedId: string) {
     try {
       const msg = await fetchRt(cfg.vehicles, cfg.headers);
       for (const v of parseVehicles(feedId, msg)) {
+        if (v.tripId) {
+          const k = tripKey(feedId, v.tripId);
+          const prev = tripMap.get(k) ?? { updatedAt: now };
+          tripMap.set(k, {
+            ...prev,
+            routeId: v.routeId ?? prev.routeId,
+            vehicleId: v.vehicleId,
+            delaySec: v.delaySec ?? prev.delaySec,
+            updatedAt: now,
+          });
+        }
         if (v.lat == null || v.lon == null) continue;
         const tk = v.tripId ? tripKey(feedId, v.tripId) : null;
         const routeId = v.routeId ?? (tk ? tripMap.get(tk)?.routeId : undefined);
@@ -571,6 +584,18 @@ export function getRtPredictionsForStop(
   return [...byTrip.values()];
 }
 
+function getVehicleIdForTrip(feedId: string, tripId: string): string | undefined {
+  const tripRt = getTripRt(feedId, tripId);
+  if (tripRt?.vehicleId) return tripRt.vehicleId;
+  const cutoff = Date.now() - 5 * 60_000;
+  for (const v of vehicleMap.values()) {
+    if (v.feedId === feedId && v.tripId === tripId && v.updatedAt >= cutoff) {
+      return v.vehicleId;
+    }
+  }
+  return undefined;
+}
+
 function getVehicleForTrip(feedId: string, tripId: string): RtVehicle | undefined {
   const cutoff = Date.now() - 5 * 60_000;
   for (const v of vehicleMap.values()) {
@@ -663,7 +688,8 @@ export function mergeRtIntoDeparture(
     }
   }
 
-  const vehicleId = tripRt?.vehicleId ?? vehicle?.vehicleId;
+  const vehicleId =
+    tripRt?.vehicleId ?? vehicle?.vehicleId ?? getVehicleIdForTrip(feedId, liveTripId ?? tripId);
   if (liveTripId != null && !fuzzyPlatform) {
     for (const sid of stopIds) {
       const pred = predictionsByStop

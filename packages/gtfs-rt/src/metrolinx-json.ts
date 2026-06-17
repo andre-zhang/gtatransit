@@ -136,6 +136,8 @@ export function parseMetrolinxJsonTripUpdates(
     const tripId = str(field(trip, "trip_id", "Trip_id", "TripId"));
     if (!tripId) continue;
     const routeId = str(field(trip, "route_id", "Route_id", "RouteId"));
+    const vehicle = record(field(tu, "vehicle", "Vehicle"));
+    const vehicleId = str(field(vehicle, "id", "Id", "vehicle_id", "Vehicle_id"));
     const stopUpdates = asArray(
       field(
         tu,
@@ -168,6 +170,7 @@ export function parseMetrolinxJsonTripUpdates(
         platform:
           str(field(stu, "platform", "Platform", "track", "Track")) ??
           str(field(stu, "assigned_stop_id", "Assigned_stop_id")),
+        vehicleId,
       });
     }
   }

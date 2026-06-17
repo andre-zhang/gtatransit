@@ -63,7 +63,7 @@ function TripStopsPanel({
       if (scheduleTripId && scheduleTripId !== tripId) {
         params.set("scheduleTrip", scheduleTripId);
       }
-      const qs = params.toString() ? `?${params}` : "";
+      const qs = params.toString() ? `?${params}&lite=1` : "?lite=1";
       const res = await fetch(
         `/api/trips/${feedId}/${encodeURIComponent(tripId)}${qs}`,
         { cache: "no-store" },
