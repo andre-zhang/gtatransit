@@ -24,16 +24,21 @@ export async function GET(
   const quick = req.nextUrl.searchParams.get("quick") === "1";
 
   if (await useDemoFixtures()) {
-    const resolved = resolveStopGroupId(groupId);
-    const cached = getCachedStopBoard(resolved, quick);
-    if (cached) return NextResponse.json(cached);
+    try {
+      const stop = await loadDemoStopMeta(groupId);
+      const resolved = resolveStopGroupId(groupId);
+      const cached = getCachedStopBoard(resolved, quick);
+      if (cached) return NextResponse.json(cached);
 
-    const stop = await loadDemoStopMeta(resolved);
-    if (!stop) return NextResponse.json({ name: "Stop", rows: [] });
+      if (!stop) return NextResponse.json({ name: "Stop", rows: [] });
 
-    const board = await buildDemoStopDepartures(resolved, stop, { quick });
-    setCachedStopBoard(resolved, quick, board);
-    return NextResponse.json(board);
+      const board = await buildDemoStopDepartures(resolved, stop, { quick });
+      setCachedStopBoard(resolved, quick, board);
+      return NextResponse.json(board);
+    } catch (err) {
+      console.error("[departures]", groupId, err);
+      return NextResponse.json({ name: "Stop", rows: [], error: "load_failed" }, { status: 500 });
+    }
   }
 
   await ensureRtCache();

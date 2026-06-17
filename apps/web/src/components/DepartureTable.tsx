@@ -184,18 +184,18 @@ export function DepartureTable({
             return (
               <li key={m.rowKey}>
                 {m.showDayBreak && m.dayLabel && (
-                  <div className="departure-board-daybreak px-4 py-2 text-xs font-semibold uppercase tracking-wide text-go-slate">
+                  <div className="departure-board-daybreak px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-go-slate">
                     {m.dayLabel}
                   </div>
                 )}
                 <button
                   type="button"
-                  className={`departure-board-card w-full px-3 py-2.5 text-left ${m.isOpen ? "departure-board-row--open" : ""}`}
+                  className={`departure-board-card w-full text-left ${m.isOpen ? "departure-board-row--open" : ""}`}
                   onClick={() => toggle(m.rowKey)}
                   aria-expanded={m.isOpen}
                 >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <div className="flex w-[3.75rem] shrink-0 items-center justify-end gap-1">
+                  <div className="departure-board-card-grid">
+                    <div className="departure-board-card-time">
                       <TimePair
                         scheduled={r.time}
                         predicted={m.showStruck ? r.predicted : undefined}
@@ -203,31 +203,35 @@ export function DepartureTable({
                         align="right"
                       />
                     </div>
-                    {showAgency && <AgencyMark feedId={r.feedId} />}
-                    <RoutePill
-                      shortName={r.routeShort}
-                      color={r.routeColor}
-                      href={routePageHref(r.feedId, r.routeId)}
-                    />
+                    <div className="departure-board-card-meta">
+                      {showAgency && <AgencyMark feedId={r.feedId} />}
+                      <RoutePill
+                        shortName={r.routeShort}
+                        color={r.routeColor}
+                        href={routePageHref(r.feedId, r.routeId)}
+                      />
+                    </div>
+                    <div className="departure-board-card-status">
+                      <DepartureStatusRow
+                        realtime={r.realtime}
+                        latenessMin={r.latenessMin}
+                        tripHref={m.tripHref}
+                        vehicleHref={m.vehicleHref}
+                        feedId={r.feedId}
+                        vehicleId={r.vehicleId}
+                        onClick={(e) => e.stopPropagation()}
+                        compact
+                      />
+                    </div>
                     <Link
                       href={m.tripHref}
                       onClick={(e) => e.stopPropagation()}
-                      className={`departure-board-dest min-w-0 flex-1 truncate text-sm ${
+                      className={`departure-board-card-dest departure-board-dest departure-board-dest--clamp ${
                         r.realtime ? "departure-board-dest--live" : "departure-board-dest--sched"
                       }`}
                     >
                       {cleanHeadsign(r.destination)}
                     </Link>
-                    <DepartureStatusRow
-                      realtime={r.realtime}
-                      latenessMin={r.latenessMin}
-                      tripHref={m.tripHref}
-                      vehicleHref={m.vehicleHref}
-                      feedId={r.feedId}
-                      vehicleId={r.vehicleId}
-                      onClick={(e) => e.stopPropagation()}
-                      compact
-                    />
                   </div>
                 </button>
                 {m.isOpen && (
@@ -244,15 +248,22 @@ export function DepartureTable({
         </ul>
       </div>
 
-      <div className="hidden overflow-x-auto md:block">
-      <table className="departure-board-table w-full min-w-[36rem] text-left">
+      <div className="hidden md:block">
+      <table className="departure-board-table departure-board-table--compact w-full table-fixed">
+        <colgroup>
+          <col className="w-[4.5rem]" />
+          {showAgency && <col className="w-7" />}
+          <col className="w-14" />
+          <col />
+          <col className="w-[5.25rem]" />
+        </colgroup>
         <thead>
           <tr className="departure-board-head">
-            <th className="px-5 py-3 text-right">Time</th>
-            {showAgency && <th className="px-2 py-3">Agency</th>}
-            <th className="px-3 py-3">Route</th>
-            <th className="px-3 py-3">Headsign</th>
-            <th className="px-5 py-3 text-right">Status</th>
+            <th className="text-right">Time</th>
+            {showAgency && <th>Agency</th>}
+            <th>Route</th>
+            <th>Headsign</th>
+            <th className="text-right">Status</th>
           </tr>
         </thead>
         <tbody className="departure-board-body">
@@ -265,7 +276,7 @@ export function DepartureTable({
                   <tr className="departure-board-daybreak">
                     <td
                       colSpan={showAgency ? 5 : 4}
-                      className="px-5 py-2 text-xs font-semibold uppercase tracking-wide text-go-slate"
+                      className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-go-slate"
                     >
                       {m.dayLabel}
                     </td>
@@ -284,12 +295,12 @@ export function DepartureTable({
                   role="button"
                   aria-expanded={m.isOpen}
                 >
-                  <td className="px-5 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
+                  <td className="text-right">
+                    <div className="flex items-center justify-end gap-1">
                       <TimePair
                         scheduled={r.time}
                         predicted={m.showStruck ? r.predicted : undefined}
-                        size="md"
+                        size="sm"
                         align="right"
                       />
                       {m.dayOffset > 0 && (
@@ -300,30 +311,30 @@ export function DepartureTable({
                     </div>
                   </td>
                   {showAgency && (
-                    <td className="px-2 py-3">
-                      <AgencyMark feedId={r.feedId} />
+                    <td>
+                      <AgencyMark feedId={r.feedId} iconOnly />
                     </td>
                   )}
-                  <td className="px-3 py-3">
+                  <td>
                     <RoutePill
                       shortName={r.routeShort}
                       color={r.routeColor}
-                      size="lg"
+                      size="md"
                       href={routePageHref(r.feedId, r.routeId)}
                     />
                   </td>
-                  <td className="max-w-[14rem] truncate px-3 py-3">
+                  <td className="min-w-0">
                     <Link
                       href={m.tripHref}
                       onClick={(e) => e.stopPropagation()}
-                      className={`departure-board-dest truncate ${
+                      className={`departure-board-dest departure-board-dest--clamp ${
                         r.realtime ? "departure-board-dest--live" : "departure-board-dest--sched"
                       }`}
                     >
                       {cleanHeadsign(r.destination)}
                     </Link>
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="text-right">
                     <DepartureStatusRow
                       realtime={r.realtime}
                       latenessMin={r.latenessMin}

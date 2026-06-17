@@ -163,7 +163,17 @@ body {
 }
 
 .departure-status-row {
-  min-width: 7.5rem;
+  min-width: 4.5rem;
+}
+
+.departure-board .departure-action-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.departure-board .departure-status-row svg {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 .departure-action-btn {
@@ -246,6 +256,26 @@ body {
   color: var(--color-go-navy);
 }
 
+.departure-board-table--compact th,
+.departure-board-table--compact td {
+  padding: 0.375rem 0.625rem;
+  vertical-align: middle;
+}
+
+.departure-board-table--compact th:first-child,
+.departure-board-table--compact td:first-child {
+  padding-left: 0.875rem;
+}
+
+.departure-board-table--compact th:last-child,
+.departure-board-table--compact td:last-child {
+  padding-right: 0.875rem;
+}
+
+.departure-board-table--compact .departure-board-dest--clamp {
+  font-size: 0.8125rem;
+}
+
 .departure-board-head {
   border-bottom: 2px solid var(--color-go-navy);
   background: #fff;
@@ -278,6 +308,44 @@ body {
 
 .departure-board-card {
   transition: background-color 0.15s ease;
+  padding: 0.5rem 0.625rem;
+}
+
+.departure-board-card-grid {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr) auto;
+  column-gap: 0.5rem;
+  row-gap: 0.25rem;
+  align-items: center;
+}
+
+.departure-board-card-time {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  text-align: right;
+}
+
+.departure-board-card-meta {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.departure-board-card-dest {
+  grid-column: 2 / span 2;
+  grid-row: 2;
+  min-width: 0;
+  font-size: 0.8125rem;
+}
+
+.departure-board-card-status {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
 }
 
 .departure-board-card:active {
@@ -330,6 +398,15 @@ body {
   display: block;
   text-decoration: none;
   color: var(--color-go-slate);
+  line-height: 1.25;
+}
+
+.departure-board-dest--clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .departure-board-dest--live {

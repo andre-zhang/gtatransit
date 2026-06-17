@@ -49,6 +49,28 @@ function normalizeAnchor(name: string): string {
   return name.replace(/\s+/g, " ").trim();
 }
 
+const PLATFORM_BAY_IN_NAME = /\b(?:platform|bay|track)\s+[a-z0-9]+\b/i;
+const PLATFORM_BAY_SUFFIX =
+  /\s*[-–—,]?\s*(?:platform|bay|track)\s+[a-z0-9]+(?:\s*[-–—,]\s*.*)?$/i;
+
+/** Remove trailing platform / bay / track identifiers from stop names. */
+export function stripPlatformBayFromName(name: string): string {
+  let n = name.trim();
+  let prev = "";
+  while (prev !== n) {
+    prev = n;
+    n = n.replace(PLATFORM_BAY_SUFFIX, "").replace(/\s+/g, " ").trim();
+  }
+  return n || name.trim();
+}
+
+function platformBayAnchorFromName(name: string): string | null {
+  if (!PLATFORM_BAY_IN_NAME.test(name)) return null;
+  const base = stripPlatformBayFromName(name);
+  if (!base || base === name.trim()) return null;
+  return normalizeAnchor(base);
+}
+
 function isGoRailStationName(name: string): boolean {
   const n = name.trim();
   return /\bGO\s*$/i.test(n) || /\bGO\/UP\b/i.test(n) || /\bUP Express\b/i.test(n);
@@ -106,6 +128,11 @@ function classifyStop(
   const terminal = terminalAnchorFromName(n);
   if (terminal) {
     return { groupable: true, anchor: terminal };
+  }
+
+  const platformBay = platformBayAnchorFromName(n);
+  if (platformBay) {
+    return { groupable: true, anchor: platformBay };
   }
 
   if (/\bexchange\b/i.test(n)) {
@@ -256,7 +283,7 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
   return alias;
 }
 
-function terminalDisplayName(members: StopPoint[], fallback: string): string {
+function pickClusterDisplayName(members: StopPoint[], fallback: string): string {
   if (
     members.some(
       (m) =>
@@ -267,7 +294,25 @@ function terminalDisplayName(members: StopPoint[], fallback: string): string {
   ) {
     return "Toronto Union";
   }
-  return fallback;
+
+  const counts = new Map<string, number>();
+  for (const m of members) {
+    const stripped = stripPlatformBayFromName(m.name);
+    counts.set(stripped, (counts.get(stripped) ?? 0) + 1);
+  }
+
+  let best = stripPlatformBayFromName(fallback);
+  let bestCount = 0;
+  for (const [name, count] of counts) {
+    if (
+      count > bestCount ||
+      (count === bestCount && name.length < best.length)
+    ) {
+      best = name;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 function buildGroupedStops(): {
@@ -301,10 +346,11 @@ function buildGroupedStops(): {
   for (const [target, members] of memberLists) {
     const deduped = [...new Map(members.map((m) => [`${m.feedId}:${m.stopId}`, m])).values()];
     const cluster = clusterPoints.get(target) ?? [];
+    const rawName = names.get(target) ?? target;
     const displayName =
       cluster.length > 1
-        ? terminalDisplayName(cluster, names.get(target) ?? target)
-        : (names.get(target) ?? target);
+        ? pickClusterDisplayName(cluster, rawName)
+        : stripPlatformBayFromName(rawName);
     grouped[target] = { name: displayName, members: deduped };
   }
 

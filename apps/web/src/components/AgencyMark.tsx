@@ -1,6 +1,12 @@
 import { AGENCY_COLORS, AGENCY_NAMES } from "@/lib/colors";
 
-export function AgencyMark({ feedId }: { feedId: string }) {
+export function AgencyMark({
+  feedId,
+  iconOnly = false,
+}: {
+  feedId: string;
+  iconOnly?: boolean;
+}) {
   const color = AGENCY_COLORS[feedId] ?? "#64748b";
   const name = AGENCY_NAMES[feedId] ?? feedId.toUpperCase();
 
@@ -14,7 +20,7 @@ export function AgencyMark({ feedId }: { feedId: string }) {
         style={{ backgroundColor: color }}
         aria-hidden
       />
-      <span className="hidden sm:inline">{name}</span>
+      {!iconOnly && <span className="hidden sm:inline">{name}</span>}
     </span>
   );
 }
