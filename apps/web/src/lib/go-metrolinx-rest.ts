@@ -278,6 +278,7 @@ export type GoTrainDetail = {
   carsLabel: string | null;
   occupancyPercent: number | null;
   display: string | null;
+  coachNumbers: string[];
 };
 
 const trainsCache = { at: 0, rows: [] as Record<string, unknown>[] };
@@ -338,6 +339,43 @@ async function loadGoTrains(apiKey: string): Promise<Record<string, unknown>[]> 
   return rows;
 }
 
+function parseCoachNumbers(match: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const raw =
+    match.CoachNumbers ??
+    match.CarNumbers ??
+    match.Consist ??
+    match.CoachConsist ??
+    match.coachNumbers;
+  if (Array.isArray(raw)) {
+    for (const x of raw) {
+      const s = String(x).trim();
+      if (s) out.push(s);
+    }
+  } else if (raw != null && String(raw).trim()) {
+    out.push(
+      ...String(raw)
+        .split(/[,;/|]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
+  }
+  const display = match.Display ?? match.display;
+  if (display != null) {
+    const s = String(display).trim();
+    const labeled = s.match(/\b(?:coach|car)\s*#?\s*(\d+[A-Za-z]?)/gi);
+    if (labeled) {
+      for (const m of labeled) {
+        const num = m.match(/(\d+[A-Za-z]?)/)?.[1];
+        if (num) out.push(num);
+      }
+    }
+    const bare = s.match(/\b(\d{3,4}[A-Za-z]?)\b/g);
+    if (bare) out.push(...bare);
+  }
+  return [...new Set(out.map((x) => x.trim()).filter(Boolean))];
+}
+
 export async function fetchGoTrainDetail(
   tripId: string,
   apiKey: string,
@@ -357,10 +395,12 @@ export async function fetchGoTrainDetail(
 
   const { count, label } = parseCars(match.Cars ?? match.cars);
   const occupancy = Number(match.OccupancyPercentage ?? match.occupancyPercentage);
+  const coachNumbers = parseCoachNumbers(match);
   return {
     cars: count,
     carsLabel: label,
     occupancyPercent: Number.isFinite(occupancy) ? occupancy : null,
     display: match.Display != null ? String(match.Display) : null,
+    coachNumbers,
   };
 }

@@ -10,7 +10,7 @@ import {
 } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
-import { getDemoRun } from "@/lib/demo-run";
+import { getDemoServiceView } from "@/lib/demo-service-view";
 import { ensureRtCache, getStopTripRt } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
@@ -22,7 +22,7 @@ export async function GET(
   const { feedId, vehicleId } = await params;
 
   if (await useDemoFixtures()) {
-    const run = await getDemoRun(feedId, vehicleId);
+    const run = await getDemoServiceView(feedId, { vehicleId });
     if (!run) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(run);
   }

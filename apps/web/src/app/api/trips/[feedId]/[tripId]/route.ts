@@ -12,6 +12,7 @@ import {
 import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
 import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
+import { getDemoServiceView } from "@/lib/demo-service-view";
 import { loadDemoTripPayload } from "@/lib/load-demo-trip";
 import { loadDemoTripStopsLite } from "@/lib/load-demo-trip-stops";
 import { stopGroupIdFor } from "@/lib/stop-group-href";
@@ -32,9 +33,22 @@ export async function GET(
   const fromStop = req.nextUrl.searchParams.get("fromStop") ?? undefined;
   const scheduleTripParam = req.nextUrl.searchParams.get("scheduleTrip") ?? undefined;
   const lite = req.nextUrl.searchParams.get("lite") === "1";
+  const serviceView = req.nextUrl.searchParams.get("view") === "service";
 
   if (await useDemoFixtures()) {
     try {
+      if (serviceView) {
+        const payload = await getDemoServiceView(feedId, {
+          tripId,
+          fromStop,
+          scheduleTrip: scheduleTripParam,
+        });
+        if (!payload) {
+          return NextResponse.json({ error: "not_found" }, { status: 404 });
+        }
+        return NextResponse.json(payload);
+      }
+
       if (lite) {
         const cacheKey = tripStopsCacheKey(feedId, tripId, fromStop, scheduleTripParam);
         const cached = getCachedTripStops(cacheKey);

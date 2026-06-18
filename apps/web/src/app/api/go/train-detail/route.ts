@@ -17,7 +17,13 @@ export async function GET(req: NextRequest) {
 
   const detail = await fetchGoTrainDetail(tripId, apiKey);
   if (!detail) {
-    return NextResponse.json({ cars: null, carsLabel: null, occupancyPercent: null });
+    return NextResponse.json({
+      cars: null,
+      carsLabel: null,
+      occupancyPercent: null,
+      display: null,
+      coachNumbers: [],
+    });
   }
 
   return NextResponse.json(detail);

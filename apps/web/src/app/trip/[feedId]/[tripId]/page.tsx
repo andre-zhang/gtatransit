@@ -1,60 +1,37 @@
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { DetailLoading } from "@/components/DetailLoading";
 import { MetaBar } from "@/components/MetaBar";
 import { PageEmpty } from "@/components/PageEmpty";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
-import { Section } from "@/components/Section";
-import { StopTimeline } from "@/components/StopTimeline";
+import { ServiceViewClient } from "@/components/ServiceViewClient";
 import { VehicleLink } from "@/components/VehicleLink";
 import { cleanHeadsign } from "@/lib/headsign";
+import { getDemoServiceView } from "@/lib/demo-service-view";
 import { routePageHref, runPageHref } from "@/lib/detail-href";
-import { loadDemoTripPayload } from "@/lib/load-demo-trip";
 import { getPageMeta } from "@/lib/page-meta";
 import { stopBoardHref } from "@/lib/stop-group-href";
 import { serverBaseUrl } from "@/lib/server-base-url";
-
-type Stop = {
-  stopId: string;
-  name: string;
-  sequence: number;
-  scheduled: string;
-  predicted?: string;
-  delayMin?: number;
-  platform?: string;
-  groupId?: string;
-  passed?: boolean;
-};
-
-type TripPayload = {
-  stops: Stop[];
-  vehicleId?: string;
-  headsign?: string | null;
-  route?: {
-    routeId: string;
-    shortName: string;
-    color: string;
-  } | null;
-};
+import type { ServiceViewData } from "@/lib/demo-service-view";
 
 async function load(
   feedId: string,
   tripId: string,
   opts?: { fromStop?: string; scheduleTrip?: string },
 ) {
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({ view: "service" });
   if (opts?.fromStop) params.set("fromStop", opts.fromStop);
   if (opts?.scheduleTrip && opts.scheduleTrip !== tripId) {
     params.set("scheduleTrip", opts.scheduleTrip);
   }
-  const qs = params.toString() ? `?${params}` : "";
   const base = await serverBaseUrl();
   const res = await fetch(
-    `${base}/api/trips/${feedId}/${encodeURIComponent(tripId)}${qs}`,
+    `${base}/api/trips/${feedId}/${encodeURIComponent(tripId)}?${params}`,
     { cache: "no-store" },
   );
   if (!res.ok) return null;
-  return res.json() as Promise<TripPayload>;
+  return res.json() as Promise<ServiceViewData>;
 }
 
 async function TripPageContent({
@@ -68,15 +45,16 @@ async function TripPageContent({
   demo: boolean;
   tripOpts: { fromStop?: string; scheduleTrip?: string };
 }) {
-  let data: TripPayload | null = null;
-  if (demo) {
-    try {
-      data = await loadDemoTripPayload(feedId, tripId, tripOpts);
-    } catch {
-      data = null;
-    }
-  } else {
-    data = await load(feedId, tripId, tripOpts);
+  const data = demo
+    ? await getDemoServiceView(feedId, { tripId, ...tripOpts })
+    : await load(feedId, tripId, tripOpts);
+
+  if (
+    data?.vehicle?.id &&
+    data.vehicle.lat != null &&
+    data.vehicle.lon != null
+  ) {
+    redirect(runPageHref(feedId, data.vehicle.id));
   }
 
   if (!data) {
@@ -91,71 +69,44 @@ async function TripPageContent({
     );
   }
 
-  const title = cleanHeadsign(data.headsign) || "Trip";
-  const routeHref = data.route ? routePageHref(feedId, data.route.routeId) : undefined;
+  const title = cleanHeadsign(data.trip?.headsign) || "Trip";
+  const routeHref = data.route ? routePageHref(feedId, data.trip?.route_id ?? data.route.short_name ?? "") : undefined;
   const stopHref =
     tripOpts.fromStop != null ? await stopBoardHref(feedId, tripOpts.fromStop) : null;
-  const metaItems = [
-    ...(stopHref ? [{ label: "Stop board", href: stopHref }] : []),
-    ...(data.vehicleId
-      ? [{ label: `#${data.vehicleId}`, href: runPageHref(feedId, data.vehicleId) }]
-      : []),
-    ...(routeHref && data.route
-      ? [{ label: data.route.shortName, href: routeHref }]
-      : []),
-  ];
-
-  const header = (
-    <PageHeader
-      title={title}
-      subtitle={
-        data.vehicleId ? (
-          <VehicleLink
-            feedId={feedId}
-            vehicleId={data.vehicleId}
-            className="text-sm font-semibold text-white/90 hover:text-white"
-          />
-        ) : undefined
-      }
-      routeBadge={
-        data.route
-          ? {
-              shortName: data.route.shortName,
-              color: data.route.color,
-              href: routeHref,
-            }
-          : undefined
-      }
-    />
-  );
-
-  if (!data.stops.length) {
-    return (
-      <>
-        {header}
-        <MetaBar items={metaItems} />
-        <PageEmpty title="No upcoming stops" />
-      </>
-    );
-  }
 
   return (
     <>
-      {header}
-      <MetaBar items={metaItems} />
-      <Section title="Stops">
-        <StopTimeline
-          stops={data.stops.map((s) => ({
-            stop_id: s.stopId,
-            name: s.name,
-            scheduled: s.scheduled,
-            predicted: s.predicted,
-            delayMin: s.delayMin,
-            groupId: s.groupId,
-            passed: s.passed,
-          }))}
-        />
-      </Section>
+      <PageHeader
+        title={title}
+        subtitle={
+          data.vehicle ? (
+            <VehicleLink
+              feedId={feedId}
+              vehicleId={data.vehicle.id}
+              label={data.vehicle.label}
+              className="text-sm font-semibold text-white/90 hover:text-white"
+            />
+          ) : undefined
+        }
+        routeBadge={
+          data.route
+            ? {
+                shortName: data.route.short_name ?? "?",
+                color: data.route.color,
+                href: routeHref,
+              }
+            : undefined
+        }
+      />
+      <MetaBar
+        items={[
+          ...(stopHref ? [{ label: "Stop board", href: stopHref }] : []),
+          ...(routeHref && data.route?.short_name
+            ? [{ label: data.route.short_name, href: routeHref }]
+            : []),
+        ]}
+      />
+      <ServiceViewClient feedId={feedId} tripId={tripId} tripQuery={tripOpts} initial={data} />
     </>
   );
 }
@@ -177,7 +128,7 @@ export default async function TripPage({
 
   return (
     <PageShell rtUpdated={rtUpdated} demo={demo}>
-      <Suspense fallback={<DetailLoading message="Loading trip…" />}>
+      <Suspense fallback={<DetailLoading message="Loading…" />}>
         <TripPageContent
           feedId={feedId}
           tripId={tripId}

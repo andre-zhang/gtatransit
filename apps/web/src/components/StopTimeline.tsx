@@ -11,6 +11,7 @@ type Stop = {
   delayMin?: number;
   groupId?: string;
   passed?: boolean;
+  current?: boolean;
 };
 
 export function StopTimeline({ stops }: { stops: Stop[] }) {
@@ -45,7 +46,7 @@ export function StopTimeline({ stops }: { stops: Stop[] }) {
             )}
             <span
               className={`relative z-[1] mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 sm:mt-2 sm:h-3.5 sm:w-3.5 ${
-                i === 0 && !s.passed
+                s.current && !s.passed
                   ? "border-go-green bg-go-green"
                   : s.passed
                     ? "border-go-slate bg-go-bg"
