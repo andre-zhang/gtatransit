@@ -72,7 +72,7 @@ export async function resolveDemoTrip(
     }
     const schedNorm = normalizeServiceSec(gtfsTimeToSec(row.departureTime), now);
     const delta = Math.abs(schedNorm - refSec);
-    if (delta < bestDelta && delta <= 50 * 60) {
+    if (delta < bestDelta && delta <= 20 * 60) {
       bestDelta = delta;
       best = row;
     }

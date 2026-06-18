@@ -18,6 +18,10 @@ export function routeIdentityKeys(
   return keys;
 }
 
+function isAmbiguousNumericKey(key: string): boolean {
+  return /^\d{1,2}$/.test(key);
+}
+
 /** True when a live/RT route id refers to the same line as the page route. */
 export function routesMatch(
   feedId: string,
@@ -29,7 +33,13 @@ export function routesMatch(
   const pageKeys = routeIdentityKeys(feedId, pageRouteId, pageShort);
   const rtKeys = routeIdentityKeys(feedId, rtRouteId, routeTail(rtRouteId));
   for (const key of pageKeys) {
-    if (rtKeys.has(key)) return true;
+    if (!rtKeys.has(key)) continue;
+    if (isAmbiguousNumericKey(key)) {
+      const pageFull = pageRouteId === rtRouteId || pageShort === rtRouteId;
+      const pageTail = routeTail(pageRouteId) === routeTail(rtRouteId);
+      if (!pageFull && !pageTail) continue;
+    }
+    return true;
   }
   return false;
 }

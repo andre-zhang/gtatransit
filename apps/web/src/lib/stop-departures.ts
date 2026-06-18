@@ -33,7 +33,7 @@ import {
   type RtStopPrediction,
 } from "@/lib/rt-cache";
 import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
-import { cleanHeadsign } from "@/lib/headsign";
+import { cleanHeadsign, boardDestination } from "@/lib/headsign";
 import { resolveTtcRtStopIds, fixtureStopIdForLive } from "@/lib/ttc-stop-registry";
 
 /** Trim large union-style schedules before RT merge (board shows ~80 rows). */
@@ -100,7 +100,7 @@ function scheduleRowsToInputs(schedule: ScheduleRow[]): DepartureInput[] {
     routeId: r.routeId,
     routeShort: r.routeShort,
     routeColor: r.routeColor,
-    destination: cleanHeadsign(r.headsign),
+    destination: boardDestination(r.feedId, r.routeShort, r.headsign),
     departureTime: r.departureTime,
     stopId: r.stopId,
     realtime: false,
@@ -151,6 +151,7 @@ function rtPredictionToDeparture(
 
   if (!scheduledRow && predNorm != null && routeId) {
     let bestDelta = Infinity;
+    let ambiguous = false;
     for (const s of schedule) {
       if (s.feedId !== row.feedId) continue;
       if (
@@ -161,14 +162,22 @@ function rtPredictionToDeparture(
       }
       const schedNorm = normalizeServiceSec(gtfsTimeToSec(s.departureTime), now);
       const delta = Math.abs(schedNorm - predNorm);
-      if (delta < bestDelta && delta <= 50 * 60) {
+      if (delta > 20 * 60) continue;
+      if (delta < bestDelta - 120) {
         bestDelta = delta;
         scheduledRow = s;
+        ambiguous = false;
+      } else if (scheduledRow && Math.abs(delta - bestDelta) <= 120) {
+        ambiguous = true;
       }
     }
+    if (ambiguous) scheduledRow = undefined;
   }
 
   if (!scheduledRow && !routeId) return null;
+
+  const resolvedRouteId = scheduledRow?.routeId ?? routeId ?? "";
+  const resolvedRouteShort = scheduledRow?.routeShort ?? routeShort;
 
   const schedSec = scheduledRow
     ? gtfsTimeToSec(scheduledRow.departureTime)
@@ -184,12 +193,14 @@ function rtPredictionToDeparture(
     tripId: row.tripId,
     scheduleTripId: scheduledRow?.tripId ?? row.tripId,
     feedId: row.feedId,
-    routeId: routeId ?? "",
-    routeShort,
+    routeId: resolvedRouteId,
+    routeShort: resolvedRouteShort,
     routeColor:
       scheduledRow?.routeColor ??
-      routeColor(row.feedId, routeShort, null, routeId ?? undefined),
-    destination: cleanHeadsign(scheduledRow?.headsign) || "In service",
+      routeColor(row.feedId, resolvedRouteShort, null, resolvedRouteId || undefined),
+    destination:
+      boardDestination(row.feedId, resolvedRouteShort, scheduledRow?.headsign) ||
+      "In service",
     departureTime: secToTime(schedSec % 86400),
     stopId: row.stopId,
     platform: row.feedId === "go" ? row.platform : undefined,
@@ -255,18 +266,13 @@ function enrichGoPlatforms(
 async function buildRtStopIdMaps(stop: DemoStopMeta) {
   const rtStopIdsByFeed = new Map<string, string[]>();
   const ttcMembers = stop.members.filter((x) => x.feedId === "ttc");
-  const ttcRtIds = ttcMembers.length
-    ? await resolveTtcRtStopIds(ttcMembers)
-    : [];
   const ttcRtByStopId = new Map<string, string[]>();
   if (ttcMembers.length) {
-    await Promise.all(
-      ttcMembers.map(async (m) => {
-        if (!ttcRtByStopId.has(m.stopId)) {
-          ttcRtByStopId.set(m.stopId, await resolveTtcRtStopIds([m]));
-        }
-      }),
-    );
+    const batch = await resolveTtcRtStopIds(ttcMembers);
+    for (const m of ttcMembers) {
+      ttcRtByStopId.set(m.stopId, batch.length ? batch : [m.stopId]);
+    }
+    rtStopIdsByFeed.set("ttc", batch.length ? batch : ttcMembers.map((m) => m.stopId));
   }
 
   for (const m of stop.members) {
@@ -289,7 +295,7 @@ async function buildRtStopIdMaps(stop: DemoStopMeta) {
   return {
     rtStopIdsByFeed,
     ttcRtByStopId,
-    allowedTtcRtStopIds: new Set(ttcRtIds),
+    allowedTtcRtStopIds: new Set(rtStopIdsByFeed.get("ttc") ?? []),
   };
 }
 
@@ -307,7 +313,7 @@ export async function buildDemoStopDepartures(
     };
   }
 
-  await Promise.all([loadFixturesTree(), ensureRtCacheWithin(6000)]);
+  await Promise.all([loadFixturesTree(), ensureRtCacheWithin(2000)]);
   const usedRtTrips = new Set<string>();
 
   const { ttcRtByStopId } = await buildRtStopIdMaps(stop);
@@ -371,7 +377,7 @@ export async function buildDemoStopDepartures(
       routeId: r.routeId,
       routeShort: r.routeShort,
       routeColor: r.routeColor,
-      destination: cleanHeadsign(r.headsign),
+      destination: boardDestination(r.feedId, r.routeShort, r.headsign),
       departureTime: r.departureTime,
       stopId: r.stopId,
       platform: r.feedId === "go" ? formatGoPlatform(rt.platform) : undefined,
@@ -411,15 +417,18 @@ export async function buildDemoStopDepartures(
 
   const resolved = new Map<string, string | null>();
   if (missingByFeed.size) {
-    await Promise.all(
-      [...missingByFeed.entries()].map(async ([feedId, tripIds]) => {
-        await preloadTripHeadsignIndex(feedId);
-        const hits = await tripHeadsigns(feedId, [...tripIds]);
-        for (const [tripId, hs] of hits) {
-          resolved.set(`${feedId}:${tripId}`, hs);
-        }
-      }),
-    );
+    await Promise.race([
+      Promise.all(
+        [...missingByFeed.entries()].map(async ([feedId, tripIds]) => {
+          await preloadTripHeadsignIndex(feedId);
+          const hits = await tripHeadsigns(feedId, [...tripIds]);
+          for (const [tripId, hs] of hits) {
+            resolved.set(`${feedId}:${tripId}`, hs);
+          }
+        }),
+      ),
+      new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+    ]);
   }
 
   const withHeadsigns = deduped.map((row) => {
@@ -429,7 +438,7 @@ export async function buildDemoStopDepartures(
       resolved.get(`${row.feedId}:${row.tripId}`);
     if (!hs) return row;
     if (!row.realtime && !needsHeadsignLookup(row.destination)) return row;
-    return { ...row, destination: cleanHeadsign(hs) };
+    return { ...row, destination: boardDestination(row.feedId, row.routeShort, hs) };
   });
 
   return {

@@ -93,7 +93,9 @@ export function RunViewClient({
   const [loading, setLoading] = useState(initial == null);
   const [blockLoading, setBlockLoading] = useState(false);
   const [blockTrips, setBlockTrips] = useState<RunData["blockTrips"]>(initial?.blockTrips);
-  const [blockRange, setBlockRange] = useState<string | null>(null);
+  const [blockRange, setBlockRange] = useState<string | null>(
+    blockTimeRange(initial?.blockStart, initial?.blockEnd),
+  );
   const [trainDetail, setTrainDetail] = useState<GoTrainDetail | null>(null);
   const hadDataRef = useRef(initial != null);
 
@@ -106,6 +108,11 @@ export function RunViewClient({
       if (res.ok) {
         const next = (await res.json()) as RunData;
         setData(next);
+        if (next.blockTrips?.length) {
+          setBlockTrips(next.blockTrips);
+          setBlockRange(blockTimeRange(next.blockStart, next.blockEnd));
+          setBlockLoading(false);
+        }
         hadDataRef.current = true;
       } else if (!hadDataRef.current) {
         setData(null);
@@ -128,6 +135,12 @@ export function RunViewClient({
     if (!tripId) {
       setBlockTrips(undefined);
       setBlockRange(null);
+      return;
+    }
+    if (data?.blockTrips?.length) {
+      setBlockTrips(data.blockTrips);
+      setBlockRange(blockTimeRange(data.blockStart, data.blockEnd));
+      setBlockLoading(false);
       return;
     }
     let cancelled = false;
@@ -153,7 +166,7 @@ export function RunViewClient({
     return () => {
       cancelled = true;
     };
-  }, [feedId, vehicleId, data?.trip?.trip_id, data?.trip]);
+  }, [feedId, vehicleId, data?.trip?.trip_id, data?.blockTrips, data?.blockStart, data?.blockEnd]);
 
   if (!data) {
     return (

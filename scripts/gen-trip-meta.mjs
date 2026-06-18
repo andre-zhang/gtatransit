@@ -120,14 +120,47 @@ async function buildBlockIndex(feedId) {
   for (const [blockId, list] of blocks) {
     if (list.length <= 1 || list.length > MAX_BLOCK_TRIPS) continue;
     list.sort((a, b) => a.first_departure.localeCompare(b.first_departure));
-    const compact = list.map((t) => ({
+
+    const toSec = (t) => {
+      const parts = (t ?? "00:00").slice(0, 8).split(":").map(Number);
+      return (parts[0] ?? 0) * 3600 + (parts[1] ?? 0) * 60 + (parts[2] ?? 0);
+    };
+    const monoStart = [];
+    let prev = -Infinity;
+    for (const t of list) {
+      let s = toSec(t.first_departure);
+      while (s + 600 < prev) s += 86400;
+      monoStart.push(s);
+      prev = s;
+    }
+    const monoEnd = list.map((t, i) => {
+      let e = toSec(t.last_departure ?? t.first_departure);
+      while (e + 600 < monoStart[i]) e += 86400;
+      return e;
+    });
+    const sequential = [list[0]];
+    let lastEnd = monoEnd[0];
+    for (let i = 1; i < list.length; i++) {
+      if (monoStart[i] < lastEnd - 180) continue;
+      sequential.push(list[i]);
+      lastEnd = Math.max(lastEnd, monoEnd[i]);
+    }
+    if (sequential.length <= 1) continue;
+
+    const compact = sequential.map((t) => ({
       trip_id: t.trip_id,
       first_departure: (t.first_departure ?? "—").slice(0, 5),
       last_departure: (t.last_departure ?? t.first_departure ?? "—").slice(0, 5),
       ...(t.headsign ? { headsign: t.headsign } : {}),
     }));
     blockIndex[blockId] = compact;
-    for (const t of compact) tripToBlock[t.trip_id] = blockId;
+    for (const t of compact) {
+      tripToBlock[t.trip_id] = blockId;
+      if (feedId === "go" || feedId === "up") {
+        const suffix = t.trip_id.match(/^\d{8}-(.+)$/)?.[1];
+        if (suffix) tripToBlock[`suffix:${suffix}`] = blockId;
+      }
+    }
   }
 
   const payload = { tripToBlock };

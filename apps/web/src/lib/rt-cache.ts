@@ -183,11 +183,16 @@ function isFreshRt(entry: { updatedAt: number } | undefined, now = Date.now()): 
   return entry != null && now - entry.updatedAt < RT_STALE_MS;
 }
 
-function clearRtMaps() {
-  tripMap.clear();
-  stopTripMap.clear();
-  vehicleMap.clear();
-  predictionsByStop.clear();
+function evictStaleRt(now = Date.now()) {
+  for (const [k, v] of tripMap) {
+    if (!isFreshRt(v, now)) tripMap.delete(k);
+  }
+  for (const [k, v] of stopTripMap) {
+    if (!isFreshRt(v, now)) stopTripMap.delete(k);
+  }
+  for (const [k, v] of vehicleMap) {
+    if (!isFreshRt(v, now)) vehicleMap.delete(k);
+  }
 }
 
 async function pollGoRest(key: string, now: number): Promise<number> {
@@ -458,7 +463,7 @@ export async function refreshRtCache(force = false) {
   if (refreshing) return refreshing;
 
   refreshing = (async () => {
-    clearRtMaps();
+    evictStaleRt();
     await Promise.all(Object.keys(RT_FEEDS).map((feedId) => pollFeed(feedId)));
     if (goKey) {
       await pollGo(goKey);
@@ -766,6 +771,7 @@ export function isRtCacheWarm(): boolean {
 /** Refresh RT only when the cache is empty or stale. */
 export async function ensureRtCache(force = false): Promise<void> {
   if (!force && isRtCacheWarm()) return;
+  if (refreshing) return;
   await refreshRtCache(force);
 }
 

@@ -5,7 +5,7 @@ import { routeColor } from "@/lib/colors";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { loadDemoRouteDetail } from "@/lib/load-demo-route";
 import { routesMatch } from "@/lib/route-match";
-import { refreshRtCache } from "@/lib/rt-cache";
+import { ensureRtCacheWithin } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
@@ -20,7 +20,7 @@ export async function GET(
     if (!detail) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(detail);
   }
-  await refreshRtCache();
+  await ensureRtCacheWithin(2000);
 
   const db = getSql();
   const date = serviceDate();

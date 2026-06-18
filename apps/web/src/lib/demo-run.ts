@@ -20,7 +20,14 @@ import {
   unixToTorontoSec,
 } from "./calendar";
 import type { ScheduleRow } from "./demo-schedule-types";
-import { needsHeadsignLookup, preloadTripHeadsignIndex, tripHeadsign, headsignFromWarmIndex } from "./demo-trip-headsign";
+import { resolveVehicleBlock } from "./demo-trip-meta";
+import {
+  needsHeadsignLookup,
+  preloadTripHeadsignIndex,
+  tripHeadsign,
+  headsignFromWarmIndex,
+} from "./demo-trip-headsign";
+import { boardDestination } from "./headsign";
 import { liveStopDisplayName, mapFixtureStopsToRt, resolveTtcRtStopIds } from "./ttc-stop-registry";
 import {
   getRtVehicle,
@@ -250,7 +257,7 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
 
   const warmHeadsign =
     liveTripId != null ? headsignFromWarmIndex(feedId, liveTripId) : null;
-  const headsign =
+  const headsignRaw =
     (scheduleTrip?.headsign?.trim() && !needsHeadsignLookup(scheduleTrip.headsign)
       ? scheduleTrip.headsign.trim()
       : null) ??
@@ -258,8 +265,15 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
     (liveTripId && !warmHeadsign ? await tripHeadsign(feedId, liveTripId) : null) ??
     route?.long_name ??
     null;
+  const headsign = headsignRaw
+    ? boardDestination(
+        feedId,
+        route?.short_name ?? scheduleTrip?.routeShort,
+        headsignRaw,
+      ) || headsignRaw
+    : null;
 
-  const [allUpcoming] = await Promise.all([
+  const [allUpcoming, block] = await Promise.all([
     liveTripId
       ? buildUpcomingStops(
           feedId,
@@ -269,18 +283,20 @@ export async function getDemoRun(feedId: string, vehicleId: string) {
           vehicle.currentStopSequence,
         )
       : Promise.resolve([] as UpcomingStop[]),
+    liveTripId
+      ? resolveVehicleBlock(feedId, liveTripId, scheduleTripId)
+      : Promise.resolve({
+          blockId: null,
+          blockTrips: [],
+          blockStart: null,
+          blockEnd: null,
+        }),
   ]);
 
-  const blockId = null;
-  const blockTrips: Array<{
-    trip_id: string;
-    headsign: string | null;
-    first_departure: string;
-    last_departure?: string;
-    active: boolean;
-  }> = [];
-  const blockStart = null;
-  const blockEnd = null;
+  const blockId = block.blockId;
+  const blockTrips = block.blockTrips;
+  const blockStart = block.blockStart;
+  const blockEnd = block.blockEnd;
 
   const currentIdx = inferCurrentStopIndex(
     allUpcoming,

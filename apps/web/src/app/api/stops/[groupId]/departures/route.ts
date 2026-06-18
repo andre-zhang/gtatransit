@@ -37,6 +37,18 @@ export async function GET(
       return NextResponse.json(board);
     } catch (err) {
       console.error("[departures]", groupId, err);
+      if (!quick) {
+        try {
+          const stop = await loadDemoStopMeta(groupId);
+          const resolved = resolveStopGroupId(groupId);
+          if (stop) {
+            const fallback = await buildDemoStopDepartures(resolved, stop, { quick: true });
+            return NextResponse.json({ ...fallback, partial: true });
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       return NextResponse.json({ name: "Stop", rows: [], error: "load_failed" }, { status: 500 });
     }
   }
