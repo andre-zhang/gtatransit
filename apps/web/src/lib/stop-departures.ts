@@ -277,7 +277,7 @@ async function buildRtStopIdMaps(stop: DemoStopMeta) {
 
   for (const m of stop.members) {
     if (m.feedId === "ttc") {
-      if (!rtStopIdsByFeed.has("ttc")) rtStopIdsByFeed.set("ttc", ttcRtIds);
+      continue;
     } else if (m.feedId === "go" && !rtStopIdsByFeed.has("go")) {
       const ids = new Set<string>();
       for (const x of stop.members.filter((x) => x.feedId === "go")) {
