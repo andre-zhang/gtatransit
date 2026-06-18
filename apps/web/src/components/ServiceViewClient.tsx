@@ -90,8 +90,8 @@ export function ServiceViewClient({
   }, [apiPath]);
 
   useEffect(() => {
+    void refresh();
     const id = setInterval(() => void refresh(), 20_000);
-    if (!hadDataRef.current) void refresh();
     return () => clearInterval(id);
   }, [refresh]);
 

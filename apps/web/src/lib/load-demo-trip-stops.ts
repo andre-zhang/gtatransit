@@ -9,7 +9,7 @@ export async function loadDemoTripStopsLite(
   opts?: { fromStop?: string; scheduleTrip?: string },
 ) {
   await ensureDemoStopAssets();
-  await ensureRtCacheWithin(1500);
+  await ensureRtCacheWithin(3000);
 
   const scheduleTripId = opts?.scheduleTrip?.trim() || tripId;
   const stops = await buildDemoTripStops({

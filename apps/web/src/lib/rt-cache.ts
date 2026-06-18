@@ -771,7 +771,10 @@ export function isRtCacheWarm(): boolean {
 /** Refresh RT only when the cache is empty or stale. */
 export async function ensureRtCache(force = false): Promise<void> {
   if (!force && isRtCacheWarm()) return;
-  if (refreshing) return;
+  if (refreshing) {
+    await refreshing;
+    return;
+  }
   await refreshRtCache(force);
 }
 

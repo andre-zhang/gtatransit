@@ -45,6 +45,28 @@ export function RouteViewClient({
   const [vehicles, setVehicles] = useState(initialVehicles);
   const [switching, setSwitching] = useState(false);
 
+  const refreshLive = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/routes/${feedId}/${encodeURIComponent(routeId)}?direction=${direction}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as RouteDetail;
+      setTrips(data.trips);
+      setVehicles(data.vehicles);
+      if (data.directionLabels) setLabels(data.directionLabels);
+    } catch {
+      /* keep last snapshot */
+    }
+  }, [direction, feedId, routeId]);
+
+  useEffect(() => {
+    void refreshLive();
+    const id = setInterval(() => void refreshLive(), 20_000);
+    return () => clearInterval(id);
+  }, [refreshLive]);
+
   useEffect(() => {
     setDirection(initialDirection);
     setTrips(initialTrips);

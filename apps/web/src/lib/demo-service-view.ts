@@ -313,7 +313,7 @@ export async function getDemoServiceView(
   await ensureDemoStopAssets();
   const { ensureRtCacheWithin } = await import("./rt-cache");
   await Promise.all([
-    ensureRtCacheWithin(1500),
+    ensureRtCacheWithin(3500),
     preloadTripHeadsignIndex(feedId),
     ensureDemoAssets(),
   ]);
