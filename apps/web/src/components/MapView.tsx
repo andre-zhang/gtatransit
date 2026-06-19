@@ -29,24 +29,25 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const refreshRef = useRef<() => void>(() => {});
   const aliveRef = useRef(true);
+  const agencies = filterTree?.agencies ?? [];
 
   const [zoom, setZoom] = useState(GTA_DEFAULT_ZOOM);
   const [showRoutes, setShowRoutes] = useState(true);
   const [showVehicles, setShowVehicles] = useState(true);
   const [showStops, setShowStops] = useState(true);
   const [selectedAgencies, setSelectedAgencies] = useState<Set<string>>(
-    () => new Set(filterTree.agencies.map((a) => a.id)),
+    () => new Set(agencies.map((a) => a.id)),
   );
   const [selectedModes, setSelectedModes] = useState<Set<string>>(() => {
     const s = new Set<string>();
-    for (const a of filterTree.agencies) {
+    for (const a of agencies) {
       for (const m of a.modes) s.add(`${a.id}:${m.type}`);
     }
     return s;
   });
   const [selectedRoutes, setSelectedRoutes] = useState<Set<string>>(() => {
     const s = new Set<string>();
-    for (const a of filterTree.agencies) {
+    for (const a of agencies) {
       for (const m of a.modes) {
         for (const r of m.routes) s.add(`${a.id}:${r.id}`);
       }
@@ -425,7 +426,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
 
   const layerPanel = (
     <LayerPanel
-      tree={filterTree}
+      tree={{ agencies }}
       zoom={zoom}
       selectedAgencies={selectedAgencies}
       selectedModes={selectedModes}
@@ -453,7 +454,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         } else {
           next.add(id);
           setSelectedAgencies(next);
-          const ag = filterTree.agencies.find((a) => a.id === id);
+          const ag = agencies.find((a) => a.id === id);
           if (ag) {
             setSelectedModes((modes) => {
               const m = new Set(modes);

@@ -53,8 +53,8 @@ export function RouteViewClient({
       );
       if (!res.ok) return;
       const data = (await res.json()) as RouteDetail;
-      setTrips(data.trips);
-      setVehicles(data.vehicles);
+      setTrips(Array.isArray(data.trips) ? data.trips : []);
+      setVehicles(Array.isArray(data.vehicles) ? data.vehicles : []);
       if (data.directionLabels) setLabels(data.directionLabels);
     } catch {
       /* keep last snapshot */
@@ -86,8 +86,8 @@ export function RouteViewClient({
         );
         if (!res.ok) return;
         const data = (await res.json()) as RouteDetail;
-        setTrips(data.trips);
-        setVehicles(data.vehicles);
+        setTrips(Array.isArray(data.trips) ? data.trips : []);
+        setVehicles(Array.isArray(data.vehicles) ? data.vehicles : []);
         if (data.directionLabels) setLabels(data.directionLabels);
         const href = `/route/${feedId}/${encodeURIComponent(routeId)}?direction=${d}`;
         window.history.replaceState(null, "", href);

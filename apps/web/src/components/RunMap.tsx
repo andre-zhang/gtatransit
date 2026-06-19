@@ -22,47 +22,58 @@ export function RunMap({
 
   useEffect(() => {
     if (!ref.current || lat == null || lon == null) return;
-    const map = new maplibregl.Map({
-      container: ref.current,
-      style: BASEMAP_STYLE,
-      center: [lon, lat],
-      zoom: GTA_DEFAULT_ZOOM + 3,
-      attributionControl: { compact: true },
-    });
+    let map: maplibregl.Map | null = null;
+    try {
+      map = new maplibregl.Map({
+        container: ref.current,
+        style: BASEMAP_STYLE,
+        center: [lon, lat],
+        zoom: GTA_DEFAULT_ZOOM + 3,
+        attributionControl: { compact: true },
+      });
+    } catch (err) {
+      console.error("RunMap init failed:", err);
+      return;
+    }
 
     map.on("load", () => {
-      if (shape?.geometry) {
-        map.addSource("route", { type: "geojson", data: shape });
-        map.addLayer({
-          id: "route-line",
-          type: "line",
-          source: "route",
-          paint: { "line-color": routeColor, "line-width": 4 },
+      if (!map) return;
+      try {
+        if (shape?.geometry) {
+          map.addSource("route", { type: "geojson", data: shape });
+          map.addLayer({
+            id: "route-line",
+            type: "line",
+            source: "route",
+            paint: { "line-color": routeColor, "line-width": 4 },
+          });
+        }
+        map.addSource("vehicle", {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [lon, lat] },
+            properties: { bearing: bearing ?? 0 },
+          },
         });
+        ensureVehicleArrowImage(map);
+        map.addLayer({
+          id: "vehicle",
+          type: "symbol",
+          source: "vehicle",
+          layout: {
+            "icon-image": VEHICLE_ARROW_IMAGE_ID,
+            "icon-size": 0.38,
+            "icon-rotate": ["coalesce", ["get", "bearing"], 0],
+            "icon-rotation-alignment": "map",
+          },
+        });
+      } catch (err) {
+        console.error("RunMap layer setup failed:", err);
       }
-      map.addSource("vehicle", {
-        type: "geojson",
-        data: {
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [lon, lat] },
-          properties: { bearing: bearing ?? 0 },
-        },
-      });
-      ensureVehicleArrowImage(map);
-      map.addLayer({
-        id: "vehicle",
-        type: "symbol",
-        source: "vehicle",
-        layout: {
-          "icon-image": VEHICLE_ARROW_IMAGE_ID,
-          "icon-size": 0.38,
-          "icon-rotate": ["coalesce", ["get", "bearing"], 0],
-          "icon-rotation-alignment": "map",
-        },
-      });
     });
 
-    return () => map.remove();
+    return () => map?.remove();
   }, [lat, lon, bearing, shape, routeColor]);
 
   if (lat == null || lon == null) return null;

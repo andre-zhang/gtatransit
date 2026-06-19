@@ -41,6 +41,24 @@ function blockSectionTitle(trip: ServiceViewData["trip"]) {
   return "Trips in block";
 }
 
+function normalizeServiceView(data: ServiceViewData): ServiceViewData {
+  const trainDetail = data.trainDetail
+    ? {
+        ...data.trainDetail,
+        coachNumbers: Array.isArray(data.trainDetail.coachNumbers)
+          ? data.trainDetail.coachNumbers
+          : [],
+      }
+    : null;
+
+  return {
+    ...data,
+    tripStops: Array.isArray(data.tripStops) ? data.tripStops : [],
+    blockTrips: Array.isArray(data.blockTrips) ? data.blockTrips : [],
+    trainDetail,
+  };
+}
+
 export function ServiceViewClient({
   feedId,
   vehicleId,
@@ -54,7 +72,9 @@ export function ServiceViewClient({
   tripQuery?: { fromStop?: string; scheduleTrip?: string };
   initial: ServiceViewData | null;
 }) {
-  const [data, setData] = useState<ServiceViewData | null>(initial);
+  const [data, setData] = useState<ServiceViewData | null>(
+    initial ? normalizeServiceView(initial) : null,
+  );
   const [loading, setLoading] = useState(initial == null);
   const [coachesOpen, setCoachesOpen] = useState(false);
   const hadDataRef = useRef(initial != null);
@@ -77,7 +97,7 @@ export function ServiceViewClient({
     try {
       const res = await fetch(apiPath, { cache: "no-store" });
       if (res.ok) {
-        setData((await res.json()) as ServiceViewData);
+        setData(normalizeServiceView((await res.json()) as ServiceViewData));
         hadDataRef.current = true;
       } else if (!hadDataRef.current) {
         setData(null);
@@ -123,7 +143,8 @@ export function ServiceViewClient({
     route?.short_name ??
     null;
   const isGoTrain = isMetrolinxRailFeed(feedId, lineCode);
-  const coachCount = trainDetail?.cars ?? trainDetail?.coachNumbers.length ?? null;
+  const coachCount =
+    trainDetail?.cars ?? (trainDetail?.coachNumbers?.length ? trainDetail.coachNumbers.length : null);
   const coachLabel =
     trainDetail?.carsLabel ??
     (coachCount != null ? `${coachCount} coach${coachCount === 1 ? "" : "es"}` : null);
@@ -185,7 +206,7 @@ export function ServiceViewClient({
                 aria-expanded={coachesOpen}
               >
                 {coachLabel ?? "—"}
-                {(trainDetail?.coachNumbers.length || trainDetail?.display) && (
+                {(trainDetail?.coachNumbers?.length || trainDetail?.display) && (
                   <span className="ml-1 text-xs font-normal text-go-slate">
                     {coachesOpen ? "▲" : "▼"}
                   </span>
@@ -198,7 +219,7 @@ export function ServiceViewClient({
               )}
               {coachesOpen && (
                 <div className="mt-2 space-y-1 text-xs text-go-slate">
-                  {trainDetail?.coachNumbers.length ? (
+                  {trainDetail?.coachNumbers?.length ? (
                     <ul className="flex flex-wrap gap-1.5">
                       {trainDetail.coachNumbers.map((c) => (
                         <li
