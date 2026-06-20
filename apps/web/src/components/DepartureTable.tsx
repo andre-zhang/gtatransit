@@ -105,7 +105,6 @@ function TripStopsPanel({
             <TimePair
               scheduled={s.scheduled}
               predicted={s.predicted}
-              live={s.predicted != null && s.predicted !== s.scheduled}
               size="sm"
             />
           </span>
@@ -154,9 +153,8 @@ export function DepartureTable({
     const showDayBreak = dayOffset > prevDay;
     const dayLabel =
       dayOffset === 1 ? "Tomorrow" : dayOffset > 1 ? `+${dayOffset} days` : null;
-    const displayTime = r.predicted ?? r.time;
-    const showStruck = r.realtime;
-    const predictedDisplay = r.realtime ? (r.predicted ?? r.time) : undefined;
+    const predictedDisplay =
+      r.realtime && r.predicted && r.predicted !== r.time ? r.predicted : undefined;
     const rowKey = `${r.tripId}-${i}`;
     const isOpen = expanded === rowKey;
     const tripHref = tripPageHref(r.feedId, r.tripId, {
@@ -172,12 +170,10 @@ export function DepartureTable({
       dayOffset,
       showDayBreak,
       dayLabel,
-      displayTime,
       rowKey,
       isOpen,
       tripHref,
       vehicleHref,
-      showStruck,
       predictedDisplay,
     };
   };
@@ -209,7 +205,6 @@ export function DepartureTable({
                       <TimePair
                         scheduled={r.time}
                         predicted={m.predictedDisplay}
-                        live={r.realtime}
                         size="sm"
                         align="right"
                       />
@@ -305,7 +300,6 @@ export function DepartureTable({
                       <TimePair
                         scheduled={r.time}
                         predicted={m.predictedDisplay}
-                        live={r.realtime}
                         size="sm"
                         align="right"
                       />

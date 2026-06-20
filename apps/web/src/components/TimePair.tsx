@@ -5,18 +5,16 @@ export function TimePair({
   size = "md",
   align = "right",
   showStruckWhenEqual = false,
-  live = false,
 }: {
   scheduled: string;
   predicted?: string;
   size?: "sm" | "md" | "lg";
   align?: "left" | "right";
   showStruckWhenEqual?: boolean;
-  live?: boolean;
 }) {
   const actual = predicted ?? scheduled;
   const showStruck =
-    live || (predicted != null && (showStruckWhenEqual || predicted !== scheduled));
+    predicted != null && (showStruckWhenEqual || predicted !== scheduled);
 
   const mainSize =
     size === "lg"
