@@ -3,6 +3,7 @@ import { getDemoRoutesGeoJson } from "@/lib/demo-routes";
 import { useDemoFixtures } from "@/lib/demo-mode";
 import { filterDemoRoutes, parseMapFilters } from "@/lib/demo-map-filters";
 import { filterRouteCollection, mapQueryParams } from "@/lib/geojson-map";
+import { cachedJsonBody } from "@/lib/api-cache";
 import { ZOOM_ROUTES } from "@/lib/map-zoom";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
@@ -24,9 +25,7 @@ export async function GET(req: NextRequest) {
     const key = `${bbox?.join(",") ?? "all"}:${zoom}:${JSON.stringify(filters)}`;
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < CACHE_MS) {
-      return new NextResponse(hit.body, {
-        headers: { "Content-Type": "application/json" },
-      });
+      return cachedJsonBody(hit.body, 15);
     }
     const filtered = filterRouteCollection(
       filterDemoRoutes(getDemoRoutesGeoJson(), filters),
@@ -35,7 +34,7 @@ export async function GET(req: NextRequest) {
     );
     const body = JSON.stringify(filtered);
     cache.set(key, { body, at: Date.now() });
-    return new NextResponse(body, { headers: { "Content-Type": "application/json" } });
+    return cachedJsonBody(body, 15);
   }
 
   const { default: liveHandler } = await import("./live");

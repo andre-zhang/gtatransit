@@ -4,7 +4,8 @@ import { useDemoFixtures } from "@/lib/demo-mode";
 import { parseMapFilters, vehicleMatchesFilters } from "@/lib/demo-map-filters";
 import { filterPointCollection, mapQueryParams } from "@/lib/geojson-map";
 import { routeColor } from "@/lib/colors";
-import { getRtVehicles, refreshRtCache } from "@/lib/rt-cache";
+import { jsonWithCache } from "@/lib/api-cache";
+import { getRtVehicles, ensureRtVehiclesWithin, refreshRtCache } from "@/lib/rt-cache";
 import { vehicleCollection } from "@/lib/vehicle-geojson";
 import { parseDirs, parseList } from "@/lib/parse-filters";
 
@@ -15,9 +16,8 @@ export async function GET(req: NextRequest) {
 
   if (await useDemoFixtures()) {
     const { ensureDemoStopAssets } = await import("@/lib/demo-assets");
-    const { ensureRtCacheWithin } = await import("@/lib/rt-cache");
     await ensureDemoStopAssets();
-    await ensureRtCacheWithin(3000);
+    await ensureRtVehiclesWithin(1200);
     const filters = parseMapFilters(req.nextUrl.searchParams);
     const vehicles = getRtVehicles().filter((v) => vehicleMatchesFilters(v, filters));
     const fc = vehicleCollection(
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
           bearing: v.bearing,
         })),
     );
-    return NextResponse.json(filterPointCollection(fc, bbox));
+    return jsonWithCache(filterPointCollection(fc, bbox), 15);
   }
 
   await refreshRtCache();

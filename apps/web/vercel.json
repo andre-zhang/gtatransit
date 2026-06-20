@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd ../.. && (git lfs pull 2>/dev/null || true) && pnpm install",
   "framework": "nextjs",
-  "crons": [{ "path": "/api/cron/rt", "schedule": "0 4 * * *" }]
+  "crons": [{ "path": "/api/cron/rt", "schedule": "*/5 * * * *" }]
 }

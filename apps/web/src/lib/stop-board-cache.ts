@@ -3,7 +3,7 @@ import type { DepartureRowOut } from "./departures";
 type BoardPayload = { name: string; rows: DepartureRowOut[] };
 
 const cache = new Map<string, { at: number; data: BoardPayload }>();
-const TTL_MS = 20_000;
+const TTL_MS = 45_000;
 
 export function getCachedStopBoard(groupId: string, quick: boolean): BoardPayload | null {
   const hit = cache.get(`${groupId}:${quick ? "q" : "l"}`);

@@ -17,7 +17,7 @@ export default async function HomePage() {
     await ensureDemoStopAssets();
     const core = getDemoCore();
     tree = core.filterTree as typeof tree;
-    void ensureRtCacheWithin(3000);
+    void ensureRtCacheWithin(1500);
     rtUpdated = getRtLastUpdatedIso() ?? core.rtUpdated;
   } else {
     try {

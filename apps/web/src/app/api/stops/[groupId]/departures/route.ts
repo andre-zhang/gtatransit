@@ -12,6 +12,7 @@ import { loadDemoStopMeta } from "@/lib/demo-stop-meta";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
 import { buildDemoStopDepartures } from "@/lib/stop-departures";
 import { getCachedStopBoard, setCachedStopBoard } from "@/lib/stop-board-cache";
+import { jsonWithCache } from "@/lib/api-cache";
 import { ensureRtCache, mergeRtIntoDeparture } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
@@ -28,13 +29,13 @@ export async function GET(
       const stop = await loadDemoStopMeta(groupId);
       const resolved = resolveStopGroupId(groupId);
       const cached = getCachedStopBoard(resolved, quick);
-      if (cached) return NextResponse.json(cached);
+      if (cached) return jsonWithCache(cached, quick ? 30 : 20);
 
       if (!stop) return NextResponse.json({ name: "Stop", rows: [] });
 
       const board = await buildDemoStopDepartures(resolved, stop, { quick });
       setCachedStopBoard(resolved, quick, board);
-      return NextResponse.json(board);
+      return jsonWithCache(board, quick ? 30 : 20);
     } catch (err) {
       console.error("[departures]", groupId, err);
       if (!quick) {

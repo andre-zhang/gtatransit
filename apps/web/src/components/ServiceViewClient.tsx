@@ -110,9 +110,17 @@ export function ServiceViewClient({
   }, [apiPath]);
 
   useEffect(() => {
-    void refresh();
-    const id = setInterval(() => void refresh(), 20_000);
-    return () => clearInterval(id);
+    let mountRefresh: ReturnType<typeof setTimeout> | undefined;
+    if (hadDataRef.current) {
+      mountRefresh = setTimeout(() => void refresh(), 5000);
+    } else {
+      void refresh();
+    }
+    const id = setInterval(() => void refresh(), 30_000);
+    return () => {
+      if (mountRefresh) clearTimeout(mountRefresh);
+      clearInterval(id);
+    };
   }, [refresh]);
 
   if (!data) {

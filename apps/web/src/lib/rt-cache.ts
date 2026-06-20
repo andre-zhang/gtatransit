@@ -39,13 +39,42 @@ type StopRt = {
 
 type TripRt = StopRt & { routeId?: string; vehicleId?: string };
 
-const TTL_MS = 30_000;
+const TTL_MS = 60_000;
 const tripMap = new Map<string, TripRt>();
 const stopTripMap = new Map<string, StopRt>();
 const vehicleMap = new Map<string, RtVehicle & { updatedAt: number }>();
 const predictionsByStop = new Map<string, IndexedPrediction[]>();
 let lastRefresh = 0;
 let refreshing: Promise<void> | null = null;
+
+export type RtRefreshScope = {
+  force?: boolean;
+  /** Default true. Set false on map vehicle polls to skip heavy trip-update feeds. */
+  trips?: boolean;
+  /** Default true. */
+  vehicles?: boolean;
+};
+
+function normalizeRefreshScope(opts: boolean | RtRefreshScope = {}): Required<
+  Pick<RtRefreshScope, "force" | "trips" | "vehicles">
+> {
+  const o = typeof opts === "boolean" ? { force: opts } : opts;
+  return {
+    force: o.force ?? false,
+    trips: o.trips !== false,
+    vehicles: o.vehicles !== false,
+  };
+}
+
+function hasUsableRtCache(): boolean {
+  return tripMap.size > 0 || vehicleMap.size > 0;
+}
+
+function scheduleRtRefresh(opts: boolean | RtRefreshScope = {}) {
+  if (refreshing) return;
+  void refreshRtCache(opts);
+}
+
 export function normalizeMetrolinxKey(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   let key = raw.trim();
@@ -250,17 +279,20 @@ async function pollMetrolinxFeed(
   feedId: "go" | "up",
   api: { tripUpdates: string; vehiclePositions: string },
   key: string,
+  scope: Pick<RtRefreshScope, "trips" | "vehicles"> = {},
 ) {
   const now = Date.now();
   let sawData = false;
   let tripUpdates = 0;
   let vehicles = 0;
   const errors: string[] = [];
+  const wantTrips = scope.trips !== false;
+  const wantVehicles = scope.vehicles !== false;
+  const kinds: Array<["vehicles" | "trips", string]> = [];
+  if (wantVehicles) kinds.push(["vehicles", api.vehiclePositions]);
+  if (wantTrips) kinds.push(["trips", api.tripUpdates]);
 
-  for (const [kind, path] of [
-    ["vehicles", api.vehiclePositions],
-    ["trips", api.tripUpdates],
-  ] as const) {
+  for (const [kind, path] of kinds) {
     try {
       const url = metrolinxApiUrl(path, key);
       const res = await fetch(url, { next: { revalidate: 0 } });
@@ -364,9 +396,10 @@ async function pollMetrolinxFeed(
   return { sawData, tripUpdates, vehicles };
 }
 
-async function pollGo(key: string) {
+async function pollGo(key: string, scope: Pick<RtRefreshScope, "trips" | "vehicles"> = {}) {
   const now = Date.now();
-  const result = await pollMetrolinxFeed("go", GO_RT_API, key);
+  const result = await pollMetrolinxFeed("go", GO_RT_API, key, scope);
+  if (scope.trips === false) return;
   if (result.sawData && result.tripUpdates === 0) {
     await pollGoRest(key, now);
   } else if (!result.sawData) {
@@ -374,12 +407,17 @@ async function pollGo(key: string) {
   }
 }
 
-async function pollFeed(feedId: string) {
+async function pollFeed(
+  feedId: string,
+  scope: Pick<RtRefreshScope, "trips" | "vehicles"> = {},
+) {
   const cfg = RT_FEEDS[feedId];
   if (!cfg) return;
   const now = Date.now();
+  const wantTrips = scope.trips !== false;
+  const wantVehicles = scope.vehicles !== false;
 
-  if (cfg.tripUpdates) {
+  if (wantTrips && cfg.tripUpdates) {
     try {
       const msg = await fetchRt(cfg.tripUpdates, cfg.headers);
       for (const u of parseTripUpdates(feedId, msg)) {
@@ -406,7 +444,7 @@ async function pollFeed(feedId: string) {
     }
   }
 
-  if (cfg.vehicles) {
+  if (wantVehicles && cfg.vehicles) {
     try {
       const msg = await fetchRt(cfg.vehicles, cfg.headers);
       for (const v of parseVehicles(feedId, msg)) {
@@ -443,20 +481,15 @@ async function pollFeed(feedId: string) {
   }
 }
 
-export async function refreshRtCache(force = false) {
+export async function refreshRtCache(opts: boolean | RtRefreshScope = {}) {
+  const { force, trips, vehicles } = normalizeRefreshScope(opts);
+  const scope = { trips, vehicles };
   const goKey = readMetrolinxKey();
   goRtEnabled = Boolean(goKey);
 
-  if (!force && Date.now() - lastRefresh < TTL_MS && tripMap.size > 0) {
-    if (goKey && Date.now() - goRtLastOk > TTL_MS) {
-      await pollGo(goKey);
-      await pollMetrolinxFeed("up", UP_RT_API, goKey);
-      rebuildStopPredictionsIndex();
-      goRtStats = {
-        ...goRtStats,
-        predictions: [...predictionsByStop.keys()].filter((k) => k.startsWith("go:"))
-          .length,
-      };
+  if (!force && Date.now() - lastRefresh < TTL_MS && hasUsableRtCache()) {
+    if (goKey && trips && Date.now() - goRtLastOk > TTL_MS) {
+      scheduleRtRefresh({ trips: true, vehicles: false });
     }
     return;
   }
@@ -464,10 +497,12 @@ export async function refreshRtCache(force = false) {
 
   refreshing = (async () => {
     evictStaleRt();
-    await Promise.all(Object.keys(RT_FEEDS).map((feedId) => pollFeed(feedId)));
+    await Promise.all(Object.keys(RT_FEEDS).map((feedId) => pollFeed(feedId, scope)));
     if (goKey) {
-      await pollGo(goKey);
-      await pollMetrolinxFeed("up", UP_RT_API, goKey);
+      await pollGo(goKey, scope);
+      if (trips || vehicles) {
+        await pollMetrolinxFeed("up", UP_RT_API, goKey, scope);
+      }
     }
 
     if (isDatabaseConfigured() && !(await useDemoFixtures())) {
@@ -481,12 +516,14 @@ export async function refreshRtCache(force = false) {
       }
     }
 
-    rebuildStopPredictionsIndex();
-    goRtStats = {
-      ...goRtStats,
-      predictions: [...predictionsByStop.keys()].filter((k) => k.startsWith("go:"))
-        .length,
-    };
+    if (trips) {
+      rebuildStopPredictionsIndex();
+      goRtStats = {
+        ...goRtStats,
+        predictions: [...predictionsByStop.keys()].filter((k) => k.startsWith("go:"))
+          .length,
+      };
+    }
     lastRefresh = Date.now();
     refreshing = null;
   })();
@@ -765,26 +802,48 @@ function snapshotTripUpdates(): RtTripUpdate[] {
 
 /** True when in-memory RT was refreshed recently. */
 export function isRtCacheWarm(): boolean {
-  return tripMap.size > 0 && Date.now() - lastRefresh < TTL_MS;
+  return hasUsableRtCache() && Date.now() - lastRefresh < TTL_MS;
 }
 
 /** Refresh RT only when the cache is empty or stale. */
-export async function ensureRtCache(force = false): Promise<void> {
+export async function ensureRtCache(opts: boolean | RtRefreshScope = {}): Promise<void> {
+  const { force } = normalizeRefreshScope(opts);
   if (!force && isRtCacheWarm()) return;
+
+  if (!force && hasUsableRtCache()) {
+    scheduleRtRefresh(opts);
+    return;
+  }
+
   if (refreshing) {
     await refreshing;
     return;
   }
-  await refreshRtCache(force);
+  await refreshRtCache(opts);
 }
 
 /** Wait for RT refresh but don't block the board longer than maxMs. */
-export async function ensureRtCacheWithin(maxMs: number, force = false): Promise<void> {
+export async function ensureRtCacheWithin(
+  maxMs: number,
+  opts: boolean | RtRefreshScope = {},
+): Promise<void> {
+  const { force } = normalizeRefreshScope(opts);
   if (!force && isRtCacheWarm()) return;
+
+  if (!force && hasUsableRtCache()) {
+    scheduleRtRefresh(opts);
+    return;
+  }
+
   await Promise.race([
-    ensureRtCache(force),
+    ensureRtCache(opts),
     new Promise<void>((resolve) => setTimeout(resolve, maxMs)),
   ]);
+}
+
+/** Vehicle positions only — skips trip-update protobuf decode (much cheaper). */
+export async function ensureRtVehiclesWithin(maxMs: number): Promise<void> {
+  return ensureRtCacheWithin(maxMs, { trips: false, vehicles: true });
 }
 
 /** ISO timestamp of the most recent successful RT poll (for UI freshness). */

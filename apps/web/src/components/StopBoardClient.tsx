@@ -67,7 +67,7 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
   }, [load]);
 
   useEffect(() => {
-    const id = setInterval(() => void load({ background: true }), 20_000);
+    const id = setInterval(() => void load({ background: true }), 30_000);
     return () => clearInterval(id);
   }, [load]);
 

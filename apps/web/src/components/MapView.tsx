@@ -413,7 +413,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
       fetch(`/api/map/vehicles?${params}`)
         .then((r) => (r.ok ? r.json() : EMPTY_FC))
         .then((geo) => setSource("vehicles", geo));
-    }, 15000);
+    }, 20_000);
     return () => clearInterval(id);
   }, [buildQuery, showVehicles]);
 
