@@ -1,4 +1,5 @@
 import {
+  boardHorizonSec,
   formatBoardTime,
   isUnixTimestamp,
   normalizeServiceSec,
@@ -146,6 +147,7 @@ export function filterUpcomingDepartures(
   const now = torontoNowSec();
   const pastGrace = opts?.pastGraceSec ?? 120;
   const limit = opts?.limit ?? 80;
+  const horizon = boardHorizonSec(now);
 
   const mapped = rows
     .map((r) => {
@@ -167,6 +169,7 @@ export function filterUpcomingDepartures(
 
       depSec = normalizeServiceSec(depSec, now);
       if (depSec < now - pastGrace) return null;
+      if (depSec > now + horizon) return null;
 
       if (realtime) {
         delaySec = computeDelaySec(schedSec, {

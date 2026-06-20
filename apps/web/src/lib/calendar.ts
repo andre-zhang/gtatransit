@@ -1,9 +1,17 @@
+import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 
 const TZ = "America/Toronto";
 
+const SERVICE_ROLLOVER_SEC = 3 * 3600;
+const LATE_NIGHT_END_SEC = 6 * 3600;
+const EVENING_START_SEC = 18 * 3600;
+const SAME_DAY_GAP_SEC = 12 * 3600;
+
+/** GTFS service day (YYYYMMDD), rolling at 3 AM Toronto time. */
 export function serviceDate(d = new Date()): string {
-  return formatInTimeZone(d, TZ, "yyyyMMdd");
+  const ref = torontoNowSec(d) < SERVICE_ROLLOVER_SEC ? subDays(d, 1) : d;
+  return formatInTimeZone(ref, TZ, "yyyyMMdd");
 }
 
 export function weekdayIndex(d = new Date()): number {
@@ -75,16 +83,23 @@ export function formatGtfsTime(sec: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-const SERVICE_ROLLOVER_SEC = 3 * 3600;
-const LATE_NIGHT_END_SEC = 6 * 3600;
-const EVENING_START_SEC = 18 * 3600;
-const SAME_DAY_GAP_SEC = 12 * 3600;
+/** How far ahead departure boards look (longer overnight for night service). */
+export function boardHorizonSec(now = torontoNowSec()): number {
+  return now < LATE_NIGHT_END_SEC ? 8 * 3600 : 6 * 3600;
+}
 
 /** Normalize a departure second-of-day into upcoming service context. */
 export function normalizeServiceSec(schedSec: number, now: number): number {
-  // GTFS post-midnight times (24:00+ = same service night as 00:00–03:00 clock times).
+  // GTFS post-midnight times (24:00+ = same service night as 00:00–05:59 clock times).
   if (schedSec >= 86400) {
     const clockSec = schedSec % 86400;
+    if (now < LATE_NIGHT_END_SEC) {
+      return clockSec;
+    }
+    // Before midnight, 24:xx+ departures are later tonight / early tomorrow.
+    if (now >= EVENING_START_SEC && clockSec < LATE_NIGHT_END_SEC) {
+      return schedSec;
+    }
     if (now > clockSec + 180 && now - clockSec < 20 * 3600) {
       return clockSec;
     }

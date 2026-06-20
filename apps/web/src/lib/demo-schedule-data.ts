@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { gtfsTimeToSec, normalizeServiceSec, torontoNowSec } from "./calendar";
+import { gtfsTimeToSec, normalizeServiceSec, torontoNowSec, boardHorizonSec } from "./calendar";
 import { resolveDemoDir } from "./demo-dir";
 import { readDemoJsonFile } from "./demo-read";
 import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
@@ -376,7 +376,7 @@ export async function loadUnionScheduleForBoard(
   const keys = new Set(members.map((m) => `${m.feedId}:${m.stopId}`));
   const now = torontoNowSec();
   const pastGrace = 120;
-  const horizon = 2 * 3600;
+  const horizon = boardHorizonSec(now);
   return union
     .filter((r) => keys.has(`${r.feedId}:${r.stopId}`))
     .map((row) => ({

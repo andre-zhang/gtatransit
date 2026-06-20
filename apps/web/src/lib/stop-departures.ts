@@ -7,6 +7,7 @@ import {
   type DepartureRowOut,
 } from "@/lib/departures";
 import {
+  boardHorizonSec,
   isUnixTimestamp,
   normalizeServiceSec,
   secToTime,
@@ -48,7 +49,7 @@ function scheduleForMembers(
 function filterScheduleToBoardWindow(schedule: ScheduleRow[]): ScheduleRow[] {
   const now = torontoNowSec();
   const pastGrace = 120;
-  const horizon = 6 * 3600;
+  const horizon = boardHorizonSec(now);
   const upcoming = schedule
     .map((r) => ({
       row: r,
@@ -313,7 +314,7 @@ export async function buildDemoStopDepartures(
     };
   }
 
-  await Promise.all([loadFixturesTree(), ensureRtCacheWithin(2000)]);
+  await Promise.all([loadFixturesTree(), ensureRtCacheWithin(3500, { trips: true, vehicles: true })]);
   const usedRtTrips = new Set<string>();
 
   const { ttcRtByStopId } = await buildRtStopIdMaps(stop);

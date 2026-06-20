@@ -45,6 +45,7 @@ const stopTripMap = new Map<string, StopRt>();
 const vehicleMap = new Map<string, RtVehicle & { updatedAt: number }>();
 const predictionsByStop = new Map<string, IndexedPrediction[]>();
 let lastRefresh = 0;
+let lastTripRefresh = 0;
 let refreshing: Promise<void> | null = null;
 
 export type RtRefreshScope = {
@@ -66,8 +67,8 @@ function normalizeRefreshScope(opts: boolean | RtRefreshScope = {}): Required<
   };
 }
 
-function hasUsableRtCache(): boolean {
-  return tripMap.size > 0 || vehicleMap.size > 0;
+function hasTripPredictions(): boolean {
+  return stopTripMap.size > 0 || predictionsByStop.size > 0;
 }
 
 function scheduleRtRefresh(opts: boolean | RtRefreshScope = {}) {
@@ -487,8 +488,11 @@ export async function refreshRtCache(opts: boolean | RtRefreshScope = {}) {
   const goKey = readMetrolinxKey();
   goRtEnabled = Boolean(goKey);
 
-  if (!force && Date.now() - lastRefresh < TTL_MS && hasUsableRtCache()) {
-    if (goKey && trips && Date.now() - goRtLastOk > TTL_MS) {
+  if (!force && !trips && Date.now() - lastRefresh < TTL_MS && vehicleMap.size > 0) {
+    return;
+  }
+  if (!force && trips && isRtCacheWarm()) {
+    if (goKey && Date.now() - goRtLastOk > TTL_MS) {
       scheduleRtRefresh({ trips: true, vehicles: false });
     }
     return;
@@ -523,6 +527,7 @@ export async function refreshRtCache(opts: boolean | RtRefreshScope = {}) {
         predictions: [...predictionsByStop.keys()].filter((k) => k.startsWith("go:"))
           .length,
       };
+      lastTripRefresh = Date.now();
     }
     lastRefresh = Date.now();
     refreshing = null;
@@ -800,17 +805,27 @@ function snapshotTripUpdates(): RtTripUpdate[] {
   return out;
 }
 
-/** True when in-memory RT was refreshed recently. */
+/** True when trip-update / prediction data was refreshed recently. */
 export function isRtCacheWarm(): boolean {
-  return hasUsableRtCache() && Date.now() - lastRefresh < TTL_MS;
+  return hasTripPredictions() && Date.now() - lastTripRefresh < TTL_MS;
+}
+
+/** True when vehicle positions were refreshed recently (map layer). */
+export function isRtVehicleCacheWarm(): boolean {
+  return vehicleMap.size > 0 && Date.now() - lastRefresh < TTL_MS;
 }
 
 /** Refresh RT only when the cache is empty or stale. */
 export async function ensureRtCache(opts: boolean | RtRefreshScope = {}): Promise<void> {
-  const { force } = normalizeRefreshScope(opts);
-  if (!force && isRtCacheWarm()) return;
+  const { force, trips } = normalizeRefreshScope(opts);
+  if (!force && trips && isRtCacheWarm()) return;
+  if (!force && !trips && isRtVehicleCacheWarm()) return;
 
-  if (!force && hasUsableRtCache()) {
+  if (!force && trips && hasTripPredictions()) {
+    scheduleRtRefresh(opts);
+    return;
+  }
+  if (!force && !trips && vehicleMap.size > 0) {
     scheduleRtRefresh(opts);
     return;
   }
@@ -827,10 +842,15 @@ export async function ensureRtCacheWithin(
   maxMs: number,
   opts: boolean | RtRefreshScope = {},
 ): Promise<void> {
-  const { force } = normalizeRefreshScope(opts);
-  if (!force && isRtCacheWarm()) return;
+  const { force, trips } = normalizeRefreshScope(opts);
+  if (!force && trips && isRtCacheWarm()) return;
+  if (!force && !trips && isRtVehicleCacheWarm()) return;
 
-  if (!force && hasUsableRtCache()) {
+  if (!force && trips && hasTripPredictions()) {
+    scheduleRtRefresh(opts);
+    return;
+  }
+  if (!force && !trips && vehicleMap.size > 0) {
     scheduleRtRefresh(opts);
     return;
   }
