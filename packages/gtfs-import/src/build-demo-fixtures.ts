@@ -155,8 +155,8 @@ async function loadFeed(feedId: string, name: string, zipName: string) {
   const routeShape = new Map<string, Map<number, number[][]>>();
   let shapeFeatures = 0;
   let busShapes = 0;
-  const MAX_SHAPES = 1200;
-  const busShapeCap = feedId === "ttc" ? 250 : feedId === "go" ? 120 : 150;
+  const MAX_SHAPES = 5000;
+  const busShapeCap = feedId === "ttc" ? 1200 : feedId === "go" ? 600 : 500;
 
   const sortedTrips = [...tripRoute.entries()].sort((a, b) => {
     const rtA = routeTypeById.get(a[1].routeId) ?? 3;
