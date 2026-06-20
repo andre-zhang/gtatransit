@@ -54,6 +54,13 @@ function memberCoords(feedId: string, stopId: string): { lat: number; lon: numbe
   return null;
 }
 
+function coordsMatchPin(
+  coords: { lat: number; lon: number },
+  meta: TtcSurfaceStop,
+): boolean {
+  return haversineM(coords.lat, coords.lon, meta.lat, meta.lon) <= COORD_MATCH_M;
+}
+
 /** Resolve live RT stop_ids for a single map pin (not all nearby stops). */
 function resolveIdsForMember(m: StopMember): string[] {
   if (!registry) return [];
@@ -62,11 +69,21 @@ function resolveIdsForMember(m: StopMember): string[] {
   if (cached) return cached;
 
   const ids = new Set<string>();
-
-  for (const sid of codeToIds.get(m.stopId) ?? []) ids.add(sid);
-
   const coords = memberCoords(m.feedId, m.stopId);
+
+  const direct = registry[m.stopId];
+  if (direct && (!coords || coordsMatchPin(coords, direct))) {
+    ids.add(m.stopId);
+  }
+
+  // Fixture stopId is usually a Surface stop_id, not stop_code — only accept
+  // code aliases when they sit on the same pin (e.g. stop_code 327 ↔ id 9477).
   if (coords) {
+    for (const sid of codeToIds.get(m.stopId) ?? []) {
+      const meta = registry[sid];
+      if (meta && coordsMatchPin(coords, meta)) ids.add(sid);
+    }
+
     let closest: string | undefined;
     let closestDist = Infinity;
     for (const [stopId, meta] of Object.entries(registry)) {
@@ -79,7 +96,7 @@ function resolveIdsForMember(m: StopMember): string[] {
     if (closest && closestDist <= COORD_MATCH_M) ids.add(closest);
   }
 
-  const resolved = [...ids];
+  const resolved = ids.size ? [...ids] : [m.stopId];
   memberRtIdsCache.set(cacheKey, resolved);
   return resolved;
 }
@@ -111,6 +128,13 @@ export async function mapFixtureStopsToRt<T>(
     if (hit) out.set(stopId, hit);
   }
   return out;
+}
+
+export async function resolveTtcRtStopIdsForMember(m: StopMember): Promise<string[]> {
+  await ensureRegistry();
+  if (m.feedId !== "ttc") return [m.stopId];
+  const ids = resolveIdsForMember(m);
+  return ids.length ? ids : [m.stopId];
 }
 
 export async function resolveTtcRtStopIds(members: StopMember[]): Promise<string[]> {
@@ -146,13 +170,25 @@ export async function isTtcRtStopAtGroup(
   return false;
 }
 
-/** Demo fixtures key stops by stop_code; live RT uses Surface stop_id. */
+/** Map a live Surface stop_id back to the demo fixture stop_id (GTFS stop_id). */
 export async function fixtureStopIdForLive(
   liveStopId: string,
 ): Promise<string | null> {
   await ensureRegistry();
   const live = registry?.[liveStopId];
-  return live?.stopCode ?? null;
+  if (!live) return null;
+
+  const meta = loadDemoAssets().stopMeta.ttc as
+    | Record<string, { lat: number; lon: number }>
+    | undefined;
+  if (meta?.[liveStopId]) return liveStopId;
+
+  for (const [fixtureId, pin] of Object.entries(meta ?? {})) {
+    if (pin.lat == null || pin.lon == null) continue;
+    if (coordsMatchPin(pin, live)) return fixtureId;
+  }
+
+  return liveStopId;
 }
 
 export async function liveStopDisplayName(liveStopId: string): Promise<string | null> {

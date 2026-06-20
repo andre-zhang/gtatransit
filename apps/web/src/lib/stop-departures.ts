@@ -35,7 +35,7 @@ import {
 } from "@/lib/rt-cache";
 import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
 import { cleanHeadsign, boardDestination } from "@/lib/headsign";
-import { resolveTtcRtStopIds, fixtureStopIdForLive } from "@/lib/ttc-stop-registry";
+import { resolveTtcRtStopIdsForMember } from "@/lib/ttc-stop-registry";
 
 /** Trim large union-style schedules before RT merge (board shows ~80 rows). */
 function scheduleForMembers(
@@ -269,11 +269,13 @@ async function buildRtStopIdMaps(stop: DemoStopMeta) {
   const ttcMembers = stop.members.filter((x) => x.feedId === "ttc");
   const ttcRtByStopId = new Map<string, string[]>();
   if (ttcMembers.length) {
-    const batch = await resolveTtcRtStopIds(ttcMembers);
+    const allTtcRt = new Set<string>();
     for (const m of ttcMembers) {
-      ttcRtByStopId.set(m.stopId, batch.length ? batch : [m.stopId]);
+      const memberRtIds = await resolveTtcRtStopIdsForMember(m);
+      ttcRtByStopId.set(m.stopId, memberRtIds);
+      for (const id of memberRtIds) allTtcRt.add(id);
     }
-    rtStopIdsByFeed.set("ttc", batch.length ? batch : ttcMembers.map((m) => m.stopId));
+    rtStopIdsByFeed.set("ttc", [...allTtcRt]);
   }
 
   for (const m of stop.members) {
@@ -333,8 +335,8 @@ export async function buildDemoStopDepartures(
 
       for (const extra of getRtPredictionsForStop(m.feedId, rtIds, usedRtTrips)) {
         if (m.feedId === "ttc") {
-          const fixtureStop = await fixtureStopIdForLive(extra.stopId);
-          if (!fixtureStop || fixtureStop !== m.stopId) continue;
+          const allowed = ttcRtByStopId.get(m.stopId) ?? [m.stopId];
+          if (!allowed.includes(extra.stopId)) continue;
         } else if (extra.stopId !== m.stopId) {
           continue;
         }
