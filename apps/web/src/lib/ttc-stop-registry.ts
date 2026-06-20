@@ -1,5 +1,6 @@
 import { loadDemoAssets } from "./demo-assets";
 import { readDemoJsonFile } from "./demo-read";
+import { expandGoStopId } from "./go-stop-aliases";
 
 export type TtcSurfaceStop = {
   stopCode: string | null;
@@ -107,7 +108,8 @@ export async function mapFixtureStopsToRt<T>(
   }
 
   for (const stopId of fixtureStopIds) {
-    const hit = lookup(stopId);
+    const lookupIds = feedId === "go" ? expandGoStopId(stopId) : [stopId];
+    const hit = lookupIds.map((id) => lookup(id)).find((x) => x != null);
     if (hit) out.set(stopId, hit);
   }
   return out;

@@ -59,11 +59,8 @@ export function StopBoardClient({ groupId }: { groupId: string }) {
   );
 
   useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      await load({ quick: true });
-      void load({ background: true });
-    })();
+    setLoading(true);
+    void load({ background: true });
   }, [load]);
 
   useEffect(() => {

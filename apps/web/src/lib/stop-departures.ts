@@ -32,7 +32,13 @@ import {
   isRtCacheWarm,
   type RtStopPrediction,
 } from "@/lib/rt-cache";
-import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
+import {
+  expandGoStopId,
+  formatGoPlatform,
+  goStopIdsMatch,
+  goTripsMatch,
+  resolveGoRtStopIds,
+} from "@/lib/go-stop-aliases";
 import { cleanHeadsign, boardDestination } from "@/lib/headsign";
 import { resolveTtcRtStopIds, fixtureStopIdForLive } from "@/lib/ttc-stop-registry";
 
@@ -76,10 +82,17 @@ function routeMetaFromTree(
   routeId: string | undefined,
 ) {
   if (!routeId) return null;
+  const targetTail = routeTail(routeId);
   for (const agency of tree.agencies) {
     if (agency.id !== feedId) continue;
     for (const mode of agency.modes) {
-      const r = mode.routes.find((x) => x.id === routeId || x.shortName === routeId);
+      const r = mode.routes.find(
+        (x) =>
+          x.id === routeId ||
+          x.shortName === routeId ||
+          routeTail(x.id) === targetTail ||
+          x.shortName === targetTail,
+      );
       if (r) {
         return {
           routeShort: r.shortName,
@@ -117,6 +130,12 @@ function routeMetaFromCore(feedId: string, routeId: string | undefined) {
   return routeMetaFromTree(fixturesTree, feedId, routeId);
 }
 
+function displayRouteShort(feedId: string, routeId: string | undefined): string {
+  if (!routeId) return "?";
+  if (feedId === "go" || feedId === "up") return routeTail(routeId);
+  return routeId;
+}
+
 function rtPredictionToDeparture(
   row: RtStopPrediction,
   schedule: ScheduleRow[],
@@ -125,7 +144,7 @@ function rtPredictionToDeparture(
   const coreMeta =
     routeMetaFromCore(row.feedId, routeId) ??
     (routeId ? routeMetaFromCore(row.feedId, routeTail(routeId)) : null);
-  const routeShort = coreMeta?.routeShort ?? routeId ?? "?";
+  const routeShort = coreMeta?.routeShort ?? displayRouteShort(row.feedId, routeId);
   let predictedSec = row.predictedSec;
   if (predictedSec != null && isUnixTimestamp(predictedSec)) {
     predictedSec = unixToTorontoSec(predictedSec);
@@ -177,7 +196,8 @@ function rtPredictionToDeparture(
   if (!scheduledRow && !routeId) return null;
 
   const resolvedRouteId = scheduledRow?.routeId ?? routeId ?? "";
-  const resolvedRouteShort = scheduledRow?.routeShort ?? routeShort;
+  const resolvedRouteShort =
+    scheduledRow?.routeShort ?? routeMetaFromCore(row.feedId, resolvedRouteId)?.routeShort ?? routeShort;
 
   const schedSec = scheduledRow
     ? gtfsTimeToSec(scheduledRow.departureTime)
@@ -268,11 +288,19 @@ async function buildRtStopIdMaps(stop: DemoStopMeta) {
   const ttcMembers = stop.members.filter((x) => x.feedId === "ttc");
   const ttcRtByStopId = new Map<string, string[]>();
   if (ttcMembers.length) {
-    const batch = await resolveTtcRtStopIds(ttcMembers);
-    for (const m of ttcMembers) {
-      ttcRtByStopId.set(m.stopId, batch.length ? batch : [m.stopId]);
+    const perMember = await Promise.all(
+      ttcMembers.map(async (m) => ({
+        stopId: m.stopId,
+        ids: await resolveTtcRtStopIds([m]),
+      })),
+    );
+    const all = new Set<string>();
+    for (const { stopId, ids } of perMember) {
+      const resolved = ids.length ? ids : [stopId];
+      ttcRtByStopId.set(stopId, resolved);
+      for (const id of resolved) all.add(id);
     }
-    rtStopIdsByFeed.set("ttc", batch.length ? batch : ttcMembers.map((m) => m.stopId));
+    rtStopIdsByFeed.set("ttc", all.size ? [...all] : ttcMembers.map((m) => m.stopId));
   }
 
   for (const m of stop.members) {
@@ -333,7 +361,9 @@ export async function buildDemoStopDepartures(
         if (m.feedId === "ttc") {
           const fixtureStop = await fixtureStopIdForLive(extra.stopId);
           if (!fixtureStop || fixtureStop !== m.stopId) continue;
-        } else if (extra.stopId !== m.stopId) {
+        } else if (m.feedId === "go" && !goStopIdsMatch(extra.stopId, m.stopId)) {
+          continue;
+        } else if (m.feedId !== "go" && extra.stopId !== m.stopId) {
           continue;
         }
 

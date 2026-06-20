@@ -81,6 +81,7 @@ export async function buildDemoTripStops(opts: {
   liveTripId: string;
   scheduleTripId?: string;
   fromStop?: string;
+  sliceFromStop?: boolean;
 }): Promise<TripStopOut[]> {
   const { feedId, liveTripId, fromStop } = opts;
   const scheduleTripId = opts.scheduleTripId ?? liveTripId;
@@ -107,7 +108,7 @@ export async function buildDemoTripStops(opts: {
     const startIdx = useFromStop
       ? findStopIndex(schedStops, fromCandidates!, feedId)
       : 0;
-    const slice = startIdx >= 0 ? schedStops.slice(startIdx) : schedStops;
+    const slice = opts.sliceFromStop && startIdx >= 0 ? schedStops.slice(startIdx) : schedStops;
     const baseSeq = startIdx >= 0 ? schedStops[startIdx]!.sequence : 0;
     const rawSecs = slice.map((s) => gtfsTimeToSec(s.departureTime));
     let monoSecs = makeMonotonicGtfsSecs(rawSecs);
@@ -164,7 +165,7 @@ export async function buildDemoTripStops(opts: {
           return false;
         })
       : 0;
-  const slice = startIdx >= 0 ? rtUpdates.slice(startIdx) : rtUpdates;
+  const slice = opts.sliceFromStop && startIdx >= 0 ? rtUpdates.slice(startIdx) : rtUpdates;
   const baseSeq = startIdx >= 0 ? startIdx + 1 : 1;
 
   return Promise.all(
