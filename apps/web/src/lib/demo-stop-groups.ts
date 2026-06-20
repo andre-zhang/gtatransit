@@ -247,8 +247,6 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
         uf.union(a.groupId, b.groupId);
         continue;
       }
-
-      uf.union(a.groupId, b.groupId);
     }
   }
 
@@ -390,6 +388,7 @@ function ensureCache() {
   const { grouped, coords, alias, points } = buildGroupedStops();
   cachedStops = grouped;
 
+  const rawStopAliases = new Map<string, string | null>();
   for (const [gid, stop] of Object.entries(cachedStops)) {
     for (const m of stop.members) {
       legacyAlias.set(`${m.feedId}-${m.stopId}`, gid);
@@ -398,11 +397,20 @@ function ensureCache() {
       legacyAlias.set(`up-${m.stopId}`, gid);
       legacyAlias.set(`ttc-${m.stopId}`, gid);
       legacyAlias.set(`miway-${m.stopId}`, gid);
+      const existing = rawStopAliases.get(m.stopId);
+      rawStopAliases.set(
+        m.stopId,
+        rawStopAliases.has(m.stopId) && existing !== gid ? null : gid,
+      );
     }
+  }
+  for (const [stopId, gid] of rawStopAliases) {
+    if (gid) legacyAlias.set(stopId, gid);
   }
   legacyAlias.set("demo-union", TORONTO_UNION_ID);
   legacyAlias.set("go-UN", TORONTO_UNION_ID);
   legacyAlias.set("up-UN", TORONTO_UNION_ID);
+  legacyAlias.set("UN", TORONTO_UNION_ID);
 
   const unionMemberKeys = new Set(
     (cachedStops[TORONTO_UNION_ID]?.members ?? []).map(

@@ -17,6 +17,7 @@ export async function loadDemoTripStopsLite(
     liveTripId: tripId,
     scheduleTripId,
     fromStop: opts?.fromStop,
+    sliceFromStop: true,
   });
 
   return { stops };

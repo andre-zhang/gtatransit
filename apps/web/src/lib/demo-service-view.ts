@@ -25,6 +25,7 @@ import {
 import { boardDestination } from "./headsign";
 import { fetchGoTrainDetail, type GoTrainDetail } from "./go-metrolinx-rest";
 import { isMetrolinxRailFeed, goLineCode } from "./go-rail";
+import { goStopIdsMatch } from "./go-stop-aliases";
 import { resolveVehicleBlock } from "./demo-trip-meta";
 import {
   getRtVehicle,
@@ -182,6 +183,18 @@ function inferCurrentStopIndex(
   return bestIdx;
 }
 
+function sequenceForStop(
+  feedId: string,
+  stops: TripStopOut[],
+  stopId: string | undefined,
+): number | undefined {
+  if (!stopId) return undefined;
+  const hit = stops.find((s) =>
+    feedId === "go" ? goStopIdsMatch(s.stopId, stopId) : s.stopId === stopId,
+  );
+  return hit?.sequence;
+}
+
 function markCurrentStop(stops: ServiceStop[], currentIdx: number): ServiceStop[] {
   return stops.map((s, i) => ({ ...s, current: i === currentIdx }));
 }
@@ -260,7 +273,10 @@ async function assembleTripPayload(
     rawStops.map(tripStopToService),
     inferCurrentStopIndex(
       rawStops.map(tripStopToService),
-      opts?.fromSequence ?? opts?.vehicle?.currentStopSequence ?? undefined,
+      opts?.fromSequence ??
+        sequenceForStop(feedId, rawStops, opts?.fromStop) ??
+        opts?.vehicle?.currentStopSequence ??
+        undefined,
     ),
   );
   const currentIdx = tripStops.findIndex((s) => s.current);

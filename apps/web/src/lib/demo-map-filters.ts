@@ -20,10 +20,19 @@ export function parseMapFilters(searchParams: URLSearchParams): MapFilters {
   };
 }
 
-function routeKeys(feedId: string, routeId: string, routeShort?: string | null): string[] {
-  const keys = [`${feedId}:${routeId}`];
-  if (routeShort) keys.push(`${feedId}:${routeShort}`);
-  return keys;
+function selectedRouteMatches(
+  feedId: string,
+  routeId: string,
+  routeShort: string | undefined,
+  selected: string,
+): boolean {
+  const colon = selected.indexOf(":");
+  if (colon < 0) return false;
+  const selectedFeed = selected.slice(0, colon);
+  const selectedRoute = selected.slice(colon + 1);
+  if (selectedFeed !== feedId || selectedRoute === "__none__") return false;
+  if (selectedRoute === routeId || selectedRoute === routeShort) return true;
+  return routesMatch(feedId, selectedRoute, null, routeId) || routesMatch(feedId, routeId, routeShort, selectedRoute);
 }
 
 export function routeMatchesFilters(
@@ -39,10 +48,11 @@ export function routeMatchesFilters(
   if (filters.agencies.length && !filters.agencies.includes(feedId)) return false;
   if (filters.modes.length && !filters.modes.includes(`${feedId}:${routeType}`)) return false;
   if (filters.routes.length) {
-    const keys = routeKeys(feedId, routeId, routeShort);
-    if (!keys.some((k) => filters.routes.includes(k))) return false;
+    if (!filters.routes.some((selected) => selectedRouteMatches(feedId, routeId, routeShort, selected))) {
+      return false;
+    }
   }
-  if (filters.directions.length && !filters.directions.includes(directionId)) return false;
+  void directionId;
   return true;
 }
 

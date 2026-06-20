@@ -376,7 +376,7 @@ export async function loadUnionScheduleForBoard(
   const keys = new Set(members.map((m) => `${m.feedId}:${m.stopId}`));
   const now = torontoNowSec();
   const pastGrace = 120;
-  const horizon = 2 * 3600;
+  const horizon = 6 * 3600;
   return union
     .filter((r) => keys.has(`${r.feedId}:${r.stopId}`))
     .map((row) => ({

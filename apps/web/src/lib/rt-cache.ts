@@ -22,7 +22,12 @@ import {
   torontoNowSec,
   unixToTorontoSec,
 } from "./calendar";
-import { formatGoPlatform, goTripSuffix, goTripsMatch } from "./go-stop-aliases";
+import {
+  formatGoPlatform,
+  goStopIdsMatch,
+  goTripSuffix,
+  goTripsMatch,
+} from "./go-stop-aliases";
 import { fetchGoNextService } from "./go-metrolinx-rest";
 import { routesMatch } from "./route-match";
 
@@ -564,7 +569,9 @@ function getStopTripRtAny(
       const keyStop = parts.slice(2).join(":");
       if (keyFeed !== feedId || !keyTrip || !keyStop) continue;
       if (goTripSuffix(keyTrip) !== suffix) continue;
-      if (!stopIds.includes(keyStop)) continue;
+      if (!stopIds.some((stopId) => stopId === keyStop || goStopIdsMatch(stopId, keyStop))) {
+        continue;
+      }
       if (!isFreshRt(rt)) continue;
       return rt;
     }
