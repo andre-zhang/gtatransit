@@ -4,6 +4,7 @@ import { goLineCode } from "./go-rail";
 export function cleanHeadsign(value: string | null | undefined): string {
   if (!value) return "";
   let s = value.trim();
+  if (s.startsWith("#")) s = s.slice(1).trim();
   while (
     s.length >= 2 &&
     ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))
@@ -15,7 +16,7 @@ export function cleanHeadsign(value: string | null | undefined): string {
 
 function stripRoutePrefix(cleaned: string, routeKey: string): string | null {
   const escaped = routeKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`^${escaped}[A-Za-z]?\\s*-\\s*`, "i");
+  const re = new RegExp(`^#?${escaped}[A-Za-z]?\\s*-\\s*`, "i");
   if (!re.test(cleaned)) return null;
   const stripped = cleaned.replace(re, "").trim();
   return stripped || null;

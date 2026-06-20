@@ -1,3 +1,4 @@
+import { goTripsMatch } from "./go-stop-aliases";
 import { cleanHeadsign } from "./headsign";
 import { resolveDemoTrip } from "./demo-trip-resolve";
 import { readDemoJsonFile } from "./demo-read";
@@ -96,7 +97,12 @@ async function loadFeedMeta(feedId: string): Promise<FeedMeta> {
 }
 
 function headsignFromMeta(meta: FeedMeta, tripId: string): string | null {
-  return meta.headsigns[tripId]?.trim() || null;
+  const direct = meta.headsigns[tripId]?.trim();
+  if (direct) return direct;
+  for (const [id, hs] of Object.entries(meta.headsigns)) {
+    if (goTripsMatch(id, tripId) && hs.trim()) return hs.trim();
+  }
+  return null;
 }
 
 function directionFromMeta(meta: FeedMeta, tripId: string): number | null {

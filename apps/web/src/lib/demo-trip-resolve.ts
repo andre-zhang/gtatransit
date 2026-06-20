@@ -7,7 +7,7 @@ import { loadStopScheduleRows } from "./demo-schedule-data";
 import type { ScheduleRow } from "./demo-schedule-types";
 import { isDemoFixtureTripId } from "./demo-trip-id";
 import { lookupTripFromSchedules } from "./demo-trip-lookup";
-import { expandGoStopId } from "./go-stop-aliases";
+import { expandGoStopId, goTripsMatch } from "./go-stop-aliases";
 import { routesMatch } from "./route-match";
 import { getTripRt, getTripStopUpdates } from "./rt-cache";
 import { fixtureStopIdForLive } from "./ttc-stop-registry";
@@ -61,6 +61,19 @@ export async function resolveDemoTrip(
         : anchor.stopId;
 
   const rows = await loadStopScheduleRows(feedId, schedStopId);
+
+  if (feedId === "go" || feedId === "up") {
+    const suffixMatch = rows.find((row) => goTripsMatch(row.tripId, tripId));
+    if (suffixMatch) {
+      return {
+        liveTripId: tripId,
+        scheduleTripId: suffixMatch.tripId,
+        scheduleRow: suffixMatch,
+        fuzzy: suffixMatch.tripId !== tripId,
+      };
+    }
+  }
+
   let best: ScheduleRow | undefined;
   let bestDelta = Infinity;
   for (const row of rows) {
@@ -69,6 +82,9 @@ export async function resolveDemoTrip(
         routesMatch(feedId, routeId, routeId, row.routeId) ||
         routesMatch(feedId, routeId, routeId, row.routeShort);
       if (!matches) continue;
+    }
+    if (feedId === "go" || feedId === "up") {
+      if (!goTripsMatch(row.tripId, tripId)) continue;
     }
     const schedNorm = normalizeServiceSec(gtfsTimeToSec(row.departureTime), now);
     const delta = Math.abs(schedNorm - refSec);

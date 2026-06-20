@@ -155,6 +155,7 @@ function rtPredictionToDeparture(
     let ambiguous = false;
     for (const s of schedule) {
       if (s.feedId !== row.feedId) continue;
+      if (row.feedId === "go" && !goTripsMatch(s.tripId, row.tripId)) continue;
       if (
         !routesMatch(row.feedId, routeId, routeShort, s.routeId) &&
         !routesMatch(row.feedId, routeId, routeShort, s.routeShort)
@@ -201,6 +202,7 @@ function rtPredictionToDeparture(
       routeColor(row.feedId, resolvedRouteShort, null, resolvedRouteId || undefined),
     destination:
       boardDestination(row.feedId, resolvedRouteShort, scheduledRow?.headsign) ||
+      boardDestination(row.feedId, resolvedRouteShort, row.destination) ||
       "In service",
     departureTime: secToTime(schedSec % 86400),
     stopId: row.stopId,
@@ -402,12 +404,19 @@ export async function buildDemoStopDepartures(
   }
 
   function headsignFromSchedule(row: DepartureInput): string | undefined {
-    return (
-      scheduleHeadsigns.get(`${row.feedId}:${row.tripId}`) ??
-      (row.scheduleTripId
-        ? scheduleHeadsigns.get(`${row.feedId}:${row.scheduleTripId}`)
-        : undefined)
-    );
+    const schedKey =
+      row.scheduleTripId &&
+      (row.feedId !== "go" ||
+        !row.tripId ||
+        row.tripId === row.scheduleTripId ||
+        goTripsMatch(row.scheduleTripId, row.tripId))
+        ? row.scheduleTripId
+        : undefined;
+    if (schedKey) {
+      const hs = scheduleHeadsigns.get(`${row.feedId}:${schedKey}`);
+      if (hs) return hs;
+    }
+    return scheduleHeadsigns.get(`${row.feedId}:${row.tripId}`);
   }
 
   const missingByFeed = new Map<string, Set<string>>();

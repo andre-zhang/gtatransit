@@ -5,7 +5,7 @@ import { resolveDemoDir } from "./demo-dir";
 import { readDemoJsonFile } from "./demo-read";
 import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 import { isDemoFixtureTripId } from "./demo-trip-id";
-import { goScheduleLookupKeys, goTripSuffix } from "./go-stop-aliases";
+import { goScheduleLookupKeys, goTripSuffix, goTripsMatch } from "./go-stop-aliases";
 import { routesMatch } from "./route-match";
 
 const scheduleCache = new Map<string, Record<string, ScheduleRow[]>>();
@@ -265,6 +265,10 @@ export async function lookupTripScheduleRow(
       for (const sched of Object.values(data)) {
         const hit = sched.find((row) => row.tripId === tripId);
         if (hit) return hit;
+        if (feedId === "go" || feedId === "up") {
+          const suffixHit = sched.find((row) => goTripsMatch(row.tripId, tripId));
+          if (suffixHit) return suffixHit;
+        }
       }
     } catch {
       return undefined;
@@ -277,6 +281,10 @@ export async function lookupTripScheduleRow(
     for (const sched of Object.values(part)) {
       const hit = sched.find((row) => row.tripId === tripId);
       if (hit) return hit;
+      if (feedId === "go" || feedId === "up") {
+        const suffixHit = sched.find((row) => goTripsMatch(row.tripId, tripId));
+        if (suffixHit) return suffixHit;
+      }
     }
   }
   return undefined;

@@ -112,7 +112,11 @@ type IndexedPrediction = {
   predictedSec: number;
   vehicleId?: string;
   platform?: string;
+  destination?: string;
 };
+
+/** Destination text from Metrolinx NextService REST (keyed by feed:tripId). */
+const restTripDestination = new Map<string, string>();
 
 const FUZZY_MATCH_SEC = 50 * 60;
 
@@ -172,6 +176,7 @@ function rebuildStopPredictionsIndex() {
       predictedSec,
       vehicleId: tripRt?.vehicleId ?? vehicle?.vehicleId,
       platform: rt.platform ?? tripRt?.platform,
+      destination: restTripDestination.get(tripKey(feedId, tripId)),
     });
   }
 
@@ -256,6 +261,9 @@ async function pollGoRest(key: string, now: number): Promise<number> {
       };
       stopTripMap.set(stopTripKey("go", row.tripId, stopCode), entry);
       const tk = tripKey("go", row.tripId);
+      if (row.destination?.trim()) {
+        restTripDestination.set(tk, row.destination.trim());
+      }
       const prev = tripMap.get(tk) ?? { updatedAt: now };
       tripMap.set(tk, {
         ...prev,
@@ -542,7 +550,16 @@ export async function refreshRtCache(opts: boolean | RtRefreshScope = {}) {
 }
 
 export function getTripRt(feedId: string, tripId: string): TripRt | undefined {
-  return tripMap.get(tripKey(feedId, tripId));
+  const direct = tripMap.get(tripKey(feedId, tripId));
+  if (direct) return direct;
+  if (feedId !== "go" && feedId !== "up") return undefined;
+  const suffix = goTripSuffix(tripId);
+  for (const [key, rt] of tripMap) {
+    const parts = key.split(":");
+    if (parts[0] !== feedId || !parts[1]) continue;
+    if (goTripSuffix(parts[1]) === suffix) return rt;
+  }
+  return undefined;
 }
 
 export function getStopTripRt(
@@ -604,6 +621,7 @@ export type RtStopPrediction = {
   vehicleId?: string;
   routeId?: string;
   platform?: string;
+  destination?: string;
 };
 
 /** Live predictions at a stop that may not appear in static schedule (e.g. trip id drift). */
@@ -629,6 +647,7 @@ export function getRtPredictionsForStop(
         routeId: p.routeId,
         platform:
           feedId === "go" ? formatGoPlatform(p.platform) : p.platform,
+        destination: p.destination,
       });
     }
   }
@@ -641,7 +660,12 @@ function getVehicleIdForTrip(feedId: string, tripId: string): string | undefined
   if (tripRt?.vehicleId) return tripRt.vehicleId;
   const cutoff = Date.now() - 5 * 60_000;
   for (const v of vehicleMap.values()) {
-    if (v.feedId === feedId && v.tripId === tripId && v.updatedAt >= cutoff) {
+    if (v.feedId !== feedId || v.updatedAt < cutoff || !v.tripId) continue;
+    if (v.tripId === tripId) return v.vehicleId;
+    if (
+      (feedId === "go" || feedId === "up") &&
+      goTripsMatch(tripId, v.tripId)
+    ) {
       return v.vehicleId;
     }
   }
@@ -650,17 +674,16 @@ function getVehicleIdForTrip(feedId: string, tripId: string): string | undefined
 
 function getVehicleForTrip(feedId: string, tripId: string): RtVehicle | undefined {
   const cutoff = Date.now() - 5 * 60_000;
+  let best: (RtVehicle & { updatedAt: number }) | undefined;
   for (const v of vehicleMap.values()) {
-    if (
-      v.feedId === feedId &&
-      v.tripId === tripId &&
-      v.updatedAt >= cutoff &&
-      v.lat != null
-    ) {
-      return v;
-    }
+    if (v.feedId !== feedId || v.updatedAt < cutoff || !v.tripId) continue;
+    const matches =
+      v.tripId === tripId ||
+      ((feedId === "go" || feedId === "up") && goTripsMatch(tripId, v.tripId));
+    if (!matches || v.lat == null) continue;
+    if (!best || v.updatedAt > best.updatedAt) best = v;
   }
-  return undefined;
+  return best;
 }
 
 export function mergeRtIntoDeparture(
@@ -952,7 +975,6 @@ export function getTripStopUpdates(
   predictedSec?: number;
   platform?: string;
 }> {
-  const prefix = `${feedId}:${tripId}:`;
   const out: Array<{
     stopId: string;
     delaySec?: number;
@@ -960,9 +982,26 @@ export function getTripStopUpdates(
     platform?: string;
   }> = [];
 
+  const prefix = `${feedId}:${tripId}:`;
   for (const [key, rt] of stopTripMap) {
-    if (!key.startsWith(prefix)) continue;
-    const stopId = key.slice(prefix.length);
+    if (key.startsWith(prefix)) {
+      const stopId = key.slice(prefix.length);
+      let predictedSec = rt.predictedSec;
+      if (predictedSec != null) predictedSec = normalizePredictedSec(predictedSec);
+      out.push({
+        stopId,
+        delaySec: rt.delaySec,
+        predictedSec,
+        platform: rt.platform,
+      });
+      continue;
+    }
+    if (feedId !== "go" && feedId !== "up") continue;
+    const parts = key.split(":");
+    const keyTrip = parts[1];
+    if (!keyTrip || goTripSuffix(keyTrip) !== goTripSuffix(tripId)) continue;
+    const stopId = parts.slice(2).join(":");
+    if (!stopId) continue;
     let predictedSec = rt.predictedSec;
     if (predictedSec != null) predictedSec = normalizePredictedSec(predictedSec);
     out.push({
