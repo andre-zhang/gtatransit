@@ -15,6 +15,7 @@ import {
 } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
 import type { DemoStopMeta } from "@/lib/demo";
+import { TORONTO_UNION_ID } from "@/lib/demo-stop-groups";
 import type { ScheduleRow } from "@/lib/demo-schedule-types";
 import { readDemoJsonFile } from "@/lib/demo-read";
 import type { FilterTree } from "@/lib/types";
@@ -354,7 +355,10 @@ export async function buildDemoStopDepartures(
         m.feedId === "ttc"
           ? (ttcRtByStopId.get(m.stopId) ?? [m.stopId])
           : m.feedId === "go"
-            ? resolveGoRtStopIds(m.stopId, stop.members)
+            ? resolveGoRtStopIds(
+                m.stopId,
+                groupId === TORONTO_UNION_ID ? stop.members : [m],
+              )
             : [m.stopId];
 
       for (const extra of getRtPredictionsForStop(m.feedId, rtIds, usedRtTrips)) {
@@ -390,7 +394,10 @@ export async function buildDemoStopDepartures(
       r.feedId === "ttc"
         ? (ttcRtByStopId.get(r.stopId) ?? [r.stopId])
         : r.feedId === "go"
-          ? resolveGoRtStopIds(r.stopId, stop.members)
+          ? resolveGoRtStopIds(
+              r.stopId,
+              groupId === TORONTO_UNION_ID ? stop.members : [{ feedId: r.feedId, stopId: r.stopId }],
+            )
           : [r.stopId];
     const schedSec = gtfsTimeToSec(r.departureTime);
     const rt = isRtCacheWarm()

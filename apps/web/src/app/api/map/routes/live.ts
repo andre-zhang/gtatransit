@@ -4,6 +4,7 @@ import { getSql } from "@/lib/db";
 import { routeColor } from "@/lib/colors";
 import { filterRouteCollection, mapQueryParams } from "@/lib/geojson-map";
 import { parseList } from "@/lib/parse-filters";
+import { routesMatch } from "@/lib/route-match";
 
 export default async function liveRoutes(req: NextRequest) {
   const { zoom, bbox } = mapQueryParams(req.nextUrl.searchParams);
@@ -63,7 +64,20 @@ export default async function liveRoutes(req: NextRequest) {
     );
   }
   if (routes.length) {
-    rows = rows.filter((r) => routes.includes(`${r.feed_id}:${r.route_id}`));
+    rows = rows.filter((r) =>
+      routes.some((selected) => {
+        const colon = selected.indexOf(":");
+        if (colon < 0) return false;
+        const feedId = selected.slice(0, colon);
+        const routeId = selected.slice(colon + 1);
+        if (feedId !== r.feed_id || routeId === "__none__") return false;
+        if (routeId === r.route_id || routeId === r.short_name) return true;
+        return (
+          routesMatch(r.feed_id, routeId, null, r.route_id) ||
+          routesMatch(r.feed_id, r.route_id, r.short_name, routeId)
+        );
+      }),
+    );
   }
 
   const features = rows.map((r) => {

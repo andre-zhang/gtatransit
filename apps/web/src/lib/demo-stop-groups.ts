@@ -247,8 +247,6 @@ function clusterGroupIds(points: StopPoint[]): Map<string, string> {
         uf.union(a.groupId, b.groupId);
         continue;
       }
-
-      uf.union(a.groupId, b.groupId);
     }
   }
 

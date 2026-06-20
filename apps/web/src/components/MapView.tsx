@@ -1,7 +1,7 @@
 "use client";
 
 import type { FeatureCollection } from "geojson";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import maplibregl from "maplibre-gl";
 import { LayerPanel } from "./LayerPanel";
@@ -11,6 +11,7 @@ import { BASEMAP_STYLE, GTA_CENTER, GTA_DEFAULT_ZOOM } from "@/lib/basemap";
 import { readSavedMapView, saveMapView } from "@/lib/map-view-state";
 import { ensureVehicleArrowImage, VEHICLE_ARROW_IMAGE_ID } from "@/lib/map-icons";
 import { ZOOM_ROUTES, ZOOM_STOPS } from "@/lib/map-zoom";
+import { layerRouteKey } from "@/lib/route-key";
 import type { FilterTree } from "@/lib/types";
 
 const GTA_BOUNDS: [[number, number], [number, number]] = [
@@ -22,6 +23,14 @@ const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 
 type Props = { filterTree: FilterTree; rtUpdated?: string | null; demoMode?: boolean };
 
+function filterParam(selected: Set<string>, all: Set<string>): string | null {
+  if (selected.size === 0) return "__none__";
+  if (selected.size === all.size && [...selected].every((key) => all.has(key))) {
+    return null;
+  }
+  return [...selected].join(",");
+}
+
 export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -30,6 +39,20 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
   const refreshRef = useRef<() => void>(() => {});
   const aliveRef = useRef(true);
   const agencies = filterTree?.agencies ?? [];
+  const allAgencyKeys = useMemo(() => new Set(agencies.map((a) => a.id)), [agencies]);
+  const allModeKeys = useMemo(
+    () => new Set(agencies.flatMap((a) => a.modes.map((m) => `${a.id}:${m.type}`))),
+    [agencies],
+  );
+  const allRouteKeys = useMemo(
+    () =>
+      new Set(
+        agencies.flatMap((a) =>
+          a.modes.flatMap((m) => m.routes.map((r, i) => layerRouteKey(a.id, r, i))),
+        ),
+      ),
+    [agencies],
+  );
 
   const [zoom, setZoom] = useState(GTA_DEFAULT_ZOOM);
   const [showRoutes, setShowRoutes] = useState(true);
@@ -49,7 +72,9 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
     const s = new Set<string>();
     for (const a of agencies) {
       for (const m of a.modes) {
-        for (const r of m.routes) s.add(`${a.id}:${r.id}`);
+        for (let i = 0; i < m.routes.length; i++) {
+          s.add(layerRouteKey(a.id, m.routes[i]!, i));
+        }
       }
     }
     return s;
@@ -72,17 +97,26 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
         "bbox",
         [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((n) => n.toFixed(5)).join(","),
       );
-      const agencies = [...selectedAgencies].join(",");
-      const modes = [...selectedModes].join(",");
-      const routes = [...selectedRoutes].join(",");
-      if (agencies) params.set("agencies", agencies);
-      if (modes) params.set("modes", modes);
-      if (routes) params.set("routes", routes);
+      const agencies = filterParam(selectedAgencies, allAgencyKeys);
+      const modes = filterParam(selectedModes, allModeKeys);
+      const routes = filterParam(selectedRoutes, allRouteKeys);
+      if (agencies != null) params.set("agencies", agencies);
+      if (modes != null) params.set("modes", modes);
+      if (routes != null) params.set("routes", routes);
       if (vehicleDirs.size) params.set("directions", [...vehicleDirs].join(","));
       if (stopDirs.size) params.set("stopDirections", [...stopDirs].join(","));
       return params;
     },
-    [selectedAgencies, selectedModes, selectedRoutes, vehicleDirs, stopDirs],
+    [
+      selectedAgencies,
+      selectedModes,
+      selectedRoutes,
+      allAgencyKeys,
+      allModeKeys,
+      allRouteKeys,
+      vehicleDirs,
+      stopDirs,
+    ],
   );
 
   const setSource = (id: string, data: FeatureCollection) => {
