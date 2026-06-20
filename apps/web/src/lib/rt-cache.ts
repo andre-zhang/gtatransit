@@ -71,6 +71,11 @@ function hasTripPredictions(): boolean {
   return stopTripMap.size > 0 || predictionsByStop.size > 0;
 }
 
+/** True when any stop-level RT predictions are loaded (may be stale). */
+export function hasRtPredictions(): boolean {
+  return hasTripPredictions();
+}
+
 function scheduleRtRefresh(opts: boolean | RtRefreshScope = {}) {
   if (refreshing) return;
   void refreshRtCache(opts);
@@ -823,11 +828,11 @@ export async function ensureRtCache(opts: boolean | RtRefreshScope = {}): Promis
 
   if (!force && trips && hasTripPredictions()) {
     scheduleRtRefresh(opts);
-    return;
+    if (isRtCacheWarm()) return;
   }
   if (!force && !trips && vehicleMap.size > 0) {
     scheduleRtRefresh(opts);
-    return;
+    if (isRtVehicleCacheWarm()) return;
   }
 
   if (refreshing) {
@@ -848,11 +853,11 @@ export async function ensureRtCacheWithin(
 
   if (!force && trips && hasTripPredictions()) {
     scheduleRtRefresh(opts);
-    return;
+    if (isRtCacheWarm()) return;
   }
   if (!force && !trips && vehicleMap.size > 0) {
     scheduleRtRefresh(opts);
-    return;
+    if (isRtVehicleCacheWarm()) return;
   }
 
   await Promise.race([

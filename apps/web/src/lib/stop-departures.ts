@@ -30,7 +30,7 @@ import {
   getRtPredictionsForStop,
   mergeRtIntoDeparture,
   ensureRtCacheWithin,
-  isRtCacheWarm,
+  hasRtPredictions,
   type RtStopPrediction,
 } from "@/lib/rt-cache";
 import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
@@ -314,14 +314,15 @@ export async function buildDemoStopDepartures(
     };
   }
 
-  await Promise.all([loadFixturesTree(), ensureRtCacheWithin(3500, { trips: true, vehicles: true })]);
+  await Promise.all([loadFixturesTree(), ensureRtCacheWithin(5000, { trips: true, vehicles: true })]);
   const usedRtTrips = new Set<string>();
+  const rtReady = hasRtPredictions();
 
   const { ttcRtByStopId } = await buildRtStopIdMaps(stop);
 
   const inputs: DepartureInput[] = [];
 
-  if (isRtCacheWarm()) {
+  if (rtReady) {
     for (const m of stop.members) {
       const rtIds =
         m.feedId === "ttc"
@@ -364,7 +365,7 @@ export async function buildDemoStopDepartures(
           ? resolveGoRtStopIds(r.stopId, stop.members)
           : [r.stopId];
     const schedSec = gtfsTimeToSec(r.departureTime);
-    const rt = isRtCacheWarm()
+    const rt = rtReady
       ? mergeRtIntoDeparture(r.feedId, r.tripId, r.stopId, schedSec, rtIds, {
           routeId: r.routeId,
           routeShort: r.routeShort,
