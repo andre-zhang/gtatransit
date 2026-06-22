@@ -187,6 +187,16 @@ function rtPredictionToDeparture(
 
   const resolvedRouteId = scheduledRow?.routeId ?? routeId ?? "";
   const resolvedRouteShort = scheduledRow?.routeShort ?? routeShort;
+  const destination =
+    boardDestination(row.feedId, resolvedRouteShort, scheduledRow?.headsign) ||
+    boardDestination(row.feedId, resolvedRouteShort, row.destination) ||
+    null;
+
+  // RT-only rows without a schedule match need a real destination and known route.
+  if (!scheduledRow) {
+    if (!destination || needsHeadsignLookup(destination)) return null;
+    if (!coreMeta) return null;
+  }
 
   const schedSec = scheduledRow
     ? gtfsTimeToSec(scheduledRow.departureTime)
@@ -207,10 +217,7 @@ function rtPredictionToDeparture(
     routeColor:
       scheduledRow?.routeColor ??
       routeColor(row.feedId, resolvedRouteShort, null, resolvedRouteId || undefined),
-    destination:
-      boardDestination(row.feedId, resolvedRouteShort, scheduledRow?.headsign) ||
-      boardDestination(row.feedId, resolvedRouteShort, row.destination) ||
-      "In service",
+    destination: destination ?? "In service",
     departureTime: secToTime(schedSec % 86400),
     stopId: row.stopId,
     platform: row.feedId === "go" ? row.platform : undefined,

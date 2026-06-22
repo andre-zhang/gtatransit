@@ -18,6 +18,7 @@ const SHARD_MANIFEST: Record<string, string[]> = {
     "ttc-schedules.0.json",
     "ttc-schedules.1.json",
     "ttc-schedules.2.json",
+    "ttc-schedules.3.json",
   ],
   "ttc-trip-stops": ["ttc-trip-stops.0.json", "ttc-trip-stops.1.json"],
   "go-schedules": ["go-schedules.0.json", "go-schedules.1.json"],

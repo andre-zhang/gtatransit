@@ -119,7 +119,7 @@ type IndexedPrediction = {
 /** Destination text from Metrolinx NextService REST (keyed by feed:tripId). */
 const restTripDestination = new Map<string, string>();
 
-const FUZZY_MATCH_SEC = 50 * 60;
+const FUZZY_MATCH_SEC = 15 * 60;
 
 function tripKey(feedId: string, tripId: string) {
   return `${feedId}:${tripId}`;
@@ -202,6 +202,7 @@ function findFuzzyRtMatch(
   const targetSec = normalizeServiceSec(schedSec, now);
   let best: IndexedPrediction | undefined;
   let bestDelta = Infinity;
+  let ambiguous = false;
 
   for (const stopId of stopIds) {
     const preds = predictionsByStop.get(`${feedId}:${stopId}`) ?? [];
@@ -211,13 +212,18 @@ function findFuzzyRtMatch(
       if (!routeMatches(feedId, p.routeId, routeId, routeShort)) continue;
       const predSec = normalizeServiceSec(p.predictedSec, now);
       const delta = Math.abs(predSec - targetSec);
-      if (delta > FUZZY_MATCH_SEC || delta >= bestDelta) continue;
-      best = p;
-      bestDelta = delta;
+      if (delta > FUZZY_MATCH_SEC) continue;
+      if (delta < bestDelta - 120) {
+        bestDelta = delta;
+        best = p;
+        ambiguous = false;
+      } else if (best && Math.abs(delta - bestDelta) <= 120) {
+        ambiguous = true;
+      }
     }
   }
 
-  return best;
+  return ambiguous ? undefined : best;
 }
 
 function isFreshRt(entry: { updatedAt: number } | undefined, now = Date.now()): boolean {
@@ -967,7 +973,13 @@ export function getGoRtStatus(): {
 export function getRtVehicles(): RtVehicle[] {
   const cutoff = Date.now() - 5 * 60_000;
   return [...vehicleMap.values()]
-    .filter((v) => v.updatedAt >= cutoff && v.lat != null && v.lon != null)
+    .filter(
+      (v) =>
+        v.updatedAt >= cutoff &&
+        v.lat != null &&
+        v.lon != null &&
+        Boolean(v.tripId?.trim()),
+    )
     .map(({ updatedAt: _, ...v }) => {
       if (!v.routeId && v.tripId) {
         const tripRt = tripMap.get(tripKey(v.feedId, v.tripId));

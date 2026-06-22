@@ -120,16 +120,28 @@ export async function loadStopsUsedByRouteTypes(
 export async function loadTtcSubwayStops(dir: string): Promise<
   Array<{ stopId: string; name: string; lat: number; lon: number }>
 > {
-  const subwayRoutes = new Set<string>();
+  return loadTtcRapidTransitStops(dir, { subwayOnly: true });
+}
+
+/** Subway (route_type 1) plus Line 5/6 LRT from the merged TTC GTFS feed. */
+export async function loadTtcRapidTransitStops(
+  dir: string,
+  opts?: { subwayOnly?: boolean },
+): Promise<Array<{ stopId: string; name: string; lat: number; lon: number }>> {
+  const rapidRoutes = new Set<string>();
   for await (const row of readCsv(join(dir, "routes.txt"))) {
-    if (Number(pick(row, "route_type") || 3) === 1) {
-      subwayRoutes.add(routeIdFromRow(row));
+    const routeType = Number(pick(row, "route_type") || 3);
+    const shortName = pick(row, "route_short_name");
+    if (routeType === 1) {
+      rapidRoutes.add(routeIdFromRow(row));
+    } else if (!opts?.subwayOnly && routeType === 0 && (shortName === "5" || shortName === "6")) {
+      rapidRoutes.add(routeIdFromRow(row));
     }
   }
 
   const subwayStops = new Set<string>();
   for await (const row of readCsv(join(dir, "trips.txt"))) {
-    if (!subwayRoutes.has(pick(row, "route_id"))) continue;
+    if (!rapidRoutes.has(pick(row, "route_id"))) continue;
     /* stop ids collected via stop_times below */
   }
 
@@ -149,7 +161,7 @@ export async function loadTtcSubwayStops(dir: string): Promise<
     const rid = pick(row, "route_id");
     const tripId = pick(row, "trip_id");
     const serviceId = pick(row, "service_id");
-    if (!tripId || !subwayRoutes.has(rid) || !activeServices.has(serviceId)) continue;
+    if (!tripId || !rapidRoutes.has(rid) || !activeServices.has(serviceId)) continue;
     tripRoute.set(tripId, rid);
   }
 
