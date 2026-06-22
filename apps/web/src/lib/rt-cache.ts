@@ -23,6 +23,7 @@ import {
   unixToTorontoSec,
 } from "./calendar";
 import { formatGoPlatform, goTripSuffix, goTripsMatch } from "./go-stop-aliases";
+import { isGoRailTripId } from "./go-rail";
 import { fetchGoNextService } from "./go-metrolinx-rest";
 import { routesMatch } from "./route-match";
 
@@ -732,6 +733,7 @@ export function mergeRtIntoDeparture(
   // Only attach live data when the RT trip matches this scheduled trip — never
   // fuzzy-match a different running trip onto future scheduled departures.
   if (!hasExact && opts?.usedRtTrips) {
+    let matched = false;
     for (const sid of stopIds) {
       const preds = predictionsByStop.get(`${feedId}:${sid}`) ?? [];
       for (const p of preds) {
@@ -750,9 +752,41 @@ export function mergeRtIntoDeparture(
           fuzzyPlatform =
             feedId === "go" ? formatGoPlatform(p.platform) : p.platform;
         }
+        matched = true;
         break;
       }
-      if (liveTripId) break;
+      if (matched) break;
+    }
+
+    // GO buses rotate trip ids daily — match live predictions by route + time.
+    if (
+      !matched &&
+      feedId === "go" &&
+      !isGoRailTripId(tripId) &&
+      (opts.routeId || opts.routeShort)
+    ) {
+      const fuzzy = findFuzzyRtMatch(
+        feedId,
+        stopIds,
+        opts.routeId,
+        opts.routeShort,
+        schedSec,
+        opts.usedRtTrips,
+      );
+      if (fuzzy) {
+        liveTripId = fuzzy.tripId;
+        opts.usedRtTrips.add(`${feedId}:${fuzzy.tripId}`);
+        tripRt = getTripRt(feedId, fuzzy.tripId);
+        vehicle = getVehicleForTrip(feedId, fuzzy.tripId);
+        stopRt = getStopTripRtAny(feedId, fuzzy.tripId, stopIds) ?? stopRt;
+        delaySec =
+          fuzzy.delaySec ?? stopRt?.delaySec ?? tripRt?.delaySec ?? vehicle?.delaySec;
+        predictedSec = fuzzy.predictedSec;
+        if (fuzzy.platform) {
+          fuzzyPlatform =
+            feedId === "go" ? formatGoPlatform(fuzzy.platform) : fuzzy.platform;
+        }
+      }
     }
   }
 

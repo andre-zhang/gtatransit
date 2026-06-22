@@ -24,3 +24,19 @@ export function isMetrolinxRailFeed(
 ): boolean {
   return (feedId === "go" || feedId === "up") && isGoRailLine(routeShort);
 }
+
+/** GO rail trips embed a line code (LW-1023); bus trips use numeric routes (94-94511). */
+export function isGoRailTripId(tripId: string | null | undefined): boolean {
+  if (!tripId) return false;
+  const m = tripId.match(/^\d{8}-([A-Z]{2,3})-/i);
+  return m != null && isGoRailLine(m[1]);
+}
+
+/** Route badge label — strip Metrolinx “#” prefixes from RT ids. */
+export function displayRouteShort(raw: string | null | undefined): string {
+  if (!raw) return "?";
+  const s = raw.trim().replace(/^#+/, "");
+  const code = goLineCode(s);
+  if (code && isGoRailLine(code)) return code;
+  return s;
+}

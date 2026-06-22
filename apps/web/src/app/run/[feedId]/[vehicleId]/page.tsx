@@ -6,11 +6,11 @@ import { PageShell } from "@/components/PageShell";
 import { ServiceViewClient } from "@/components/ServiceViewClient";
 import { VehicleLink } from "@/components/VehicleLink";
 import { cleanHeadsign } from "@/lib/headsign";
-import { getDemoServiceView } from "@/lib/demo-service-view";
+import { getDemoServiceView, type ServiceViewData } from "@/lib/demo-service-view";
+import { displayRouteShort } from "@/lib/go-rail";
 import { routePageHref } from "@/lib/detail-href";
 import { getPageMeta } from "@/lib/page-meta";
 import { serverBaseUrl } from "@/lib/server-base-url";
-import type { ServiceViewData } from "@/lib/demo-service-view";
 
 async function load(feedId: string, vehicleId: string) {
   const base = await serverBaseUrl();
@@ -39,7 +39,11 @@ async function RunPageContent({
     cleanHeadsign(data?.trip?.headsign ?? data?.route?.long_name ?? data?.route?.short_name) ||
     "In service";
   const routeId = data?.trip?.route_id ?? data?.route?.short_name;
-  const routeLabel = data?.route?.short_name ?? routeId;
+  const routeLabel = data?.route?.short_name
+    ? displayRouteShort(data.route.short_name)
+    : routeId
+      ? displayRouteShort(routeId)
+      : undefined;
   const routeHref = routeId ? routePageHref(feedId, routeId) : undefined;
   const stopHref = data?.currentStop?.groupId
     ? `/stop/${data.currentStop.groupId}`

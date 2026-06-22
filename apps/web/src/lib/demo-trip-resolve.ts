@@ -8,6 +8,7 @@ import type { ScheduleRow } from "./demo-schedule-types";
 import { isDemoFixtureTripId } from "./demo-trip-id";
 import { lookupTripFromSchedules } from "./demo-trip-lookup";
 import { expandGoStopId, goTripsMatch } from "./go-stop-aliases";
+import { isGoRailTripId } from "./go-rail";
 import { routesMatch } from "./route-match";
 import { getTripRt, getTripStopUpdates } from "./rt-cache";
 import { fixtureStopIdForLive } from "./ttc-stop-registry";
@@ -62,7 +63,7 @@ export async function resolveDemoTrip(
 
   const rows = await loadStopScheduleRows(feedId, schedStopId);
 
-  if (feedId === "go" || feedId === "up") {
+  if ((feedId === "go" || feedId === "up") && isGoRailTripId(tripId)) {
     const suffixMatch = rows.find((row) => goTripsMatch(row.tripId, tripId));
     if (suffixMatch) {
       return {
@@ -83,7 +84,7 @@ export async function resolveDemoTrip(
         routesMatch(feedId, routeId, routeId, row.routeShort);
       if (!matches) continue;
     }
-    if (feedId === "go" || feedId === "up") {
+    if ((feedId === "go" || feedId === "up") && isGoRailTripId(tripId)) {
       if (!goTripsMatch(row.tripId, tripId)) continue;
     }
     const schedNorm = normalizeServiceSec(gtfsTimeToSec(row.departureTime), now);

@@ -9,6 +9,7 @@ import { ServiceViewClient } from "@/components/ServiceViewClient";
 import { VehicleLink } from "@/components/VehicleLink";
 import { cleanHeadsign } from "@/lib/headsign";
 import { getDemoServiceView } from "@/lib/demo-service-view";
+import { displayRouteShort } from "@/lib/go-rail";
 import { routePageHref, runPageHref } from "@/lib/detail-href";
 import { getPageMeta } from "@/lib/page-meta";
 import { stopBoardHref } from "@/lib/stop-group-href";
@@ -91,7 +92,7 @@ async function TripPageContent({
         routeBadge={
           data.route
             ? {
-                shortName: data.route.short_name ?? "?",
+                shortName: displayRouteShort(data.route.short_name ?? "?"),
                 color: data.route.color,
                 href: routeHref,
               }

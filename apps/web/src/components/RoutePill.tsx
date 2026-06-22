@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { displayRouteShort } from "@/lib/go-rail";
 
 function contrastText(hex: string): string {
   const h = hex.replace(/^#/, "");
@@ -42,7 +43,7 @@ export function RoutePill({
         color: textColor ?? contrastText(bg),
       }}
     >
-      {shortName}
+      {displayRouteShort(shortName)}
     </span>
   );
 
@@ -51,7 +52,7 @@ export function RoutePill({
       <Link
         href={href}
         className={`shrink-0 ${className ?? ""}`.trim()}
-        title={`Route ${shortName}`}
+        title={`Route ${displayRouteShort(shortName)}`}
       >
         {pill}
       </Link>

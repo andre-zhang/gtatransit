@@ -281,31 +281,45 @@ export function ServiceViewClient({
 
       {blockTrips.length > 0 && (
         <Section title={blockSectionTitle(trip)} subtitle={blockRange ?? undefined}>
-          <ul className="divide-y divide-go-bg">
-            {blockTrips.map((t) => (
-              <li
-                key={t.trip_id}
-                className={`relative flex items-start gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3 ${t.active ? "bg-go-bg/40" : ""}`}
-              >
-                <span
-                  className={`mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 ${
-                    t.active ? "border-go-green bg-go-green" : "border-go-slate bg-white"
+          <ul className="divide-y divide-go-bg py-1">
+            {blockTrips.map((t, i) => {
+              const activeIdx = blockTrips.findIndex((x) => x.active);
+              const isPast = activeIdx >= 0 && i < activeIdx;
+              return (
+                <li
+                  key={t.trip_id}
+                  className={`relative flex items-start gap-2 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3 ${
+                    isPast ? "opacity-70" : ""
                   }`}
-                />
-                <span className="w-24 shrink-0 text-sm font-bold tabular-nums text-go-navy sm:w-28">
-                  {blockTripTimes(t.first_departure, t.last_departure)}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-go-navy">
-                  {cleanHeadsign(t.headsign) || "—"}
-                </span>
-                {t.active && (
-                  <span className="go-badge go-badge--live inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
-                    <LiveIcon className="h-3 w-3" title="Active" />
-                    <span className="hidden sm:inline">Active</span>
+                >
+                  <span
+                    className={`relative z-[1] mt-1.5 flex shrink-0 items-center gap-1 sm:mt-2 ${
+                      t.active ? "text-[#007934]" : "text-go-slate"
+                    }`}
+                  >
+                    <span
+                      className={`h-3 w-3 rounded-full border-2 sm:h-3.5 sm:w-3.5 ${
+                        t.active
+                          ? "border-go-green bg-go-green"
+                          : isPast
+                            ? "border-go-slate bg-go-bg"
+                            : "border-go-slate bg-white"
+                      }`}
+                      aria-hidden
+                    />
+                    {t.active && (
+                      <LiveIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" title="Active trip" />
+                    )}
                   </span>
-                )}
-              </li>
-            ))}
+                  <span className="w-24 shrink-0 text-sm font-bold tabular-nums text-go-navy sm:w-28">
+                    {blockTripTimes(t.first_departure, t.last_departure)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-go-navy sm:text-base">
+                    {cleanHeadsign(t.headsign) || "—"}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </Section>
       )}

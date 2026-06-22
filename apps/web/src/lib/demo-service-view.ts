@@ -24,7 +24,7 @@ import {
 } from "./demo-trip-headsign";
 import { boardDestination } from "./headsign";
 import { fetchGoTrainDetail, type GoTrainDetail } from "./go-metrolinx-rest";
-import { isMetrolinxRailFeed, goLineCode } from "./go-rail";
+import { displayRouteShort, isMetrolinxRailFeed, goLineCode } from "./go-rail";
 import { resolveVehicleBlock } from "./demo-trip-meta";
 import {
   getRtVehicle,
@@ -105,7 +105,7 @@ async function findRouteMeta(feedId: string, routeId: string | undefined) {
       const r = mode.routes.find((x) => x.id === routeId || x.shortName === routeId);
       if (r) {
         return {
-          short_name: r.shortName,
+          short_name: displayRouteShort(r.shortName),
           long_name: r.longName,
           color: routeColor(feedId, r.shortName, null, r.id),
         };
@@ -115,7 +115,7 @@ async function findRouteMeta(feedId: string, routeId: string | undefined) {
   const sample = await lookupRouteFromSchedules(feedId, routeId);
   if (sample) {
     return {
-      short_name: sample.routeShort,
+      short_name: displayRouteShort(sample.routeShort),
       long_name: sample.headsign,
       color: sample.routeColor,
     };
@@ -183,7 +183,11 @@ function inferCurrentStopIndex(
 }
 
 function markCurrentStop(stops: ServiceStop[], currentIdx: number): ServiceStop[] {
-  return stops.map((s, i) => ({ ...s, current: i === currentIdx }));
+  return stops.map((s, i) => ({
+    ...s,
+    current: i === currentIdx,
+    passed: s.passed || (currentIdx >= 0 && i < currentIdx),
+  }));
 }
 
 async function loadTrainDetail(
@@ -290,7 +294,7 @@ async function assembleTripPayload(
       route ??
       (scheduleRow
         ? {
-            short_name: scheduleRow.routeShort,
+            short_name: displayRouteShort(scheduleRow.routeShort),
             long_name: scheduleRow.headsign,
             color: scheduleRow.routeColor,
           }
@@ -391,6 +395,7 @@ export async function getDemoServiceView(
 
   if (!opts.tripId) return null;
 
+  try {
   const resolved = await resolveDemoTrip(feedId, opts.tripId);
   const liveTripId = resolved.liveTripId;
   const scheduleTripId = await pickScheduleTripId(
@@ -442,6 +447,9 @@ export async function getDemoServiceView(
     trainDetail: payload.trainDetail,
     shape: payload.shape,
   };
+  } catch {
+    return null;
+  }
 }
 
 /** @deprecated Use getDemoServiceView({ vehicleId }) */

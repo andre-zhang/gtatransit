@@ -35,6 +35,7 @@ import {
 } from "@/lib/rt-cache";
 import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
 import { cleanHeadsign, boardDestination } from "@/lib/headsign";
+import { isGoRailTripId, displayRouteShort } from "@/lib/go-rail";
 import { resolveTtcRtStopIdsForMember } from "@/lib/ttc-stop-registry";
 
 /** Trim large union-style schedules before RT merge (board shows ~80 rows). */
@@ -126,7 +127,7 @@ function rtPredictionToDeparture(
   const coreMeta =
     routeMetaFromCore(row.feedId, routeId) ??
     (routeId ? routeMetaFromCore(row.feedId, routeTail(routeId)) : null);
-  const routeShort = coreMeta?.routeShort ?? routeId ?? "?";
+  const routeShort = coreMeta?.routeShort ?? (routeId ? displayRouteShort(routeId) : "?");
   let predictedSec = row.predictedSec;
   if (predictedSec != null && isUnixTimestamp(predictedSec)) {
     predictedSec = unixToTorontoSec(predictedSec);
@@ -155,7 +156,13 @@ function rtPredictionToDeparture(
     let ambiguous = false;
     for (const s of schedule) {
       if (s.feedId !== row.feedId) continue;
-      if (row.feedId === "go" && !goTripsMatch(s.tripId, row.tripId)) continue;
+      if (
+        row.feedId === "go" &&
+        isGoRailTripId(row.tripId) &&
+        !goTripsMatch(s.tripId, row.tripId)
+      ) {
+        continue;
+      }
       if (
         !routesMatch(row.feedId, routeId, routeShort, s.routeId) &&
         !routesMatch(row.feedId, routeId, routeShort, s.routeShort)

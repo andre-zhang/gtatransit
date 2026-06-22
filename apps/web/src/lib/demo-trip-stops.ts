@@ -83,11 +83,15 @@ export async function buildDemoTripStops(opts: {
   fromStop?: string;
 }): Promise<TripStopOut[]> {
   const { feedId, liveTripId, fromStop } = opts;
-  const scheduleTripId = opts.scheduleTripId ?? liveTripId;
+  let scheduleTripId = opts.scheduleTripId ?? liveTripId;
   const now = torontoNowSec();
   const rtUpdates = getTripStopUpdates(feedId, liveTripId);
 
-  const schedStops = await getTripStops(feedId, scheduleTripId);
+  let schedStops = await getTripStops(feedId, scheduleTripId);
+  if (!schedStops.length && scheduleTripId !== liveTripId) {
+    schedStops = await getTripStops(feedId, liveTripId);
+    if (schedStops.length) scheduleTripId = liveTripId;
+  }
   const fromCandidates =
     fromStop != null ? await resolveFromStopCandidates(feedId, fromStop) : null;
 

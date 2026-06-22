@@ -4,6 +4,7 @@ import { formatGtfsDepartureTime, gtfsTimeToSec, makeMonotonicGtfsSecs } from ".
 import { boardDestination } from "./headsign";
 import { goLineCode } from "./go-rail";
 import { goTripSuffix, goTripsMatch } from "./go-stop-aliases";
+import { isGoRailTripId } from "./go-rail";
 
 type BlockTrip = {
   trip_id: string;
@@ -147,7 +148,9 @@ async function loadBlockList(
 
 function tripIdsMatch(feedId: string, a: string, b: string): boolean {
   if (a === b) return true;
-  if (feedId === "go" || feedId === "up") return goTripsMatch(a, b);
+  if (feedId === "go" || feedId === "up") {
+    if (isGoRailTripId(a) || isGoRailTripId(b)) return goTripsMatch(a, b);
+  }
   return false;
 }
 

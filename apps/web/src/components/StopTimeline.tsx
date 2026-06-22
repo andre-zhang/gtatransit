@@ -59,7 +59,6 @@ export function StopTimeline({ stops }: { stops: Stop[] }) {
                 scheduled={s.scheduled}
                 predicted={s.predicted}
                 size="md"
-                showStruckWhenEqual={Boolean(s.predicted && s.passed)}
               />
             </span>
             {nameEl}
