@@ -20,7 +20,12 @@ import {
   resolveTtcRtStopIds,
 } from "./ttc-stop-registry";
 import { resolveStopGroupForMember } from "./demo-stop-groups";
-import { getStopTripRt, getTripRt, getTripStopUpdates } from "./rt-cache";
+import {
+  getStopTripRtAny,
+  getTripDelaySec,
+  getTripRt,
+  getTripStopUpdates,
+} from "./rt-cache";
 
 export type TripStopOut = {
   stopId: string;
@@ -76,6 +81,10 @@ function findStopIndex(
   });
 }
 
+function rtStopIds(feedId: string, stopId: string): string[] {
+  return feedId === "go" ? expandGoStopId(stopId) : [stopId];
+}
+
 export async function buildDemoTripStops(opts: {
   feedId: string;
   liveTripId: string;
@@ -105,6 +114,9 @@ export async function buildDemoTripStops(opts: {
       return normalizeServiceSec(lastSec, now) < now - 300;
     })();
 
+  const tripLive = !tripEnded && Boolean(getTripRt(feedId, liveTripId) || rtUpdates.length);
+  const tripDelaySec = tripLive ? getTripDelaySec(feedId, liveTripId) : undefined;
+
   const useFromStop = fromCandidates != null && !tripEnded;
 
   if (schedStops.length) {
@@ -116,13 +128,13 @@ export async function buildDemoTripStops(opts: {
     const rawSecs = slice.map((s) => gtfsTimeToSec(s.departureTime));
     let monoSecs = makeMonotonicGtfsSecs(rawSecs);
     const rtByFixture = await mapFixtureStopsToRt(feedId, slice.map((s) => s.stopId), (liveId) =>
-      getStopTripRt(feedId, liveTripId, liveId),
+      getStopTripRtAny(feedId, liveTripId, rtStopIds(feedId, liveId)),
     );
     const firstRt = rtByFixture.get(slice[0]!.stopId);
     if (firstRt?.predictedSec != null) {
       monoSecs = shiftTripToPrediction(monoSecs, firstRt.predictedSec);
     }
-    return slice.map((s, idx) => {
+    const stopsOut = slice.map((s, idx) => {
         const schedSec = monoSecs[idx]!;
         const rt = rtByFixture.get(s.stopId);
         const delaySec =
@@ -132,12 +144,16 @@ export async function buildDemoTripStops(opts: {
                 agencyDelaySec: rt.delaySec,
                 now,
               })
-            : null;
+            : rt?.delaySec ?? tripDelaySec ?? null;
         let predictedSec: number | undefined;
         if (rt?.predictedSec != null) {
           predictedSec = alignPredictionToSchedule(rt.predictedSec, schedSec);
+        } else if (delaySec != null) {
+          predictedSec = schedSec + delaySec;
         }
         const schedNorm = normalizeServiceSec(schedSec, now);
+        const predNorm =
+          predictedSec != null ? normalizeServiceSec(predictedSec, now) : schedNorm;
         return {
           stopId: s.stopId,
           name: s.name,
@@ -149,9 +165,12 @@ export async function buildDemoTripStops(opts: {
           groupId: resolveStopGroupForMember(feedId, s.stopId) ?? undefined,
           passed: tripEnded
             ? schedNorm < now - 60
-            : useFromStop && startIdx >= 0 && s.sequence < baseSeq,
+            : useFromStop && startIdx >= 0 && s.sequence < baseSeq
+              ? true
+              : tripLive && predNorm < now - 60,
         };
       });
+    return stopsOut;
   }
 
   if (!rtUpdates.length) return [];

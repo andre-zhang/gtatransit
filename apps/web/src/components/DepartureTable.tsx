@@ -37,6 +37,7 @@ type TripStop = {
   platform?: string;
   delayMin?: number;
   groupId?: string;
+  passed?: boolean;
 };
 
 function TripStopsPanel({
@@ -100,12 +101,17 @@ function TripStopsPanel({
   return (
     <ul className="departure-board-expand divide-y divide-go-bg bg-go-bg/30">
       {stops.map((s, i) => (
-        <li key={`${s.stopId}-${i}`} className="flex items-center gap-2 px-3 py-2.5 text-sm sm:gap-3 sm:px-5">
+        <li key={`${s.stopId}-${i}`} className={`flex items-center gap-2 px-3 py-2.5 text-sm sm:gap-3 sm:px-5 ${s.passed ? "opacity-70" : ""}`}>
+          <DepartureStatus
+            realtime={Boolean(s.predicted)}
+            latenessMin={s.delayMin}
+          />
           <span className="w-12 shrink-0 sm:w-14">
             <TimePair
               scheduled={s.scheduled}
               predicted={s.predicted}
               size="sm"
+              showStruckWhenEqual={Boolean(s.passed && s.predicted)}
             />
           </span>
           {s.groupId ? (

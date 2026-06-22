@@ -55,6 +55,7 @@ export type ServiceStop = {
   groupId?: string;
   passed?: boolean;
   current?: boolean;
+  live?: boolean;
 };
 
 export type ServiceViewData = {
@@ -153,6 +154,7 @@ function tripStopToService(s: TripStopOut): ServiceStop {
     delayMin: s.delayMin,
     groupId: s.groupId,
     passed: s.passed,
+    live: Boolean(s.predicted),
   };
 }
 

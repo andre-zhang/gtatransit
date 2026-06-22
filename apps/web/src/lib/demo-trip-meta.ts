@@ -4,7 +4,6 @@ import { formatGtfsDepartureTime, gtfsTimeToSec, makeMonotonicGtfsSecs } from ".
 import { boardDestination } from "./headsign";
 import { goLineCode } from "./go-rail";
 import { goTripSuffix, goTripsMatch } from "./go-stop-aliases";
-import { isGoRailTripId } from "./go-rail";
 
 type BlockTrip = {
   trip_id: string;
@@ -148,9 +147,7 @@ async function loadBlockList(
 
 function tripIdsMatch(feedId: string, a: string, b: string): boolean {
   if (a === b) return true;
-  if (feedId === "go" || feedId === "up") {
-    if (isGoRailTripId(a) || isGoRailTripId(b)) return goTripsMatch(a, b);
-  }
+  if (feedId === "go" || feedId === "up") return goTripsMatch(a, b);
   return false;
 }
 
@@ -218,9 +215,10 @@ export async function loadBlockTrips(
   const capped = sequential.length > 50 ? sequential.slice(0, 50) : sequential;
 
   const primaryActive = scheduleTripId ?? activeTripId;
+  const activeIds = [...new Set([scheduleTripId, activeTripId, primaryActive].filter(Boolean))] as string[];
   const mapped = capped.map((t) => ({
     ...t,
-    active: tripIdsMatch(feedId, t.trip_id, primaryActive),
+    active: activeIds.some((id) => tripIdsMatch(feedId, t.trip_id, id)),
   }));
 
   const missingIds = mapped.filter((t) => !t.headsign?.trim()).map((t) => t.trip_id);

@@ -12,6 +12,7 @@ type Stop = {
   groupId?: string;
   passed?: boolean;
   current?: boolean;
+  live?: boolean;
 };
 
 export function StopTimeline({ stops }: { stops: Stop[] }) {
@@ -21,6 +22,8 @@ export function StopTimeline({ stops }: { stops: Stop[] }) {
     <ul className="py-1">
       {stops.map((s, i) => {
         const isLast = i === stops.length - 1;
+        const isLive = s.live ?? Boolean(s.predicted != null || s.current);
+        const showStatus = isLive || isPlausibleDelayMin(s.delayMin);
         const nameEl = s.groupId ? (
           <Link
             href={`/stop/${s.groupId}`}
@@ -59,11 +62,16 @@ export function StopTimeline({ stops }: { stops: Stop[] }) {
                 scheduled={s.scheduled}
                 predicted={s.predicted}
                 size="md"
+                showStruckWhenEqual={Boolean((s.passed || s.current) && s.predicted)}
               />
             </span>
             {nameEl}
-            {isPlausibleDelayMin(s.delayMin) && s.delayMin !== 0 && (
-              <DepartureStatus realtime latenessMin={s.delayMin} compact />
+            {showStatus && (
+              <DepartureStatus
+                realtime={isLive}
+                latenessMin={s.delayMin}
+                compact
+              />
             )}
           </li>
         );

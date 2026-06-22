@@ -22,7 +22,7 @@ import {
   torontoNowSec,
   unixToTorontoSec,
 } from "./calendar";
-import { formatGoPlatform, goTripSuffix, goTripsMatch } from "./go-stop-aliases";
+import { formatGoPlatform, goStopIdsMatch, goTripSuffix, goTripsMatch } from "./go-stop-aliases";
 import { isGoRailTripId } from "./go-rail";
 import { fetchGoNextService } from "./go-metrolinx-rest";
 import { routesMatch } from "./route-match";
@@ -574,12 +574,10 @@ export function getStopTripRt(
   tripId: string,
   stopId: string,
 ): StopRt | undefined {
-  const direct = stopTripMap.get(stopTripKey(feedId, tripId, stopId));
-  if (direct) return direct;
-  return undefined;
+  return getStopTripRtAny(feedId, tripId, [stopId]);
 }
 
-function getStopTripRtAny(
+export function getStopTripRtAny(
   feedId: string,
   tripId: string,
   stopIds: string[],
@@ -589,7 +587,7 @@ function getStopTripRtAny(
     if (hit && isFreshRt(hit)) return hit;
   }
 
-  if (feedId === "go") {
+  if (feedId === "go" || feedId === "up") {
     const suffix = goTripSuffix(tripId);
     for (const [key, rt] of stopTripMap) {
       const parts = key.split(":");
@@ -598,7 +596,7 @@ function getStopTripRtAny(
       const keyStop = parts.slice(2).join(":");
       if (keyFeed !== feedId || !keyTrip || !keyStop) continue;
       if (goTripSuffix(keyTrip) !== suffix) continue;
-      if (!stopIds.includes(keyStop)) continue;
+      if (!stopIds.some((id) => goStopIdsMatch(id, keyStop))) continue;
       if (!isFreshRt(rt)) continue;
       return rt;
     }
@@ -831,7 +829,7 @@ export function mergeRtIntoDeparture(
     liveTripId != null ||
     hasStopUpdate ||
     hasTripUpdate ||
-    (hasVehicle && (hasStopUpdate || hasTripUpdate || stopRt != null || tripRt != null)) ||
+    (hasVehicle && Boolean(vehicle?.tripId)) ||
     (delaySec != null && predictedSec != null && (stopRt != null || tripRt != null));
 
   const rawPlatform = stopRt?.platform ?? tripRt?.platform ?? fuzzyPlatform;
@@ -1063,11 +1061,9 @@ export function getTripStopUpdates(
 }
 
 export function getTripDelaySec(feedId: string, tripId: string): number | undefined {
-  const stopRt = [...stopTripMap.entries()]
-    .filter(([key]) => key.startsWith(`${feedId}:${tripId}:`))
-    .map(([, rt]) => rt)
-    .find((rt) => rt.delaySec != null);
-  if (stopRt?.delaySec != null) return stopRt.delaySec;
+  for (const u of getTripStopUpdates(feedId, tripId)) {
+    if (u.delaySec != null) return u.delaySec;
+  }
   const tripRt = getTripRt(feedId, tripId);
   if (tripRt?.delaySec != null) return tripRt.delaySec;
   const vehicle = getVehicleForTrip(feedId, tripId);
