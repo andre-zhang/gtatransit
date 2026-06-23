@@ -9,6 +9,9 @@
     "cluster": "tsx src/cluster-stops.ts",
     "build-demo": "tsx src/build-demo-fixtures.ts",
     "build-ttc-rapid": "tsx src/build-ttc-rapid-transit.ts",
+    "build-yrt": "tsx src/build-yrt-schedules.ts",
+    "append-yrt": "tsx src/append-yrt-services.ts",
+    "export-calendars": "tsx src/export-calendars-only.ts",
     "resmooth-routes": "tsx src/resmooth-routes.ts",
     "split-demo": "tsx src/split-demo-json.ts"
   },

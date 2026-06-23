@@ -17,6 +17,7 @@ import {
   loadStopsUsedByRouteTypes,
   loadTtcSubwayStops,
 } from "./build-demo-stops.js";
+import { exportFeedCalendar } from "./export-feed-calendar.js";
 import { smoothRouteLine } from "./smooth-line.js";
 import { writeShardedRecord } from "./write-sharded-json.js";
 
@@ -221,7 +222,7 @@ async function loadFeed(feedId: string, name: string, zipName: string) {
     modeMap.get(r.routeType)!.push(r);
   }
 
-  const modes = [...modeMap.entries()]
+  let modes = [...modeMap.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([type, rs]) => ({
       type,
@@ -234,6 +235,25 @@ async function loadFeed(feedId: string, name: string, zipName: string) {
           longName: r.longName,
         })),
     }));
+
+  if (feedId === "yrt") {
+    const busMode = modes.find((m) => m.type === 3);
+    if (busMode) {
+      const vivaRoutes = busMode.routes.filter((r) =>
+        /viva/i.test(r.longName ?? ""),
+      );
+      const localRoutes = busMode.routes.filter(
+        (r) => !/viva/i.test(r.longName ?? ""),
+      );
+      modes = modes.filter((m) => m.type !== 3);
+      if (vivaRoutes.length) {
+        modes.push({ type: 3, label: "Viva", routes: vivaRoutes });
+      }
+      if (localRoutes.length) {
+        modes.push({ type: 3, label: "Bus", routes: localRoutes });
+      }
+    }
+  }
 
   console.log(`${feedId}: ${routes.length} routes, ${features.length} shape features`);
   return { id: feedId, name, modes, features, gtfsDir: dir };
@@ -389,7 +409,8 @@ async function main() {
     console.log(`Building ${feedId} stops & schedules…`);
     const stops = await loadGoStops(feed.dir);
     const stopIds = new Set(stops.map((s) => s.stopId));
-    const built = await buildFeedSchedules(feedId, feed.dir, stopIds);
+    const built = await buildFeedSchedules(feedId, feed.dir, stopIds, { allServices: true });
+    await exportFeedCalendar(feedId, feed.dir, outDir);
     registerStops(feedId, stops);
     await loadStopMeta(feedId, feed.dir);
     if (feedId === "brampton") {

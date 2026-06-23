@@ -7,6 +7,7 @@ import type { ScheduleRow, TripStopRow } from "./demo-schedule-types";
 import { isDemoFixtureTripId } from "./demo-trip-id";
 import { goScheduleLookupKeys, goTripSuffix, goTripsMatch } from "./go-stop-aliases";
 import { routesMatch } from "./route-match";
+import { filterRowsByServiceDate } from "./demo-calendar";
 
 const scheduleCache = new Map<string, Record<string, ScheduleRow[]>>();
 const tripStopCache = new Map<string, Record<string, TripStopRow[]>>();
@@ -185,17 +186,19 @@ export async function loadStopScheduleRows(
 
   for (const key of lookupKeys) {
     const cached = stopRowCache.get(`${feedId}:${key}`);
-    if (cached?.length) {
-      cacheStopRows(feedId, lookupKeys, cached);
-      return cached;
+    if (cached) {
+      const filtered = await filterRowsByServiceDate(feedId, cached);
+      cacheStopRows(feedId, lookupKeys, filtered);
+      return filtered;
     }
   }
 
   for (const key of lookupKeys) {
     const rows = await loadStopScheduleRowsDirect(feedId, key);
     if (rows.length) {
-      cacheStopRows(feedId, lookupKeys, rows);
-      return rows;
+      const filtered = await filterRowsByServiceDate(feedId, rows);
+      cacheStopRows(feedId, lookupKeys, filtered);
+      return filtered;
     }
   }
 
@@ -224,7 +227,7 @@ export async function loadRouteScheduleRows(
           if (matches(row)) rows.push(row);
         }
       }
-      return rows;
+      return filterRowsByServiceDate(feedId, rows);
     } catch {
       return [];
     }
@@ -245,9 +248,10 @@ export async function loadRouteScheduleRows(
     }
   }
 
-  return [...byTrip.values()].sort((a, b) =>
+  const sorted = [...byTrip.values()].sort((a, b) =>
     a.departureTime.localeCompare(b.departureTime),
   );
+  return filterRowsByServiceDate(feedId, sorted);
 }
 
 /** Find a single trip without loading and retaining every schedule shard. */

@@ -1,7 +1,7 @@
 /**
- * Build schedule shards for brampton / drt / yrt without rebuilding TTC.
+ * Rebuild YRT schedule shards with all service patterns + calendar export.
  */
-import { createReadStream, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pipeline } from "node:stream/promises";
@@ -15,8 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "../../..");
 const dataDir = process.env.GTFS_DATA_DIR ?? join(root, "data/gtfs");
 const outDir = join(root, "apps/web/public/demo");
-
-const FEEDS = ["brampton", "drt", "yrt"] as const;
+const feedId = "yrt";
 
 async function extractZip(zipPath: string, outDir: string): Promise<string | null> {
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
@@ -33,29 +32,31 @@ async function extractZip(zipPath: string, outDir: string): Promise<string | nul
 }
 
 async function main() {
-  for (const feedId of FEEDS) {
-    const zipPath = join(dataDir, `${feedId}.zip`);
-    if (!existsSync(zipPath)) {
-      console.warn(`Skip ${feedId}: missing ${zipPath}`);
-      continue;
-    }
-    const extractDir = join(dataDir, "extracted-demo", feedId);
-    const dir = await extractZip(zipPath, extractDir);
-    if (!dir) {
-      console.warn(`Skip ${feedId}: could not extract`);
-      continue;
-    }
-    console.log(`Building ${feedId} schedules…`);
-    const stops = await loadGoStops(dir);
-    const stopIds = new Set(stops.map((s) => s.stopId));
-    const built = await buildFeedSchedules(feedId, dir, stopIds, { allServices: true });
-    await exportFeedCalendar(feedId, dir, outDir);
-    writeShardedRecord(outDir, `${feedId}-schedules`, built.schedulesByStop);
-    writeShardedRecord(outDir, `${feedId}-trip-stops`, built.tripStops);
-    console.log(
-      `${feedId}: ${stops.length} stops, ${Object.keys(built.schedulesByStop).length} schedule keys`,
-    );
+  const zipPath = join(dataDir, `${feedId}.zip`);
+  if (!existsSync(zipPath)) {
+    console.error(`Missing ${zipPath}`);
+    process.exit(1);
   }
+  const extractDir = join(dataDir, "extracted-demo", feedId);
+  const dir = await extractZip(zipPath, extractDir);
+  if (!dir) {
+    console.error("Could not extract YRT GTFS");
+    process.exit(1);
+  }
+
+  console.log("Building YRT schedules (all service patterns)…");
+  const stops = await loadGoStops(dir);
+  const stopIds = new Set(stops.map((s) => s.stopId));
+  const built = await buildFeedSchedules(feedId, dir, stopIds, {
+    allServices: true,
+    skipTripStops: true,
+  });
+  console.log(
+    `Built ${Object.keys(built.schedulesByStop).length} stops`,
+  );
+
+  writeShardedRecord(outDir, `${feedId}-schedules`, built.schedulesByStop);
+  await exportFeedCalendar(feedId, dir, outDir);
 
   const shardManifest: Record<string, string[]> = {};
   const shardRe = /^(.*-(?:schedules|trip-stops))(?:\.\d+)?\.json$/;
@@ -75,8 +76,12 @@ async function main() {
       return idx(a) - idx(b);
     });
   }
-  writeFileSync(join(outDir, "shard-manifest.json"), JSON.stringify(shardManifest));
-  console.log(`Wrote shard-manifest.json (${Object.keys(shardManifest).length} bases)`);
+  const existing = JSON.parse(readFileSync(join(outDir, "shard-manifest.json"), "utf8"));
+  writeFileSync(
+    join(outDir, "shard-manifest.json"),
+    JSON.stringify({ ...existing, ...shardManifest }),
+  );
+  console.log("Done — run: node scripts/demo-shard-index.mjs");
 }
 
 main().catch((e) => {

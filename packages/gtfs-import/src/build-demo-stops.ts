@@ -227,16 +227,20 @@ async function loadCalendar(dir: string): Promise<{ date: string; activeServices
   return { date, activeServices };
 }
 
-/** Stream stop_times once — schedules by stop_id + trip stop lists. */
+/** Feeds whose GTFS uses calendar_dates heavily — bake all service patterns, filter at runtime. */
+export const ALL_SERVICE_FEEDS = new Set(["yrt", "brampton", "drt"]);
+
 export async function buildFeedSchedules(
   feedId: string,
   dir: string,
   targetStopIds: Set<string>,
+  opts?: { allServices?: boolean; skipTripStops?: boolean },
 ): Promise<{
   schedulesByStop: Record<string, ScheduleRow[]>;
   tripStops: Record<string, TripStopRow[]>;
 }> {
-  const { date, activeServices } = await loadCalendar(dir);
+  const { activeServices } = await loadCalendar(dir);
+  const includeAllServices = opts?.allServices ?? ALL_SERVICE_FEEDS.has(feedId);
 
   const routes = new Map<string, { shortName: string | null; color: string }>();
   for await (const row of readCsv(join(dir, "routes.txt"))) {
@@ -255,7 +259,8 @@ export async function buildFeedSchedules(
   for await (const row of readCsv(join(dir, "trips.txt"))) {
     const tripId = pick(row, "trip_id");
     const serviceId = pick(row, "service_id");
-    if (!tripId || !serviceId || !activeServices.has(serviceId)) continue;
+    if (!tripId || !serviceId) continue;
+    if (!includeAllServices && !activeServices.has(serviceId)) continue;
     trips.set(tripId, {
       routeId: pick(row, "route_id"),
       serviceId,
@@ -305,6 +310,7 @@ export async function buildFeedSchedules(
   }
 
   const tripStopBuf = new Map<string, TripStopRow[]>();
+  if (!opts?.skipTripStops) {
   for await (const row of readCsv(stopTimesPath)) {
     const tripId = pick(row, "trip_id");
     if (!tripsServingTarget.has(tripId)) continue;
@@ -325,6 +331,7 @@ export async function buildFeedSchedules(
       arrivalTime,
       departureTime,
     });
+  }
   }
 
   for (const [tripId, stops] of tripStopBuf) {
