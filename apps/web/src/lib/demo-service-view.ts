@@ -25,11 +25,13 @@ import {
 import { boardDestination } from "./headsign";
 import { fetchGoTrainDetail, type GoTrainDetail } from "./go-metrolinx-rest";
 import { displayRouteShort, isMetrolinxRailFeed, goLineCode } from "./go-rail";
-import { resolveVehicleBlock } from "./demo-trip-meta";
+import { blockVehicleId, parseBlockVehicleId } from "./detail-href";
+import { resolveVehicleBlock, pickActiveBlockTrip } from "./demo-trip-meta";
 import {
   getRtVehicle,
   getTripDelaySec,
   getTripRt,
+  getVehicleIdForTrip,
   normalizeMetrolinxKey,
 } from "./rt-cache";
 
@@ -307,6 +309,78 @@ async function assembleTripPayload(
   };
 }
 
+function serviceVehicleFromRt(
+  vehicle: NonNullable<ReturnType<typeof getRtVehicle>>,
+  delayMin: number | null,
+): NonNullable<ServiceViewData["vehicle"]> {
+  return {
+    id: vehicle.vehicleId,
+    label: vehicle.label?.trim() || vehicle.vehicleId,
+    lat: vehicle.lat ?? null,
+    lon: vehicle.lon ?? null,
+    bearing: vehicle.bearing ?? null,
+    speed: vehicle.speed ?? null,
+    occupancy:
+      vehicle.occupancyStatus != null && vehicle.occupancyStatus !== 7
+        ? OCCUPANCY_LABELS[vehicle.occupancyStatus] ?? "No data"
+        : undefined,
+    delayMin,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function getBlockServiceView(
+  feedId: string,
+  blockId: string,
+): Promise<ServiceViewData | null> {
+  const active = await pickActiveBlockTrip(feedId, blockId);
+  if (!active) return null;
+
+  const rtVehicleId = getVehicleIdForTrip(feedId, active.trip_id);
+  const rtVehicle = rtVehicleId ? getRtVehicle(feedId, rtVehicleId) : undefined;
+
+  const resolved = await resolveDemoTrip(feedId, active.trip_id);
+  const payload = await assembleTripPayload(
+    feedId,
+    active.trip_id,
+    resolved.scheduleTripId ?? active.trip_id,
+    resolved.scheduleRow,
+    { vehicle: rtVehicle },
+  );
+
+  const vehicle = rtVehicle
+    ? serviceVehicleFromRt(rtVehicle, payload.delayMin)
+    : {
+        id: blockVehicleId(blockId),
+        label: `Block ${blockId}`,
+        lat: null,
+        lon: null,
+        bearing: null,
+        speed: null,
+        occupancy: "Scheduled",
+        delayMin: payload.delayMin,
+      };
+
+  return {
+    vehicle,
+    trip: {
+      trip_id: active.trip_id,
+      schedule_trip_id: resolved.scheduleTripId ?? null,
+      route_id: payload.routeId,
+      headsign: payload.headsign,
+      block_id: blockId,
+    },
+    route: payload.route,
+    currentStop: payload.currentStop,
+    tripStops: payload.tripStops,
+    blockTrips: payload.block.blockTrips,
+    blockStart: payload.block.blockStart,
+    blockEnd: payload.block.blockEnd,
+    trainDetail: payload.trainDetail,
+    shape: payload.shape,
+  };
+}
+
 export async function getDemoServiceView(
   feedId: string,
   opts: {
@@ -325,24 +399,18 @@ export async function getDemoServiceView(
   ]);
 
   if (opts.vehicleId) {
+    const blockId = parseBlockVehicleId(opts.vehicleId);
+    if (blockId) {
+      return getBlockServiceView(feedId, blockId);
+    }
+
     const vehicle = getRtVehicle(feedId, opts.vehicleId);
     if (!vehicle) return null;
-    if (!vehicle.tripId && (vehicle.lat == null || vehicle.lon == null)) return null;
 
     const liveTripId = vehicle.tripId;
     if (!liveTripId) {
       return {
-        vehicle: {
-          id: vehicle.vehicleId,
-          label: vehicle.label?.trim() || vehicle.vehicleId,
-          lat: vehicle.lat ?? null,
-          lon: vehicle.lon ?? null,
-          bearing: vehicle.bearing ?? null,
-          speed: vehicle.speed ?? null,
-          occupancy: OCCUPANCY_LABELS[vehicle.occupancyStatus ?? 7] ?? "No data",
-          delayMin: delayMinFromSec(vehicle.delaySec) ?? null,
-          updatedAt: new Date().toISOString(),
-        },
+        vehicle: serviceVehicleFromRt(vehicle, delayMinFromSec(vehicle.delaySec) ?? null),
         trip: null,
         route: null,
         currentStop: null,
@@ -366,17 +434,7 @@ export async function getDemoServiceView(
     );
 
     return {
-      vehicle: {
-        id: vehicle.vehicleId,
-        label: vehicle.label?.trim() || vehicle.vehicleId,
-        lat: vehicle.lat ?? null,
-        lon: vehicle.lon ?? null,
-        bearing: vehicle.bearing ?? null,
-        speed: vehicle.speed ?? null,
-        occupancy: OCCUPANCY_LABELS[vehicle.occupancyStatus ?? 7] ?? "No data",
-        delayMin: payload.delayMin,
-        updatedAt: new Date().toISOString(),
-      },
+      vehicle: serviceVehicleFromRt(vehicle, payload.delayMin),
       trip: {
         trip_id: liveTripId,
         schedule_trip_id: scheduleTripId ?? null,
@@ -407,9 +465,8 @@ export async function getDemoServiceView(
     resolved,
   );
   const tripRt = getTripRt(feedId, liveTripId);
-  const rtVehicle = tripRt?.vehicleId
-    ? getRtVehicle(feedId, tripRt.vehicleId)
-    : undefined;
+  const rtVehicleId = tripRt?.vehicleId ?? getVehicleIdForTrip(feedId, liveTripId);
+  const rtVehicle = rtVehicleId ? getRtVehicle(feedId, rtVehicleId) : undefined;
 
   const payload = await assembleTripPayload(
     feedId,
@@ -419,20 +476,24 @@ export async function getDemoServiceView(
     { fromStop: opts.fromStop, vehicle: rtVehicle },
   );
 
+  const blockId = payload.block.blockId;
+  const blockVehicle = blockId ? blockVehicleId(blockId) : null;
+
   return {
     vehicle: rtVehicle
-      ? {
-          id: rtVehicle.vehicleId,
-          label: rtVehicle.label?.trim() || rtVehicle.vehicleId,
-          lat: rtVehicle.lat ?? null,
-          lon: rtVehicle.lon ?? null,
-          bearing: rtVehicle.bearing ?? null,
-          speed: rtVehicle.speed ?? null,
-          occupancy: OCCUPANCY_LABELS[rtVehicle.occupancyStatus ?? 7] ?? "No data",
-          delayMin: payload.delayMin,
-          updatedAt: new Date().toISOString(),
-        }
-      : null,
+      ? serviceVehicleFromRt(rtVehicle, payload.delayMin)
+      : blockVehicle
+        ? {
+            id: blockVehicle,
+            label: `Block ${blockId}`,
+            lat: null,
+            lon: null,
+            bearing: null,
+            speed: null,
+            occupancy: "Scheduled",
+            delayMin: payload.delayMin,
+          }
+        : null,
     trip: {
       trip_id: liveTripId,
       schedule_trip_id: scheduleTripId ?? null,

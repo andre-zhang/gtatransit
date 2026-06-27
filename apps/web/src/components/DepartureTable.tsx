@@ -167,10 +167,7 @@ export function DepartureTable({
       fromStop: r.stopId,
       scheduleTrip: r.scheduleTripId,
     });
-    const vehicleHref =
-      r.realtime && r.vehicleId
-        ? runPageHref(r.feedId, r.vehicleId)
-        : undefined;
+    const vehicleHref = r.vehicleId ? runPageHref(r.feedId, r.vehicleId) : undefined;
     return {
       prevDay,
       dayOffset,

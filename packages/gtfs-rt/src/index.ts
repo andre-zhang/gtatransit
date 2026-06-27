@@ -65,6 +65,7 @@ export function parseTripUpdates(
     const tu = entity.tripUpdate;
     if (!tu?.trip?.tripId) continue;
     const vehicleId = tu.vehicle?.id ?? undefined;
+    const vehicleLabel = tu.vehicle?.label ?? undefined;
     for (const stu of tu.stopTimeUpdate ?? []) {
       if (!stu.stopId) continue;
       out.push({
@@ -78,6 +79,7 @@ export function parseTripUpdates(
         departureTime: stu.departure?.time != null ? Number(stu.departure.time) : undefined,
         platform: extractPlatform(stu as unknown as Record<string, unknown>),
         vehicleId,
+        vehicleLabel,
       });
     }
   }

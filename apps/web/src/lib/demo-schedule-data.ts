@@ -160,8 +160,13 @@ async function loadStopScheduleRowsDirect(
   const index = await loadShardIndex(basename);
   const indexedFile = index[stopId];
   if (indexedFile) {
-    const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(indexedFile);
-    return part[stopId] ?? [];
+    try {
+      const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(indexedFile);
+      const rows = part[stopId] ?? [];
+      if (rows.length) return rows;
+    } catch {
+      /* shard missing — fall through to scan */
+    }
   }
 
   for (const file of files) {

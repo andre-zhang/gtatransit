@@ -19,3 +19,16 @@ export function tripPageHref(
 export function runPageHref(feedId: string, vehicleId: string): string {
   return `/run/${feedId}/${encodeURIComponent(vehicleId)}`;
 }
+
+/** Static GTFS block assignment (no live GPS required). */
+export const BLOCK_VEHICLE_PREFIX = "b:";
+
+export function blockVehicleId(blockId: string): string {
+  return `${BLOCK_VEHICLE_PREFIX}${blockId}`;
+}
+
+export function parseBlockVehicleId(vehicleId: string): string | null {
+  return vehicleId.startsWith(BLOCK_VEHICLE_PREFIX)
+    ? vehicleId.slice(BLOCK_VEHICLE_PREFIX.length)
+    : null;
+}

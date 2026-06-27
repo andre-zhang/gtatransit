@@ -1,6 +1,6 @@
 import { preloadTripHeadsignIndex, tripHeadsigns } from "./demo-trip-headsign";
 import { readDemoJsonFile } from "./demo-read";
-import { formatGtfsDepartureTime, gtfsTimeToSec, makeMonotonicGtfsSecs } from "./calendar";
+import { formatGtfsDepartureTime, gtfsTimeToSec, makeMonotonicGtfsSecs, torontoNowSec } from "./calendar";
 import { boardDestination } from "./headsign";
 import { goLineCode } from "./go-rail";
 import { goTripSuffix, goTripsMatch } from "./go-stop-aliases";
@@ -86,7 +86,7 @@ function blockFileName(blockId: string): string {
   return `${Buffer.from(blockId, "utf8").toString("base64url")}.json`;
 }
 
-async function loadTripToBlock(feedId: string): Promise<Record<string, string>> {
+export async function loadTripToBlock(feedId: string): Promise<Record<string, string>> {
   const hit = tripToBlockCache.get(feedId);
   if (hit) return hit;
 
@@ -111,6 +111,57 @@ async function loadTripToBlock(feedId: string): Promise<Record<string, string>> 
     tripToBlockCache.set(feedId, empty);
     return empty;
   }
+}
+
+export async function getBlockIdForTrip(
+  feedId: string,
+  tripId: string,
+): Promise<string | null> {
+  const meta = await loadFeedTripMeta(feedId, tripId);
+  return meta.blockId;
+}
+
+export async function loadFeedTripMeta(
+  feedId: string,
+  tripId: string,
+): Promise<{ blockId: string | null }> {
+  const tripToBlock = await loadTripToBlock(feedId);
+  const mapped = tripToBlock[tripId];
+  if (mapped) return { blockId: mapped };
+
+  if (feedId === "go" || feedId === "up") {
+    const suffix = goTripSuffix(tripId);
+    const suffixMap = tripSuffixToBlockCache.get(feedId);
+    const fromSuffix = suffixMap?.[suffix];
+    if (fromSuffix) return { blockId: fromSuffix };
+    for (const [tid, blockId] of Object.entries(tripToBlock)) {
+      if (goTripSuffix(tid) === suffix) return { blockId };
+    }
+  }
+
+  return { blockId: null };
+}
+
+export async function pickActiveBlockTrip(
+  feedId: string,
+  blockId: string,
+): Promise<BlockTrip | null> {
+  const list = await loadBlockList(feedId, blockId);
+  if (!list?.length) return null;
+  const now = torontoNowSec();
+  let best = list[0]!;
+  let bestDelta = Infinity;
+  for (const t of list) {
+    const start = blockTripStartSec(t);
+    const end = blockTripEndSec(t);
+    if (now >= start - 3600 && now <= end + 1800) return t;
+    const delta = Math.abs(now - start);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = t;
+    }
+  }
+  return best;
 }
 
 async function loadBlockList(
@@ -182,24 +233,6 @@ async function findBlockForTrip(
   }
 
   return undefined;
-}
-
-export async function loadFeedTripMeta(
-  feedId: string,
-  tripId: string,
-): Promise<{ blockId: string | null }> {
-  const tripToBlock = await loadTripToBlock(feedId);
-  const mapped = tripToBlock[tripId];
-  if (mapped) return { blockId: mapped };
-
-  if (feedId === "go") {
-    const suffix = goTripSuffix(tripId);
-    for (const [tid, blockId] of Object.entries(tripToBlock)) {
-      if (goTripSuffix(tid) === suffix) return { blockId };
-    }
-  }
-
-  return { blockId: null };
 }
 
 export async function loadBlockTrips(

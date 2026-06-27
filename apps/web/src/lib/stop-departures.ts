@@ -36,6 +36,8 @@ import {
 import { expandGoStopId, formatGoPlatform, goTripsMatch, resolveGoRtStopIds } from "@/lib/go-stop-aliases";
 import { cleanHeadsign, boardDestination } from "@/lib/headsign";
 import { isGoRailTripId, displayRouteShort } from "@/lib/go-rail";
+import { loadTripToBlock } from "@/lib/demo-trip-meta";
+import { blockVehicleId } from "@/lib/detail-href";
 import { resolveTtcRtStopIdsForMember } from "@/lib/ttc-stop-registry";
 
 /** Trim large union-style schedules before RT merge (board shows ~80 rows). */
@@ -323,16 +325,23 @@ export async function buildDemoStopDepartures(
   stop: DemoStopMeta,
   opts?: { quick?: boolean },
 ): Promise<{ name: string; rows: DepartureRowOut[] }> {
-  const schedule = await loadBoardSchedule(groupId, stop);
+  const schedulePromise = loadBoardSchedule(groupId, stop);
 
   if (opts?.quick) {
+    const schedule = await schedulePromise;
     return {
       name: stop.name,
       rows: filterUpcomingDepartures(scheduleRowsToInputs(schedule)),
     };
   }
 
-  await Promise.all([loadFixturesTree(), ensureRtCacheWithin(5000, { trips: true, vehicles: true })]);
+  const feedIds = [...new Set(stop.members.map((m) => m.feedId))];
+  const [, schedule, tripToBlockByFeed] = await Promise.all([
+    Promise.all([loadFixturesTree(), ensureRtCacheWithin(1500, { trips: true, vehicles: false })]),
+    schedulePromise,
+    Promise.all(feedIds.map(async (feedId) => [feedId, await loadTripToBlock(feedId)] as const)),
+  ]);
+  const blockMaps = new Map(tripToBlockByFeed);
   const usedRtTrips = new Set<string>();
   const rtReady = hasRtPredictions();
 
@@ -390,6 +399,9 @@ export async function buildDemoStopDepartures(
           usedRtTrips,
         })
       : { liveTripId: undefined, delaySec: undefined, predictedSec: undefined, realtime: false, platform: undefined, vehicleId: undefined };
+    const blockId = blockMaps.get(r.feedId)?.[r.tripId];
+    const vehicleId =
+      rt.vehicleId ?? (blockId ? blockVehicleId(blockId) : undefined);
     inputs.push({
       tripId: rt.liveTripId ?? r.tripId,
       scheduleTripId: r.tripId,
@@ -404,7 +416,7 @@ export async function buildDemoStopDepartures(
       delaySec: rt.delaySec,
       predictedSec: rt.predictedSec,
       realtime: rt.realtime,
-      vehicleId: rt.vehicleId,
+      vehicleId,
     });
   }
 

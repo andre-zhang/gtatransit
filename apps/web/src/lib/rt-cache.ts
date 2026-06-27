@@ -27,7 +27,7 @@ import { isGoRailTripId } from "./go-rail";
 import { fetchGoNextService } from "./go-metrolinx-rest";
 import { routesMatch } from "./route-match";
 
-const RT_STALE_MS = 5 * 60_000;
+const RT_STALE_MS = 30 * 60_000;
 /** Major GO stop codes polled via REST when GTFS-RT is unavailable. */
 const GO_REST_HUBS = ["UN", "OS", "BR", "ML", "RH", "KP", "CO", "DI"];
 
@@ -123,6 +123,56 @@ const FUZZY_MATCH_SEC = 15 * 60;
 
 function tripKey(feedId: string, tripId: string) {
   return `${feedId}:${tripId}`;
+}
+
+function upsertVehicleRecord(
+  feedId: string,
+  vehicleId: string,
+  patch: Partial<RtVehicle> & { tripId?: string; routeId?: string; label?: string },
+  now: number,
+) {
+  const key = `${feedId}:${vehicleId}`;
+  const prev = vehicleMap.get(key);
+  vehicleMap.set(key, {
+    feedId,
+    vehicleId,
+    tripId: patch.tripId ?? prev?.tripId,
+    routeId: patch.routeId ?? prev?.routeId,
+    label: patch.label?.trim() || prev?.label || vehicleId,
+    lat: patch.lat ?? prev?.lat,
+    lon: patch.lon ?? prev?.lon,
+    bearing: patch.bearing ?? prev?.bearing,
+    speed: patch.speed ?? prev?.speed,
+    currentStopSequence: patch.currentStopSequence ?? prev?.currentStopSequence,
+    delaySec: patch.delaySec ?? prev?.delaySec,
+    occupancyStatus: patch.occupancyStatus ?? prev?.occupancyStatus,
+    updatedAt: now,
+  });
+}
+
+function linkTripVehicle(
+  feedId: string,
+  tripId: string,
+  vehicleId: string | undefined,
+  vehicleLabel: string | undefined,
+  routeId: string | undefined,
+  now: number,
+) {
+  if (!vehicleId) return;
+  const tk = tripKey(feedId, tripId);
+  const prev = tripMap.get(tk) ?? { updatedAt: now };
+  tripMap.set(tk, {
+    ...prev,
+    routeId: routeId ?? prev.routeId,
+    vehicleId,
+    updatedAt: now,
+  });
+  upsertVehicleRecord(
+    feedId,
+    vehicleId,
+    { tripId, routeId, label: vehicleLabel },
+    now,
+  );
 }
 
 function stopTripKey(feedId: string, tripId: string, stopId: string) {
@@ -356,12 +406,11 @@ async function pollMetrolinxFeed(
 
       if (kind === "vehicles") {
         for (const v of vehicleRows) {
-          if (v.lat == null || v.lon == null) continue;
-          vehicles++;
           const tk = v.tripId ? tripKey(feedId, v.tripId) : null;
           const routeId = v.routeId ?? (tk ? tripMap.get(tk)?.routeId : undefined);
           const enriched = routeId && !v.routeId ? { ...v, routeId } : v;
-          vehicleMap.set(`${feedId}:${v.vehicleId}`, { ...enriched, updatedAt: now });
+          upsertVehicleRecord(feedId, v.vehicleId, enriched, now);
+          if (v.lat != null && v.lon != null) vehicles++;
           if (!v.tripId) continue;
           const k = tripKey(feedId, v.tripId);
           const prev = tripMap.get(k) ?? { updatedAt: now };
@@ -394,6 +443,14 @@ async function pollMetrolinxFeed(
             platform: platform ?? prev.platform,
             updatedAt: now,
           });
+          linkTripVehicle(
+            feedId,
+            u.tripId,
+            u.vehicleId,
+            u.vehicleLabel,
+            u.routeId,
+            now,
+          );
         }
       }
     } catch (e) {
@@ -459,6 +516,14 @@ async function pollFeed(
           platform: u.platform ?? prev.platform,
           updatedAt: now,
         });
+        linkTripVehicle(
+          feedId,
+          u.tripId,
+          u.vehicleId,
+          u.vehicleLabel,
+          u.routeId,
+          now,
+        );
       }
     } catch {
       /* ignore */
@@ -480,21 +545,10 @@ async function pollFeed(
             updatedAt: now,
           });
         }
-        if (v.lat == null || v.lon == null) continue;
         const tk = v.tripId ? tripKey(feedId, v.tripId) : null;
         const routeId = v.routeId ?? (tk ? tripMap.get(tk)?.routeId : undefined);
         const enriched = routeId && !v.routeId ? { ...v, routeId } : v;
-        vehicleMap.set(`${feedId}:${v.vehicleId}`, { ...enriched, updatedAt: now });
-        if (!v.tripId) continue;
-        const k = tripKey(feedId, v.tripId);
-        const prev = tripMap.get(k) ?? { updatedAt: now };
-        tripMap.set(k, {
-          ...prev,
-          routeId: v.routeId ?? prev.routeId,
-          vehicleId: v.vehicleId,
-          delaySec: v.delaySec ?? prev.delaySec,
-          updatedAt: now,
-        });
+        upsertVehicleRecord(feedId, v.vehicleId, enriched, now);
       }
     } catch {
       /* ignore */
@@ -660,10 +714,10 @@ export function getRtPredictionsForStop(
   return [...byTrip.values()];
 }
 
-function getVehicleIdForTrip(feedId: string, tripId: string): string | undefined {
+export function getVehicleIdForTrip(feedId: string, tripId: string): string | undefined {
   const tripRt = getTripRt(feedId, tripId);
   if (tripRt?.vehicleId) return tripRt.vehicleId;
-  const cutoff = Date.now() - 5 * 60_000;
+  const cutoff = Date.now() - RT_STALE_MS;
   for (const v of vehicleMap.values()) {
     if (v.feedId !== feedId || v.updatedAt < cutoff || !v.tripId) continue;
     if (v.tripId === tripId) return v.vehicleId;
@@ -678,14 +732,14 @@ function getVehicleIdForTrip(feedId: string, tripId: string): string | undefined
 }
 
 function getVehicleForTrip(feedId: string, tripId: string): RtVehicle | undefined {
-  const cutoff = Date.now() - 5 * 60_000;
+  const cutoff = Date.now() - RT_STALE_MS;
   let best: (RtVehicle & { updatedAt: number }) | undefined;
   for (const v of vehicleMap.values()) {
     if (v.feedId !== feedId || v.updatedAt < cutoff || !v.tripId) continue;
     const matches =
       v.tripId === tripId ||
       ((feedId === "go" || feedId === "up") && goTripsMatch(tripId, v.tripId));
-    if (!matches || v.lat == null) continue;
+    if (!matches) continue;
     if (!best || v.updatedAt > best.updatedAt) best = v;
   }
   return best;
@@ -908,9 +962,15 @@ export async function ensureRtCacheWithin(
   maxMs: number,
   opts: boolean | RtRefreshScope = {},
 ): Promise<void> {
-  const { force, trips } = normalizeRefreshScope(opts);
-  if (!force && trips && isRtCacheWarm()) return;
-  if (!force && !trips && isRtVehicleCacheWarm()) return;
+  const { force, trips, vehicles } = normalizeRefreshScope(opts);
+  if (!force && trips && hasTripPredictions()) {
+    if (!isRtCacheWarm()) scheduleRtRefresh(opts);
+    return;
+  }
+  if (!force && !trips && vehicles && vehicleMap.size > 0) {
+    if (!isRtVehicleCacheWarm()) scheduleRtRefresh(opts);
+    return;
+  }
 
   if (!force && trips && hasTripPredictions()) {
     scheduleRtRefresh(opts);
@@ -1005,8 +1065,7 @@ export function getRtVehicle(
   vehicleId: string,
 ): (RtVehicle & { updatedAt?: number }) | undefined {
   const v = vehicleMap.get(`${feedId}:${vehicleId}`);
-  if (!v || v.lat == null || v.lon == null) return undefined;
-  if (v.updatedAt < Date.now() - 5 * 60_000) return undefined;
+  if (!v || v.updatedAt < Date.now() - RT_STALE_MS) return undefined;
   return v;
 }
 

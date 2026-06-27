@@ -249,7 +249,11 @@ export function ServiceViewClient({
           ) : (
             <>
               <div className="text-sm font-semibold text-go-navy">
-                {vehicle?.occupancy ?? "—"}
+                {vehicle?.occupancy && vehicle.occupancy !== "No data"
+                  ? vehicle.occupancy
+                  : vehicle?.id.startsWith("b:")
+                    ? "Scheduled"
+                    : "—"}
               </div>
               {vehicle?.speed != null && (
                 <div className="mt-0.5 text-xs text-go-slate">

@@ -53,7 +53,8 @@ async function TripPageContent({
   if (
     data?.vehicle?.id &&
     data.vehicle.lat != null &&
-    data.vehicle.lon != null
+    data.vehicle.lon != null &&
+    !data.vehicle.id.startsWith("b:")
   ) {
     redirect(runPageHref(feedId, data.vehicle.id));
   }
