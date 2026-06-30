@@ -57,12 +57,25 @@ export async function readFeedCalendar(dir: string): Promise<FeedCalendarExport>
   return { calendar, calendarDates };
 }
 
+/** Extend calendar end dates so demo boards keep working after GTFS feed expiry. */
+const DEMO_CALENDAR_END = "20991231";
+
+function extendCalendarForDemo(data: FeedCalendarExport): FeedCalendarExport {
+  return {
+    calendar: data.calendar.map((row) => ({
+      ...row,
+      end_date: row.end_date < DEMO_CALENDAR_END ? DEMO_CALENDAR_END : row.end_date,
+    })),
+    calendarDates: data.calendarDates,
+  };
+}
+
 export async function exportFeedCalendar(
   feedId: string,
   dir: string,
   outDir: string,
 ): Promise<FeedCalendarExport> {
-  const data = await readFeedCalendar(dir);
+  const data = extendCalendarForDemo(await readFeedCalendar(dir));
   writeFileSync(join(outDir, `${feedId}-calendar.json`), JSON.stringify(data));
   return data;
 }

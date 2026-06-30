@@ -87,6 +87,24 @@ export function activeServiceIds(
     if (cd.exception_type === "2") active.delete(cd.service_id);
   }
 
+  // GTFS calendar.txt expires between demo builds — keep weekday patterns working.
+  if (active.size === 0) {
+    for (const c of cal.calendar) {
+      if (c[col] === "1") active.add(c.service_id);
+    }
+    for (const cd of cal.calendarDates) {
+      if (cd.exception_type !== "1") continue;
+      const exWd = weekdayIndex(
+        new Date(
+          Number(cd.date.slice(0, 4)),
+          Number(cd.date.slice(4, 6)) - 1,
+          Number(cd.date.slice(6, 8)),
+        ),
+      );
+      if (exWd === wd) active.add(cd.service_id);
+    }
+  }
+
   activeCache.set(cacheKey, active);
   return active;
 }
