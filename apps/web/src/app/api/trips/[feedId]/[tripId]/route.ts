@@ -11,7 +11,7 @@ import {
 } from "@/lib/calendar";
 import { computeDelaySec, delayMinFromSec } from "@/lib/departures";
 import { routeColor } from "@/lib/colors";
-import { useDemoFixtures } from "@/lib/demo-mode";
+import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { getDemoServiceView } from "@/lib/demo-service-view";
 import { loadDemoTripPayload } from "@/lib/load-demo-trip";
 import { loadDemoTripStopsLite } from "@/lib/load-demo-trip-stops";
@@ -35,7 +35,7 @@ export async function GET(
   const lite = req.nextUrl.searchParams.get("lite") === "1";
   const serviceView = req.nextUrl.searchParams.get("view") === "service";
 
-  if (await useDemoFixtures()) {
+  if (await useDemoForFeed(feedId)) {
     try {
       if (serviceView) {
         const payload = await getDemoServiceView(feedId, {

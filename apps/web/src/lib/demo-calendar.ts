@@ -118,6 +118,11 @@ export async function filterRowsByServiceDate(
   const cal = await loadFeedCalendar(feedId);
   if (!cal) return rows;
   const active = activeServiceIds(feedId, cal, date);
-  if (!active.size) return [];
-  return rows.filter((r) => active.has(r.serviceId));
+  if (!active.size) return rows;
+  let filtered = rows.filter((r) => active.has(r.serviceId));
+  if (!filtered.length && rows.length) {
+    // Calendar pattern mismatch — prefer showing schedule over an empty board.
+    return rows;
+  }
+  return filtered;
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { activeServiceSql, serviceDate } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
-import { useDemoFixtures } from "@/lib/demo-mode";
+import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { loadDemoRouteDetail } from "@/lib/load-demo-route";
 import { routesMatch } from "@/lib/route-match";
 import { ensureRtCacheWithin } from "@/lib/rt-cache";
@@ -15,7 +15,7 @@ export async function GET(
 ) {
   const { feedId, routeId } = await params;
   const direction = Number(req.nextUrl.searchParams.get("direction") ?? 0);
-  if (await useDemoFixtures()) {
+  if (await useDemoForFeed(feedId)) {
     const detail = await loadDemoRouteDetail(feedId, routeId, direction);
     if (!detail) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(detail);

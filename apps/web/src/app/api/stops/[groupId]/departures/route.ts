@@ -7,6 +7,7 @@ import {
 } from "@/lib/departures";
 import { activeServiceSql, secToTime, serviceDate } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
+import { stopUsesDemoScheduleBoard } from "@/lib/demo-schedule-feeds";
 import { useDemoFixtures } from "@/lib/demo";
 import { loadDemoStopMeta } from "@/lib/demo-stop-meta";
 import { resolveStopGroupId } from "@/lib/demo-stop-groups";
@@ -16,6 +17,22 @@ import { ensureRtCache, mergeRtIntoDeparture } from "@/lib/rt-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
+async function demoBoardResponse(
+  groupId: string,
+  quick: boolean,
+): Promise<NextResponse> {
+  const stop = await loadDemoStopMeta(groupId);
+  const resolved = resolveStopGroupId(groupId);
+  const cached = getCachedStopBoard(resolved, quick);
+  if (cached) return NextResponse.json(cached);
+
+  if (!stop) return NextResponse.json({ name: "Stop", rows: [] });
+
+  const board = await buildDemoStopDepartures(resolved, stop, { quick });
+  setCachedStopBoard(resolved, quick, board);
+  return NextResponse.json(board);
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ groupId: string }> },
@@ -23,23 +40,18 @@ export async function GET(
   const { groupId } = await params;
   const quick = req.nextUrl.searchParams.get("quick") === "1";
 
-  if (await useDemoFixtures()) {
+  const stop = await loadDemoStopMeta(groupId);
+  const useDemoBoard =
+    (await useDemoFixtures()) ||
+    (stop != null && (await stopUsesDemoScheduleBoard(stop.members)));
+
+  if (useDemoBoard) {
     try {
-      const stop = await loadDemoStopMeta(groupId);
-      const resolved = resolveStopGroupId(groupId);
-      const cached = getCachedStopBoard(resolved, quick);
-      if (cached) return NextResponse.json(cached);
-
-      if (!stop) return NextResponse.json({ name: "Stop", rows: [] });
-
-      const board = await buildDemoStopDepartures(resolved, stop, { quick });
-      setCachedStopBoard(resolved, quick, board);
-      return NextResponse.json(board);
+      return await demoBoardResponse(groupId, quick);
     } catch (err) {
       console.error("[departures]", groupId, err);
       if (!quick) {
         try {
-          const stop = await loadDemoStopMeta(groupId);
           const resolved = resolveStopGroupId(groupId);
           if (stop) {
             const fallback = await buildDemoStopDepartures(resolved, stop, { quick: true });

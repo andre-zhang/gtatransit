@@ -9,7 +9,7 @@ import {
   unixToTorontoSec,
 } from "@/lib/calendar";
 import { routeColor } from "@/lib/colors";
-import { useDemoFixtures } from "@/lib/demo-mode";
+import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { getDemoServiceView } from "@/lib/demo-service-view";
 import { ensureRtCache, getStopTripRt } from "@/lib/rt-cache";
 
@@ -21,7 +21,7 @@ export async function GET(
 ) {
   const { feedId, vehicleId } = await params;
 
-  if (await useDemoFixtures()) {
+  if (await useDemoForFeed(feedId)) {
     const run = await getDemoServiceView(feedId, { vehicleId });
     if (!run) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(run);
