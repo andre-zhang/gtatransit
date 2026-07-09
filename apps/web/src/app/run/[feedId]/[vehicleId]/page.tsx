@@ -9,6 +9,7 @@ import { cleanHeadsign } from "@/lib/headsign";
 import { getDemoServiceView, type ServiceViewData } from "@/lib/demo-service-view";
 import { displayRouteShort } from "@/lib/go-rail";
 import { routePageHref } from "@/lib/detail-href";
+import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { getPageMeta } from "@/lib/page-meta";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
@@ -25,13 +26,11 @@ async function load(feedId: string, vehicleId: string) {
 async function RunPageContent({
   feedId,
   vehicleId,
-  demo,
 }: {
   feedId: string;
   vehicleId: string;
-  demo: boolean;
 }) {
-  const data = demo
+  const data = (await useDemoForFeed(feedId))
     ? await getDemoServiceView(feedId, { vehicleId })
     : await load(feedId, vehicleId);
 
@@ -99,7 +98,7 @@ export default async function RunPage({
   return (
     <PageShell rtUpdated={rtUpdated} demo={demo}>
       <Suspense fallback={<DetailLoading message="Loading…" />}>
-        <RunPageContent feedId={feedId} vehicleId={vehicleId} demo={demo} />
+        <RunPageContent feedId={feedId} vehicleId={vehicleId} />
       </Suspense>
     </PageShell>
   );

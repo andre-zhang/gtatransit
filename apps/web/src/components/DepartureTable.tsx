@@ -193,14 +193,17 @@ export function DepartureTable({
                     {m.dayLabel}
                   </div>
                 )}
-                <button
-                  type="button"
+                <div
                   className={`departure-board-card w-full text-left ${m.isOpen ? "departure-board-row--open" : ""}`}
-                  onClick={() => toggle(m.rowKey)}
-                  aria-expanded={m.isOpen}
                 >
                   <div className="departure-board-card-grid">
-                    <div className="departure-board-card-time">
+                    <button
+                      type="button"
+                      className="departure-board-card-time"
+                      onClick={() => toggle(m.rowKey)}
+                      aria-expanded={m.isOpen}
+                      aria-label="Show upcoming stops"
+                    >
                       <DepartureStatus
                         realtime={r.realtime}
                         latenessMin={r.latenessMin}
@@ -211,7 +214,7 @@ export function DepartureTable({
                         size="sm"
                         align="right"
                       />
-                    </div>
+                    </button>
                     <div className="departure-board-card-meta">
                       {showAgency && <AgencyMark feedId={r.feedId} />}
                       <RoutePill
@@ -225,12 +228,10 @@ export function DepartureTable({
                       <DepartureActionLinks
                         tripHref={m.tripHref}
                         vehicleHref={m.vehicleHref}
-                        onClick={(e) => e.stopPropagation()}
                       />
                     </div>
                     <Link
                       href={m.tripHref}
-                      onClick={(e) => e.stopPropagation()}
                       className={`departure-board-card-dest departure-board-dest departure-board-dest--clamp ${
                         r.realtime ? "departure-board-dest--live" : "departure-board-dest--sched"
                       }`}
@@ -238,7 +239,7 @@ export function DepartureTable({
                       {cleanHeadsign(r.destination)}
                     </Link>
                   </div>
-                </button>
+                </div>
                 {m.isOpen && (
                   <TripStopsPanel
                     feedId={r.feedId}

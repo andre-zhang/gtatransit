@@ -11,6 +11,7 @@ import { cleanHeadsign } from "@/lib/headsign";
 import { getDemoServiceView } from "@/lib/demo-service-view";
 import { displayRouteShort } from "@/lib/go-rail";
 import { routePageHref, runPageHref } from "@/lib/detail-href";
+import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { getPageMeta } from "@/lib/page-meta";
 import { stopBoardHref } from "@/lib/stop-group-href";
 import { serverBaseUrl } from "@/lib/server-base-url";
@@ -38,15 +39,13 @@ async function load(
 async function TripPageContent({
   feedId,
   tripId,
-  demo,
   tripOpts,
 }: {
   feedId: string;
   tripId: string;
-  demo: boolean;
   tripOpts: { fromStop?: string; scheduleTrip?: string };
 }) {
-  const data = demo
+  const data = (await useDemoForFeed(feedId))
     ? await getDemoServiceView(feedId, { tripId, ...tripOpts })
     : await load(feedId, tripId, tripOpts);
 
@@ -131,12 +130,7 @@ export default async function TripPage({
   return (
     <PageShell rtUpdated={rtUpdated} demo={demo}>
       <Suspense fallback={<DetailLoading message="Loading…" />}>
-        <TripPageContent
-          feedId={feedId}
-          tripId={tripId}
-          demo={demo}
-          tripOpts={tripOpts}
-        />
+        <TripPageContent feedId={feedId} tripId={tripId} tripOpts={tripOpts} />
       </Suspense>
     </PageShell>
   );

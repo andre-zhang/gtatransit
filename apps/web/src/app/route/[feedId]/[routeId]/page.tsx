@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { routePageHref } from "@/lib/detail-href";
 import { loadDemoRouteDetail } from "@/lib/load-demo-route";
+import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { getPageMeta } from "@/lib/page-meta";
 import { serverBaseUrl } from "@/lib/server-base-url";
 import { RouteViewClient } from "./RouteViewClient";
@@ -23,14 +24,12 @@ async function RoutePageContent({
   feedId,
   routeId,
   direction,
-  demo,
 }: {
   feedId: string;
   routeId: string;
   direction: number;
-  demo: boolean;
 }) {
-  const data = demo
+  const data = (await useDemoForFeed(feedId))
     ? await loadDemoRouteDetail(feedId, routeId, direction)
     : await load(feedId, routeId, direction);
 
@@ -86,12 +85,7 @@ export default async function RoutePage({
   return (
     <PageShell rtUpdated={rtUpdated} demo={demo}>
       <Suspense fallback={<DetailLoading message="Loading route…" />}>
-        <RoutePageContent
-          feedId={feedId}
-          routeId={routeId}
-          direction={direction}
-          demo={demo}
-        />
+        <RoutePageContent feedId={feedId} routeId={routeId} direction={direction} />
       </Suspense>
     </PageShell>
   );

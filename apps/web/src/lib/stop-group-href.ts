@@ -1,11 +1,12 @@
 import { getSql } from "@/lib/db";
+import { isDemoOnlyScheduleFeed } from "@/lib/demo-schedule-feeds";
 import { useDemoFixtures } from "@/lib/demo-mode";
 
 export async function stopGroupIdFor(
   feedId: string,
   stopId: string,
 ): Promise<string | null> {
-  if (await useDemoFixtures()) {
+  if ((await useDemoFixtures()) || isDemoOnlyScheduleFeed(feedId)) {
     const { resolveStopGroupForMember } = await import("./demo-stop-groups");
     return resolveStopGroupForMember(feedId, stopId);
   }
