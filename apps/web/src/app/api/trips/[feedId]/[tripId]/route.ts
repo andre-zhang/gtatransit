@@ -22,6 +22,7 @@ import {
   tripStopsCacheKey,
 } from "@/lib/trip-stops-cache";
 import { ensureRtCache, getStopTripRt, getTripRt } from "@/lib/rt-cache";
+import { jsonWithCache } from "@/lib/api-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
@@ -46,20 +47,20 @@ export async function GET(
         if (!payload) {
           return NextResponse.json({ error: "not_found" }, { status: 404 });
         }
-        return NextResponse.json(payload);
+        return jsonWithCache(payload, 15);
       }
 
       if (lite) {
         const cacheKey = tripStopsCacheKey(feedId, tripId, fromStop, scheduleTripParam);
         const cached = getCachedTripStops(cacheKey);
-        if (cached) return NextResponse.json(cached);
+        if (cached) return jsonWithCache(cached, 15);
 
         const payload = await loadDemoTripStopsLite(feedId, tripId, {
           fromStop,
           scheduleTrip: scheduleTripParam,
         });
         setCachedTripStops(cacheKey, payload);
-        return NextResponse.json(payload);
+        return jsonWithCache(payload, 15);
       }
 
       const payload = await loadDemoTripPayload(feedId, tripId, {

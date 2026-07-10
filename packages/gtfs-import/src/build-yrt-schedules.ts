@@ -81,7 +81,7 @@ async function main() {
     join(outDir, "shard-manifest.json"),
     JSON.stringify({ ...existing, ...shardManifest }),
   );
-  console.log("Done — run: node scripts/demo-shard-index.mjs");
+  console.log("Done — run: node scripts/reshard-schedules.mjs");
 }
 
 main().catch((e) => {

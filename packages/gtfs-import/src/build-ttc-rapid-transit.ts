@@ -299,7 +299,7 @@ async function main() {
   writeFileSync(routesPath, JSON.stringify(routesGeo));
 
   console.log(
-    `Done — appended ${newScheduleKeys} rapid transit stops. Run: node scripts/demo-shard-index.mjs`,
+    `Done — appended ${newScheduleKeys} rapid transit stops. Run: node scripts/reshard-schedules.mjs`,
   );
 }
 

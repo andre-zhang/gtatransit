@@ -70,7 +70,7 @@ async function main() {
   console.log(`Wrote ${file} (existing shards: ${existing.length})`);
 
   await exportFeedCalendar("yrt", dir, outDir);
-  console.log("Run: node scripts/demo-shard-index.mjs");
+  console.log("Run: node scripts/reshard-schedules.mjs");
 }
 
 main().catch((e) => {

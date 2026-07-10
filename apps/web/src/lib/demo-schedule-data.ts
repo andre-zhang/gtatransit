@@ -13,76 +13,51 @@ const scheduleCache = new Map<string, Record<string, ScheduleRow[]>>();
 const tripStopCache = new Map<string, Record<string, TripStopRow[]>>();
 let unionCache: ScheduleRow[] | null = null;
 
-/** Known shard names (Vercel has no directory listing for public/demo). */
+function shardNames(base: string, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => `${base}.${i}.json`);
+}
+
+/** Fallback shard names when shard-manifest.json is unavailable (keep in sync with reshard script output). */
 const SHARD_MANIFEST: Record<string, string[]> = {
-  "ttc-schedules": [
-    "ttc-schedules.0.json",
-    "ttc-schedules.1.json",
-    "ttc-schedules.2.json",
-    "ttc-schedules.3.json",
-  ],
-  "ttc-trip-stops": ["ttc-trip-stops.0.json", "ttc-trip-stops.1.json"],
-  "go-schedules": ["go-schedules.0.json", "go-schedules.1.json"],
-  "go-trip-stops": ["go-trip-stops.json"],
-  "miway-schedules": [
-    "miway-schedules.0.json",
-    "miway-schedules.1.json",
-    "miway-schedules.2.json",
-    "miway-schedules.3.json",
-    "miway-schedules.4.json",
-    "miway-schedules.5.json",
-  ],
-  "miway-trip-stops": [
-    "miway-trip-stops.0.json",
-    "miway-trip-stops.1.json",
-    "miway-trip-stops.2.json",
-    "miway-trip-stops.3.json",
-  ],
-  "yrt-schedules": [
-    "yrt-schedules.0.json",
-    "yrt-schedules.1.json",
-    "yrt-schedules.2.json",
-    "yrt-schedules.3.json",
-    "yrt-schedules.4.json",
-    "yrt-schedules.5.json",
-    "yrt-schedules.6.json",
-    "yrt-schedules.7.json",
-    "yrt-schedules.8.json",
-    "yrt-schedules.9.json",
-    "yrt-schedules.10.json",
-    "yrt-schedules.11.json",
-    "yrt-schedules.12.json",
-    "yrt-schedules.13.json",
-    "yrt-schedules.14.json",
-    "yrt-schedules.15.json",
-    "yrt-schedules.16.json",
-    "yrt-schedules.17.json",
-    "yrt-schedules.18.json",
-    "yrt-schedules.19.json",
-    "yrt-schedules.20.json",
-  ],
-  "yrt-trip-stops": [
-    "yrt-trip-stops.0.json",
-    "yrt-trip-stops.1.json",
-    "yrt-trip-stops.2.json",
-    "yrt-trip-stops.3.json",
-    "yrt-trip-stops.4.json",
-    "yrt-trip-stops.5.json",
-    "yrt-trip-stops.6.json",
-    "yrt-trip-stops.7.json",
-    "yrt-trip-stops.8.json",
-    "yrt-trip-stops.9.json",
-    "yrt-trip-stops.10.json",
-  ],
+  "ttc-schedules": shardNames("ttc-schedules", 63),
+  "ttc-trip-stops": shardNames("ttc-trip-stops", 73),
+  "go-schedules": shardNames("go-schedules", 2),
+  "go-trip-stops": shardNames("go-trip-stops", 2),
+  "up-schedules": ["up-schedules.json"],
+  "up-trip-stops": ["up-trip-stops.json"],
+  "miway-schedules": shardNames("miway-schedules", 12),
+  "miway-trip-stops": shardNames("miway-trip-stops", 13),
+  "brampton-schedules": shardNames("brampton-schedules", 10),
+  "brampton-trip-stops": shardNames("brampton-trip-stops", 12),
+  "yrt-schedules": shardNames("yrt-schedules", 21),
+  "yrt-trip-stops": shardNames("yrt-trip-stops", 25),
+  "drt-schedules": shardNames("drt-schedules", 21),
+  "drt-trip-stops": shardNames("drt-trip-stops", 22),
 };
 
 const shardIndexCache = new Map<string, Record<string, string>>();
 const shardFileCache = new Map<string, Record<string, TripStopRow[]>>();
 const tripStopRowCache = new Map<string, TripStopRow[]>();
 let runtimeShardManifest: Record<string, string[]> | null = null;
+let manifestFetch: Promise<void> | null = null;
 
 function loadRuntimeShardManifest(): Record<string, string[]> {
   if (runtimeShardManifest) return runtimeShardManifest;
+
+  if (process.env.VERCEL) {
+    // No filesystem on Vercel — hydrate from the static asset in the background.
+    if (!manifestFetch) {
+      manifestFetch = readDemoJsonFile<Record<string, string[]>>("shard-manifest.json")
+        .then((m) => {
+          runtimeShardManifest = m;
+        })
+        .catch(() => {
+          runtimeShardManifest = SHARD_MANIFEST;
+        });
+    }
+    return SHARD_MANIFEST;
+  }
+
   try {
     const demoDir = resolveDemoDir();
     const raw = readFileSync(join(demoDir, "shard-manifest.json"), "utf8");
@@ -92,6 +67,12 @@ function loadRuntimeShardManifest(): Record<string, string[]> {
     runtimeShardManifest = SHARD_MANIFEST;
     return runtimeShardManifest;
   }
+}
+
+/** Prefer numbered shards; a monolith alongside numbered shards is stale build output. */
+function preferNumberedShards(files: string[]): string[] {
+  const numbered = files.filter((name) => /\.\d+\.json$/.test(name));
+  return numbered.length ? numbered : files;
 }
 
 async function loadShardIndex(basename: string): Promise<Record<string, string>> {
@@ -110,10 +91,14 @@ async function loadShardIndex(basename: string): Promise<Record<string, string>>
 
 function listShardFiles(basename: string): string[] {
   const manifest = loadRuntimeShardManifest();
-  if (process.env.VERCEL) return manifest[basename] ?? SHARD_MANIFEST[basename] ?? [];
+  if (process.env.VERCEL) {
+    return preferNumberedShards(manifest[basename] ?? SHARD_MANIFEST[basename] ?? []);
+  }
 
   const demoDir = resolveDemoDir();
-  if (!existsSync(demoDir)) return manifest[basename] ?? SHARD_MANIFEST[basename] ?? [];
+  if (!existsSync(demoDir)) {
+    return preferNumberedShards(manifest[basename] ?? SHARD_MANIFEST[basename] ?? []);
+  }
   const re = new RegExp(
     `^${basename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\.(\\d+))?\\.json$`,
   );
@@ -126,7 +111,9 @@ function listShardFiles(basename: string): string[] {
       };
       return idx(a) - idx(b);
     });
-  return local.length ? local : (manifest[basename] ?? SHARD_MANIFEST[basename] ?? []);
+  return preferNumberedShards(
+    local.length ? local : (manifest[basename] ?? SHARD_MANIFEST[basename] ?? []),
+  );
 }
 
 async function loadShardedRecord<T extends Record<string, unknown>>(
