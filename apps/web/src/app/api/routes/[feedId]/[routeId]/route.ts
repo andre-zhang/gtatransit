@@ -6,6 +6,7 @@ import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { loadDemoRouteDetail } from "@/lib/load-demo-route";
 import { routesMatch } from "@/lib/route-match";
 import { ensureRtCacheWithin } from "@/lib/rt-cache";
+import { jsonWithCache } from "@/lib/api-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
@@ -18,7 +19,7 @@ export async function GET(
   if (await useDemoForFeed(feedId)) {
     const detail = await loadDemoRouteDetail(feedId, routeId, direction);
     if (!detail) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    return NextResponse.json(detail);
+    return jsonWithCache(detail, 20);
   }
   await ensureRtCacheWithin(2000);
 

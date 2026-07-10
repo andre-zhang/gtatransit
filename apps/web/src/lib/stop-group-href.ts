@@ -7,8 +7,10 @@ export async function stopGroupIdFor(
   stopId: string,
 ): Promise<string | null> {
   if ((await useDemoFixtures()) || isDemoOnlyScheduleFeed(feedId)) {
-    const { resolveStopGroupForMember } = await import("./demo-stop-groups");
-    return resolveStopGroupForMember(feedId, stopId);
+    // Legacy "feedId-stopId" ids are resolved to the real group by the stop
+    // board itself (resolveStopGroupId), so we can link without loading the
+    // multi-MB stop grouping assets into this lambda.
+    return `${feedId}-${stopId}`;
   }
 
   const db = getSql();

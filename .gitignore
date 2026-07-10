@@ -12,3 +12,8 @@ data/gtfs/**/extracted-demo
 tsconfig.tsbuildinfo
 
 .vercel
+
+# local scratch files
+tmp-*
+tmp*.bin
+data/gtfs/tmp/

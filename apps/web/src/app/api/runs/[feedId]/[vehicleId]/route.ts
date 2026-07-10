@@ -12,6 +12,7 @@ import { routeColor } from "@/lib/colors";
 import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { getDemoServiceView } from "@/lib/demo-service-view";
 import { ensureRtCache, getStopTripRt } from "@/lib/rt-cache";
+import { jsonWithCache } from "@/lib/api-cache";
 
 export { dynamic, maxDuration } from "@/lib/api-config";
 
@@ -24,7 +25,7 @@ export async function GET(
   if (await useDemoForFeed(feedId)) {
     const run = await getDemoServiceView(feedId, { vehicleId });
     if (!run) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    return NextResponse.json(run);
+    return jsonWithCache(run, 15);
   }
 
   const db = getSql();

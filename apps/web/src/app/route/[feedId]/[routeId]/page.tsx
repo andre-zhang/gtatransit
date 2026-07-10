@@ -4,8 +4,6 @@ import { PageEmpty } from "@/components/PageEmpty";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { routePageHref } from "@/lib/detail-href";
-import { loadDemoRouteDetail } from "@/lib/load-demo-route";
-import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { getPageMeta } from "@/lib/page-meta";
 import { serverBaseUrl } from "@/lib/server-base-url";
 import { RouteViewClient } from "./RouteViewClient";
@@ -29,9 +27,8 @@ async function RoutePageContent({
   routeId: string;
   direction: number;
 }) {
-  const data = (await useDemoForFeed(feedId))
-    ? await loadDemoRouteDetail(feedId, routeId, direction)
-    : await load(feedId, routeId, direction);
+  // Always go through the API route so the CDN cache is shared with client refreshes.
+  const data = await load(feedId, routeId, direction);
 
   if (!data) {
     return (

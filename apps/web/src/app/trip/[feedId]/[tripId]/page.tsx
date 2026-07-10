@@ -8,10 +8,8 @@ import { PageShell } from "@/components/PageShell";
 import { ServiceViewClient } from "@/components/ServiceViewClient";
 import { VehicleLink } from "@/components/VehicleLink";
 import { cleanHeadsign } from "@/lib/headsign";
-import { getDemoServiceView } from "@/lib/demo-service-view";
 import { displayRouteShort } from "@/lib/go-rail";
 import { routePageHref, runPageHref } from "@/lib/detail-href";
-import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { getPageMeta } from "@/lib/page-meta";
 import { stopBoardHref } from "@/lib/stop-group-href";
 import { serverBaseUrl } from "@/lib/server-base-url";
@@ -45,9 +43,8 @@ async function TripPageContent({
   tripId: string;
   tripOpts: { fromStop?: string; scheduleTrip?: string };
 }) {
-  const data = (await useDemoForFeed(feedId))
-    ? await getDemoServiceView(feedId, { tripId, ...tripOpts })
-    : await load(feedId, tripId, tripOpts);
+  // Always go through the API route so the CDN cache is shared with client refreshes.
+  const data = await load(feedId, tripId, tripOpts);
 
   if (
     data?.vehicle?.id &&

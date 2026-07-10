@@ -31,13 +31,13 @@ async function readDemoJsonFileUncached<T>(filename: string): Promise<T> {
   const origin = vercelOrigin();
 
   // On Vercel, never touch public/demo via fs (Next traces the whole folder into lambdas).
+  // no-store: these are immutable static assets served by Vercel's own CDN; writing
+  // multi-MB payloads through the Next data cache adds latency instead of saving it.
   if (process.env.VERCEL) {
     if (!origin) {
       throw new Error(`Demo file ${filename}: VERCEL_URL not set`);
     }
-    const res = await fetch(`${origin}/demo/${filename}`, {
-      next: { revalidate: 3600 },
-    });
+    const res = await fetch(`${origin}/demo/${filename}`, { cache: "no-store" });
     if (res.ok) return res.json() as Promise<T>;
     throw new Error(`Demo file not found: ${origin}/demo/${filename} (${res.status})`);
   }
@@ -48,9 +48,7 @@ async function readDemoJsonFileUncached<T>(filename: string): Promise<T> {
   }
 
   if (origin) {
-    const res = await fetch(`${origin}/demo/${filename}`, {
-      next: { revalidate: 3600 },
-    });
+    const res = await fetch(`${origin}/demo/${filename}`, { cache: "no-store" });
     if (res.ok) return res.json() as Promise<T>;
   }
 

@@ -6,10 +6,9 @@ import { PageShell } from "@/components/PageShell";
 import { ServiceViewClient } from "@/components/ServiceViewClient";
 import { VehicleLink } from "@/components/VehicleLink";
 import { cleanHeadsign } from "@/lib/headsign";
-import { getDemoServiceView, type ServiceViewData } from "@/lib/demo-service-view";
+import { type ServiceViewData } from "@/lib/demo-service-view";
 import { displayRouteShort } from "@/lib/go-rail";
 import { routePageHref } from "@/lib/detail-href";
-import { useDemoForFeed } from "@/lib/demo-schedule-feeds";
 import { getPageMeta } from "@/lib/page-meta";
 import { serverBaseUrl } from "@/lib/server-base-url";
 
@@ -30,9 +29,8 @@ async function RunPageContent({
   feedId: string;
   vehicleId: string;
 }) {
-  const data = (await useDemoForFeed(feedId))
-    ? await getDemoServiceView(feedId, { vehicleId })
-    : await load(feedId, vehicleId);
+  // Always go through the API route so the CDN cache is shared with client refreshes.
+  const data = await load(feedId, vehicleId);
 
   const headsign =
     cleanHeadsign(data?.trip?.headsign ?? data?.route?.long_name ?? data?.route?.short_name) ||
