@@ -120,6 +120,51 @@ function writeShardIndex(basename) {
   console.log(`wrote ${basename}-index.json (${Object.keys(index).length} keys, ${files.length} shards)`);
 }
 
+/**
+ * Trip and route lookups previously scanned every shard. Emit:
+ *  - {base}-trip-index.json:  tripId -> shard file (first occurrence)
+ *  - {base}-route-index.json: routeId/routeShort -> [shard files]
+ */
+function writeScheduleLookupIndexes(basename) {
+  const files = listShards(basename, { includeMonolith: false });
+  if (!files.length) return;
+
+  const tripIndex = {};
+  const routeIndex = {};
+  const tripRe = /"tripId"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+  const routeRe = /"(?:routeId|routeShort)"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+
+  for (const file of files) {
+    const raw = readFileSync(join(demoDir, file), "utf8");
+    let m;
+    tripRe.lastIndex = 0;
+    while ((m = tripRe.exec(raw)) !== null) {
+      const id = m[1];
+      if (!(id in tripIndex)) tripIndex[id] = file;
+    }
+    const seenRoutes = new Set();
+    routeRe.lastIndex = 0;
+    while ((m = routeRe.exec(raw)) !== null) {
+      seenRoutes.add(m[1]);
+    }
+    for (const r of seenRoutes) {
+      (routeIndex[r] ??= []).push(file);
+    }
+  }
+
+  writeFileSync(
+    join(demoDir, `${basename}-trip-index.json`),
+    JSON.stringify(tripIndex),
+  );
+  writeFileSync(
+    join(demoDir, `${basename}-route-index.json`),
+    JSON.stringify(routeIndex),
+  );
+  console.log(
+    `wrote ${basename}-trip-index.json (${Object.keys(tripIndex).length} trips) and ${basename}-route-index.json (${Object.keys(routeIndex).length} routes)`,
+  );
+}
+
 const SCHEDULE_BASES = [
   "ttc-schedules",
   "go-schedules",
@@ -144,6 +189,10 @@ for (const base of TRIP_STOP_BASES) reshard(base, MAX_TRIP_STOP_BYTES);
 
 for (const base of [...SCHEDULE_BASES, ...TRIP_STOP_BASES]) {
   writeShardIndex(base);
+}
+
+for (const base of SCHEDULE_BASES) {
+  writeScheduleLookupIndexes(base);
 }
 
 // Manifest lists numbered shards when they exist, else the monolith.

@@ -36,6 +36,7 @@ const SHARD_MANIFEST: Record<string, string[]> = {
 };
 
 const shardIndexCache = new Map<string, Record<string, string>>();
+const routeIndexCache = new Map<string, Record<string, string[]>>();
 const shardFileCache = new Map<string, Record<string, TripStopRow[]>>();
 const tripStopRowCache = new Map<string, TripStopRow[]>();
 let runtimeShardManifest: Record<string, string[]> | null = null;
@@ -234,6 +235,26 @@ export async function loadStopScheduleRows(
   return [];
 }
 
+/** routeId/routeShort -> schedule shard filenames containing that route. */
+async function loadRouteShardIndex(
+  feedId: string,
+): Promise<Record<string, string[]>> {
+  const basename = `${feedId}-schedules-route`;
+  const hit = routeIndexCache.get(basename);
+  if (hit) return hit;
+  try {
+    const idx = await readDemoJsonFile<Record<string, string[]>>(
+      `${basename}-index.json`,
+    );
+    routeIndexCache.set(basename, idx);
+    return idx;
+  } catch {
+    const empty = {};
+    routeIndexCache.set(basename, empty);
+    return empty;
+  }
+}
+
 /** Collect rows for a route by scanning shards (stops early once enough trips found). */
 export async function loadRouteScheduleRows(
   feedId: string,
@@ -243,7 +264,7 @@ export async function loadRouteScheduleRows(
     routesMatch(feedId, routeId, routeId, row.routeId) ||
     routesMatch(feedId, routeId, routeId, row.routeShort);
 
-  const files = listShardFiles(`${feedId}-schedules`);
+  let files = listShardFiles(`${feedId}-schedules`);
   if (!files.length) {
     try {
       const data = await readDemoJsonFile<Record<string, ScheduleRow[]>>(
@@ -260,6 +281,16 @@ export async function loadRouteScheduleRows(
       return [];
     }
   }
+
+  // Narrow the scan to shards known to contain this route.
+  const routeIndex = await loadRouteShardIndex(feedId);
+  const indexed = new Set<string>();
+  for (const [key, shardFiles] of Object.entries(routeIndex)) {
+    if (routesMatch(feedId, routeId, routeId, key)) {
+      for (const f of shardFiles) indexed.add(f);
+    }
+  }
+  if (indexed.size) files = files.filter((f) => indexed.has(f));
 
   const byTrip = new Map<string, ScheduleRow>();
 
@@ -282,6 +313,27 @@ export async function loadRouteScheduleRows(
   return filterRowsByServiceDate(feedId, sorted);
 }
 
+/** tripId -> schedule shard filename (built by scripts/reshard-schedules.mjs). */
+async function loadTripShardIndex(feedId: string): Promise<Record<string, string>> {
+  return loadShardIndex(`${feedId}-schedules-trip`);
+}
+
+function findTripInShard(
+  part: Record<string, ScheduleRow[]>,
+  feedId: string,
+  tripId: string,
+): ScheduleRow | undefined {
+  let suffixHit: ScheduleRow | undefined;
+  for (const sched of Object.values(part)) {
+    const hit = sched.find((row) => row.tripId === tripId);
+    if (hit) return hit;
+    if (!suffixHit && (feedId === "go" || feedId === "up")) {
+      suffixHit = sched.find((row) => goTripsMatch(row.tripId, tripId));
+    }
+  }
+  return suffixHit;
+}
+
 /** Find a single trip without loading and retaining every schedule shard. */
 export async function lookupTripScheduleRow(
   feedId: string,
@@ -295,30 +347,38 @@ export async function lookupTripScheduleRow(
       const data = await readDemoJsonFile<Record<string, ScheduleRow[]>>(
         `${feedId}-schedules.json`,
       );
-      for (const sched of Object.values(data)) {
-        const hit = sched.find((row) => row.tripId === tripId);
-        if (hit) return hit;
-        if (feedId === "go" || feedId === "up") {
-          const suffixHit = sched.find((row) => goTripsMatch(row.tripId, tripId));
-          if (suffixHit) return suffixHit;
-        }
-      }
+      return findTripInShard(data, feedId, tripId);
     } catch {
       return undefined;
     }
-    return undefined;
   }
+
+  const tripIndex = await loadTripShardIndex(feedId);
+  let indexedFile = tripIndex[tripId];
+  if (!indexedFile && (feedId === "go" || feedId === "up")) {
+    const suffix = goTripSuffix(tripId);
+    for (const [key, file] of Object.entries(tripIndex)) {
+      if (goTripSuffix(key) === suffix) {
+        indexedFile = file;
+        break;
+      }
+    }
+  }
+  if (indexedFile) {
+    try {
+      const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(indexedFile);
+      const hit = findTripInShard(part, feedId, tripId);
+      if (hit) return hit;
+    } catch {
+      /* shard missing — fall through to scan */
+    }
+  }
+  if (Object.keys(tripIndex).length) return undefined;
 
   for (const file of files) {
     const part = await readDemoJsonFile<Record<string, ScheduleRow[]>>(file);
-    for (const sched of Object.values(part)) {
-      const hit = sched.find((row) => row.tripId === tripId);
-      if (hit) return hit;
-      if (feedId === "go" || feedId === "up") {
-        const suffixHit = sched.find((row) => goTripsMatch(row.tripId, tripId));
-        if (suffixHit) return suffixHit;
-      }
-    }
+    const hit = findTripInShard(part, feedId, tripId);
+    if (hit) return hit;
   }
   return undefined;
 }
