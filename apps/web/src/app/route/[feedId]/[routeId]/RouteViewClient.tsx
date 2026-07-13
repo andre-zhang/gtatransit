@@ -63,7 +63,9 @@ export function RouteViewClient({
 
   useEffect(() => {
     void refreshLive();
-    const id = setInterval(() => void refreshLive(), 30_000);
+    const id = setInterval(() => {
+      if (!document.hidden) void refreshLive();
+    }, 30_000);
     return () => clearInterval(id);
   }, [refreshLive]);
 

@@ -407,6 +407,7 @@ export function MapView({ filterTree, rtUpdated, demoMode }: Props) {
 
   useEffect(() => {
     const id = setInterval(() => {
+      if (document.hidden) return;
       const map = mapRef.current;
       if (!map?.isStyleLoaded() || !showVehicles) return;
       const params = buildQuery(map);

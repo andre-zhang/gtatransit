@@ -116,7 +116,9 @@ export function ServiceViewClient({
     } else {
       void refresh();
     }
-    const id = setInterval(() => void refresh(), 30_000);
+    const id = setInterval(() => {
+      if (!document.hidden) void refresh();
+    }, 30_000);
     return () => {
       if (mountRefresh) clearTimeout(mountRefresh);
       clearInterval(id);

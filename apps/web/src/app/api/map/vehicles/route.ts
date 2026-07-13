@@ -5,7 +5,7 @@ import { parseMapFilters, vehicleMatchesFilters } from "@/lib/demo-map-filters";
 import { filterPointCollection, mapQueryParams } from "@/lib/geojson-map";
 import { routeColor } from "@/lib/colors";
 import { jsonWithCache } from "@/lib/api-cache";
-import { getRtVehicles, ensureRtVehiclesWithin, refreshRtCache } from "@/lib/rt-cache";
+import { getRtVehicles, ensureRtVehiclesWithin } from "@/lib/rt-cache";
 import { vehicleCollection } from "@/lib/vehicle-geojson";
 import { parseDirs, parseList } from "@/lib/parse-filters";
 
@@ -37,7 +37,8 @@ export async function GET(req: NextRequest) {
     return jsonWithCache(filterPointCollection(fc, bbox), 15);
   }
 
-  await refreshRtCache();
+  // Vehicles only — decoding trip-update feeds on every map poll is wasted CPU.
+  await ensureRtVehiclesWithin(1200);
 
   const agencies = parseList(req.nextUrl.searchParams.get("agencies"));
   const dirs = parseDirs(req.nextUrl.searchParams.get("directions"));
@@ -81,5 +82,5 @@ export async function GET(req: NextRequest) {
     })),
   );
 
-  return NextResponse.json(filterPointCollection(fc, bbox));
+  return jsonWithCache(filterPointCollection(fc, bbox), 15);
 }
